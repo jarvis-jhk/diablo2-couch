@@ -27,3 +27,10 @@
   every upstream world.cpp/fight.cpp commit — ask upstream first. Client-side seams
   (host + N Town clients, per-player input, shared camera, panel origin, pause) are
   ours and narrow.
+- First fork CI: a fork's push runs stayed gated even with Actions enabled by API;
+  adding `workflow_dispatch:` to ci.yml (2 lines, the only fork change there) and
+  pushing released them. Run 38276091534 on 813e56c: Linux GCC, Windows MSVC and
+  macOS Clang all green; ctest 34/34 passed on each (MPQ-dependent tests SKIP, no
+  game data on runners). M0 complete. Next: M1 needs the N-player World — decide
+  between the upstream issue (contact plan) and client-side seams that don't need it
+  (host/N-client split, per-player input, shared camera).
