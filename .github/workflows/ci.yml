@@ -7,6 +7,8 @@ on:
     tags:
       - '*'
   pull_request:
+  # Fork (diablo2-couch): a fork's push runs are gated, so CI is also started by hand.
+  workflow_dispatch:
 
 permissions:
   contents: read
