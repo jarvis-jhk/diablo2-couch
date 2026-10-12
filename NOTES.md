@@ -34,3 +34,13 @@
   game data on runners). M0 complete. Next: M1 needs the N-player World — decide
   between the upstream issue (contact plan) and client-side seams that don't need it
   (host/N-client split, per-player input, shared camera).
+
+## 2026-10-12 — REA set up (Jan's request via adhoc)
+- REA (rea-agents 6.4.0, Ghidra 12.1.4, JDK 21) installed in JARVIS's toolchain, not in
+  the repo. Works on Debian 12 despite `rea doctor`; ~20 min import per call on the d2d
+  ELF; PIE addresses are nm + 0x100000. Details: docs/research/rea.md.
+- No D2 1.14d game.exe here (Blizzard's, user-supplied), so native analysis of the
+  original is blocked until one is available locally; REA ran on our own CI build.
+- Finding for M1: two hidden frame-to-frame statics, `fades` (wall see-through decided
+  from ONE player's cell) and `eases` (light radius easing). Added to docs/COUCH.md;
+  the wall cut-out must take every local hero on a shared screen.

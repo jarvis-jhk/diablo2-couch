@@ -47,3 +47,10 @@ checksum verification before a release. Fork versions are v0.x.y; never pass an 
 tag or an untested mockup off as our release. Signal Jan only for verified new releases.
 Hardware evidence is separate: virtual controllers/bots do not certify physical pads or the Deck.
 Keep NOTES, ROADMAP and known limitations honest.
+
+Reverse engineering: upstream's `.claude/skills/reverse-engineering` (Ghidra scripts,
+tools/emu oracle) is the method for game.exe. REA (`rea-agents`, genuine npm package of
+github.com/morluto/rea only) is an extra lens over the same Ghidra: evidence JSON per
+function with callers, callees, data references and value flow. Setup, pitfalls and
+what it found are in docs/research/rea.md. Analyse Blizzard binaries locally only;
+commit findings in our own words with addresses, never decompiled code or game files.

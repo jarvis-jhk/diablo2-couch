@@ -66,7 +66,12 @@ seed (fine: one game per process).
 the camera, NPCs are culled around it, the light grid and lamp and the roof
 cut-out centre on it. The world-to-screen projection (`render_world`,
 world_view.cpp) is cleanly parameterised at a fixed 800×600; it keeps a
-function-local static mask (fine for one shared view). `render_ingame` takes one
+function-local static mask (fine for one shared view). Two more hidden
+function-local statics carry state between frames (found with REA, see
+docs/research/rea.md): `fades` in `render_world` (wall see-through, centred on ONE
+player's cell, keyed by level pointer) and `eases` in `frame_light` (town.cpp, light
+radius easing per light). With a shared screen the wall cut-out must consider every
+local hero; with any second view in the process both maps would be shared silently. `render_ingame` takes one
 player's inventory/HUD and draws panels at fixed screen positions.
 
 **Controllers.** None. `SDL_Init(SDL_INIT_VIDEO)` only; no gamepad code. Upstream
