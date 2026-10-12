@@ -10,3 +10,20 @@
 - Background research: JARVIS report "Diablo 2 Couch-Koop: Stand und Aufwand" (2026-10-12).
 - Upstream README kept as docs/D2DECOMP-README.md; README.md is the fork's.
 - Next: M0 in ROADMAP.md.
+
+## 2026-10-12 — M0 baseline
+- CI: the fork keeps upstream's `.github/workflows/ci.yml` unchanged (Linux GCC,
+  Windows MSVC, macOS Clang; build, clang-tidy, ctest, package). Actions are enabled
+  on the fork. macOS stays: the repo is public so minutes are free, and an untouched
+  ci.yml merges cleanly; Linux + Windows are the required gate, macOS informational.
+  Upstream's own run on 625fd8f (38260650029) passed all three in ~11 min.
+  No local build here (Debian 12 container has no SDL3/StormLib/Qt6); CI is the gate.
+- Upstream policy: no CONTRIBUTING / templates / AI statement; never an outside PR.
+  Contact plan in docs/COUCH.md "Upstream": one honest issue (AI-written, asking if
+  PRs are welcome) only once we have something concrete. Nothing opened yet.
+- Survey: docs/COUCH.md. Key finding: our M1 server is upstream's own planned
+  "N-player World, still in process" (net-host.md stage 1, ~2 weeks, deferred by
+  upstream until after Act 2). Doing it alone in the fork means conflicts with nearly
+  every upstream world.cpp/fight.cpp commit — ask upstream first. Client-side seams
+  (host + N Town clients, per-player input, shared camera, panel origin, pause) are
+  ours and narrow.

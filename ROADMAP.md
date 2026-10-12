@@ -5,8 +5,8 @@ upstream's plan in `docs/PLAN.md`; we merge it as it lands.
 
 ## M0 — Fork baseline
 - [ ] Upstream builds and its tests pass on our CI (Linux, Windows; macOS optional).
-- [ ] Upstream contribution policy and AI stance checked; contact plan recorded in NOTES.
-- [ ] Survey: how d2d structures client/server in one process; where per-player state
+- [x] Upstream contribution policy and AI stance checked; contact plan recorded in NOTES.
+- [x] Survey: how d2d structures client/server in one process; where per-player state
       (input, cursor, UI panels, camera) is global today. Write docs/COUCH.md.
 
 ## M1 — Two local players, Act I, shared screen (prototype)
