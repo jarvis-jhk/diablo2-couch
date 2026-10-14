@@ -12,6 +12,7 @@ upstream's plan in `docs/PLAN.md`; we merge it as it lands.
 ## M1 — Two local players, Act I, shared screen (prototype)
 - [ ] Two in-process clients joined to the embedded server, each with its own character/save.
 - [ ] One shared camera following the group, with a leash keeping players on screen.
+      Rules done and unit-tested (components/couch, 2026-10-14); wiring waits for two heroes.
 - [ ] Controller input per player (SDL3 gamepads), direct stick movement, skill buttons.
 - [ ] Per-player inventory/stash/merchant panels that do not pause the world.
 - [ ] Group rules for waypoints, town portals and area transitions.

@@ -98,6 +98,15 @@ lists controllers under "Cross-platform polish" (PLAN.md step 7), not started.
    camera; light and roof cut-out per hero.
 6. **Panels.** Give panel drawing a screen origin (and later a scale) so each player's
    panels sit in their own corner/quadrant; held items and NPC dialogs per player.
+   *Built (2026-10-14):* the rules alone, `components/couch/group_camera.hpp`
+   (test_couch). The camera is the centre of the heroes' screen bounding box,
+   shifted just enough to keep every hero inside a safe frame (the 800x600 screen
+   less a margin, a sprite's height above and the control panel below); one hero
+   gives exactly today's camera. A step is allowed if the party still fits, or if it
+   does not widen the party on either screen axis, so a hero left outside after a
+   warp or join can always walk back. Not wired into `Town` yet: that needs seam 3
+   (several heroes in one process). The server applies the leash to walk/run
+   commands; the client only draws.
 7. **Pause.** The menu pause applies only with one local player.
 
 Different acts for different players fight over `palette_act`; group rules

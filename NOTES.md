@@ -44,3 +44,16 @@
 - Finding for M1: two hidden frame-to-frame statics, `fades` (wall see-through decided
   from ONE player's cell) and `eases` (light radius easing). Added to docs/COUCH.md;
   the wall cut-out must take every local hero on a shared screen.
+
+## 2026-10-14 — upstream merge, group camera rules
+- Merged upstream da2fd6d (22 commits): Act II complete, Act III's docks and jungle.
+  Only conflict was README.md (ours kept, status table updated).
+- M1 slice: `components/couch/group_camera.hpp` (header only, fork-only component) with
+  `test_couch`: group camera = screen bounding-box centre clamped into a safe frame
+  (one hero = today's camera exactly), even split when the party is too wide, and the
+  leash rule (allowed if the party fits or does not widen). Negative controls: without
+  the clamp the asymmetric-frame case fails; with the leash always true the wide-party
+  case fails. Built and run locally with g++ 12 (-std=c++23 -Werror) and clang-tidy 22
+  (repo .clang-tidy) clean; the full build still needs CI (no SDL3 here).
+- Not wired: needs two heroes in one process (COUCH.md seams 1/3). Server-side PlayerSession
+  is still upstream's planned stage 1; the upstream contact issue is still unopened.
