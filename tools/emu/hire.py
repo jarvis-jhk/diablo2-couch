@@ -3,7 +3,7 @@
 
     uv run python hire.py <first seed>-<last seed>
 
-For each entry seed, acts 1 and 2 (0, 1), difficulties 0..2 and character
+For each entry seed, acts 1 to 3 (0..2), difficulties 0..2 and character
 levels 1, 9, 30, 75 (FUN_00625480's stat 12, hooked): the offer game.exe
 rolls on {seed, 666} for an LoD game, one line `seed act diff clvl: id
 level life str dex cost exp def dmg_min dmg_max`, as `drlg-dump ... hire`
@@ -23,7 +23,7 @@ def dump(e, seed):
     e.hook(0x625480, lambda _e: clvl[0], 1)
     try:
         offer = e.alloc(0x40)
-        for act in (0, 1):
+        for act in (0, 1, 2):
             for diff in (0, 1, 2):
                 for level in CLVLS:
                     clvl[0] = level

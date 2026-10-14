@@ -114,6 +114,7 @@ void place_act1(GameData& game_data, d2d::mpq::Stack& mpqs, const d2d::drlg::Out
         if (placement.level == 1) { game_data.town.world_x = placement.x; game_data.town.world_y = placement.y; }
     game_data.act1_layout = layout;
     game_data.act2_layout = d2d::drlg::act2_layout(d2d::drlg::level_defs(act1.levels), d2d::drlg::act_seed(map_seed));
+    game_data.act3_layout = d2d::drlg::act3_layout(d2d::drlg::level_defs(act1.levels), d2d::drlg::act_seed(map_seed));
 }
 
 // Monster tables (MonStats, MonStats2, MonLvl), unique names and mods, and
@@ -192,7 +193,7 @@ void load_monsters(GameData& game_data, const d2d::mpq::Stack& mpqs) {
         }
         type_info.sound = text("MonSound");
         type_info.usound = text("UMonSound");
-        type_info.threat = num(text("threat")); type_info.switch_ai = text("switchai") == "1";
+        type_info.threat = num(text("threat")); type_info.switch_ai = text("switchai") == "1"; type_info.interact = text("interact") == "1";
         type_info.montype = text("MonType");
         for (int difficulty = 0; difficulty < 3; ++difficulty) {
             const std::string x = kSfx[difficulty];
@@ -301,7 +302,7 @@ void load_monsters(GameData& game_data, const d2d::mpq::Stack& mpqs) {
         missile_info.vel = number("Vel"); missile_info.range = number("Range"); missile_info.src_damage = number("SrcDamage"); missile_info.min = number("MinDamage"); missile_info.max = number("MaxDamage");
         missile_info.anim_speed = std::max(number("AnimSpeed"), 1); missile_info.anim_len = std::max(number("AnimLen"), 1); missile_info.trans = number("Trans"); missile_info.light = number("Light");
         missile_info.skill = missiles_table.get(row_index, "Skill"); missile_info.lev_range = number("LevRange"); missile_info.hit_func = number("pSrvHitFunc"); missile_info.hit_par1 = number("sHitPar1");
-        missile_info.to_hit = number("ToHit") == 1; missile_info.collide_kill = number("CollideKill") == 1; missile_info.pierce = number("Pierce") == 1;
+        missile_info.to_hit = number("ToHit") == 1; missile_info.collide_kill = number("CollideKill") == 1; missile_info.pierce = number("Pierce") == 1; missile_info.return_fire = number("ReturnFire") == 1;
         missile_info.srv_do = number("pSrvDoFunc"); missile_info.param1 = number("Param1"); missile_info.param2 = number("Param2"); missile_info.hit_par2 = number("sHitPar2");
         missile_info.next_hit = number("NextHit") == 1; missile_info.next_delay = number("NextDelay");
         missile_info.sub = missiles_table.get(row_index, "SubMissile1"); missile_info.hit_sub = missiles_table.get(row_index, "HitSubMissile1");

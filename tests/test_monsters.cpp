@@ -642,9 +642,10 @@ int main() {
                 static constexpr std::string_view kCases[] = {
 #include "mon_ais_cases.inc"
                 };
-                static constexpr std::array<std::string_view, 18> kAis{ "Duriel", "Swarm", "PinHead", "Mummy", "SandLeaper", "ClawViper", "PantherWoman", "PantherJavelin",
+                // Then the curse thinks (special AI 10 / 11) and the other thinks.
+                static constexpr std::array<std::string_view, 22> kAis{ "Duriel", "Swarm", "PinHead", "Mummy", "SandLeaper", "ClawViper", "PantherWoman", "PantherJavelin",
                                                                        "Scarab", "BatDemon", "Baboon", "SandRaider", "GreaterMummy", "SandMaggot", "Summoner", "Vulture",
-                                                                       "MaggotEgg", "MaggotLarva" };
+                                                                       "MaggotEgg", "MaggotLarva", "DimVision", "Terror", "BatDemon", "SandMaggot" };
                 using d2d::rules::ThinkEffect;
                 int checked = 0;
                 for (const std::string_view case_line : kCases) {
@@ -677,6 +678,9 @@ int main() {
                         const int spot_x = read(), spot_y = read();
                         if (found) spot = std::pair{ spot_x, spot_y };
                     }
+                    int cast_word = 0;
+                    input.swings = read() != 0; input.runs = read() != 0; input.afraid = read() != 0; input.in_s4 = read() != 0; cast_word = read();
+                    input.cast_word = &cast_word;
                     d2d::rules::Rng seed;
                     seed.low = std::uint32_t(std::stoll([&] { std::string text; fields >> text; return text; }()));
                     seed.high = std::uint32_t(std::stoll([&] { std::string text; fields >> text; return text; }()));
@@ -694,8 +698,14 @@ int main() {
                         assert(asked < asks.size() && asks[asked].first == reach);
                         return asks[asked++].second != 0;
                     };
-                    const auto act = d2d::rules::mon_think(kAis[std::size_t(which)], input, seed, away);
+                    const auto ai_name = kAis[std::size_t(which)];
+                    const auto act = which == 18 ? d2d::rules::dim_vision_think(input, seed)
+                                   : which == 19 ? d2d::rules::terror_think(input, seed, away)
+                                   : which >= 20 ? d2d::rules::other_think(ai_name, input)
+                                                 : d2d::rules::mon_think(ai_name, input, seed, away);
                     assert(asked == asks.size());
+                    for (const auto& effect : effects)                     // the toggle back clears the scratch words (FUN_005b0e00)
+                        if (effect.kind == ThinkEffect::toggle) { ctrl[0] = ctrl[1] = 0; if (!effect.value) ctrl[2] = 0; }
                     std::vector<std::array<int, 3>> want_effects;
                     std::istringstream effect_text(line.substr(bar2 + 1, bar3 - bar2 - 1));
                     for (std::string effect; std::getline(effect_text, effect, ';');) {
@@ -716,13 +726,35 @@ int main() {
                     const int y = act.spot ? 1 : act.y;
                     const bool same = int(act.act) == want[0] && act.n == want[1] && act.x == want[2] && y == want[3] && int(act.unit) == want[4] && act.wait == want[5] && act.event == want[6]
                                    && pace == want[7] && steps == want[8] && ctrl[0] == want[9] && ctrl[1] == want[10] && ctrl[2] == want[11]
-                                   && seed.low == std::uint32_t(want[12]) && seed.high == std::uint32_t(want[13]);
+                                   && seed.low == std::uint32_t(want[12]) && seed.high == std::uint32_t(want[13]) && (which != 21 || cast_word == want[14]);
                     if (!same) std::fprintf(stderr, "mon_ais %s: %s\n  got %d %d %d %d %d %d %d | %d %d | %d %d %d | %u %u\n", std::string(kAis[std::size_t(which)]).c_str(), line.c_str(),
                                             int(act.act), act.n, act.x, y, int(act.unit), act.wait, act.event, pace, steps, ctrl[0], ctrl[1], ctrl[2], seed.low, seed.high);
                     assert(same);
                     ++checked;
                 }
                 assert(checked > 300);
+            }
+            // The AI toggle (FUN_005b0e00): a curse's think, then back; the
+            // other think only by toggling 0 on the monster's own think (two
+            // AI-swapping states, the first ending while the second is on).
+            {
+                int special = 0, state = 5, state2 = 6, state3 = 7;
+                bool other = false;
+                auto toggle = [&](int next, bool has_other) { d2d::rules::ai_toggle(special, other, { &state, &state2, &state3 }, next, has_other); };
+                toggle(11, true);                                  // Terror on
+                assert(special == 11 && !other && state == 0 && state2 == 0 && state3 == 0);
+                state = 3;
+                toggle(10, true);                                  // Cloak on: its own special, the words cleared
+                assert(special == 10 && !other && state == 0);
+                toggle(0, true);                                   // one ends: its own think
+                assert(special == 0 && !other);
+                state = 4;
+                toggle(0, true);                                   // the other ends: the other think, the words kept
+                assert(special == 0 && other && state == 4);
+                toggle(0, true);                                   // it toggles back
+                assert(special == 0 && !other && state == 0);
+                toggle(0, false);                                  // a row without one stays on its own think
+                assert(special == 0 && !other);
             }
             // The Shadows (tools/emu/shadow_init.py / shadow_master.py --dump:
             // game.exe's own runs): the Warrior's init and the Master's, then the

@@ -138,6 +138,54 @@ d2d: `components/drlg` `act2_layout` / `roll_act2_tombs` /
 layout` (drlg.layout_dump; drlg.act_of picks a level's act for every
 dump): 2000/2000 seeds, rectangles, file and tombs.
 
+## Act 3's layout (FUN_006789b0)
+
+FUN_00642da0 first rolls `next & 1` on the act seed (act +0x474). Then the
+Kurast Docks (75) sits at its Levels.txt Offset (1000, 1000), and
+FUN_00677880 (OutPlace.cpp) grows the jungle from it, on the act seed
+itself (not a copy):
+
+1. **Pieces.** Piece 0 is the jungle level's size (64x192) right above the
+   docks. Two more, each off `rand(count)` earlier pieces (`& (n-1)` for a
+   power of two) with `next % 5` (FUN_006777d0): 0 above; 1 / 2 left /
+   right and H/3 up; 3 / 4 left / right and 2H/3 up (the asm's rounding:
+   −64 / −128). A piece that isn't clear of every earlier one (FUN_0066b860,
+   gap 0) is rolled again. A parent keeps up to three children.
+2. **The grid.** Cells of 32 tiles over the pieces' bounds plus a margin of
+   one (four int grids: owner, path number, mark, link bits). Per piece:
+   the way in from below (`mark 1` on the bottom row at `side`, `mark 2`
+   beside it; piece 0's side is `next & 1`, others' `dir` odd), the ways
+   out by each child's dir (0 top-left, 1 / 2 row 3 left / right, 3 / 4
+   row 1). The river climbs from the bottom row: each cell numbered
+   (piece+1)·100 on; after the first step `next % 3 == 0` moves it a
+   column over (same row); after two steps in a column, the cell beside it
+   becomes a branch (`mark 2`) when free and the row > 1. Under two
+   branches the piece is redone; over three, `rand(n)` drops one.
+3. **Links** (8 up, 4 down, 2 right, 1 left): consecutive path numbers;
+   a `mark 1` cell joins its lowest-numbered neighbour of its piece and
+   links to a `mark 1` of another piece.
+4. **Branches**, every cell in order, `next & 3` each: a `mark 2` cell
+   joins a path cell (links 1..14) of its piece, trying the four sides from
+   that roll (0x80 up, 0x40 down, 0x20 right, 0x10 left, the neighbour
+   gets the opposite bit). Joining nothing restarts the grid (step 2). A
+   clearing (no links) may also open into another piece's `mark 2`, else on
+   `next & 1` into one more path cell (a fresh `next & 3`).
+5. **Defs**: links only → 529 + links (530..544, "Jungle W".."NSEW"); no
+   links → 0x6f13bc[bits >> 4] (575..584, the clearings); links and a
+   branch → 0x6f13f0[links][branch] (545..572). A second branch would
+   index that table by a Def (never seen; d2d flags it `failed`).
+6. Each piece copies its 2x6 cells (level +0x1bc; +0x1b8 counts Defs past
+   574). The pieces sort by y, lowest first: 76 Spider Forest, 77 Great
+   Marsh, 78 Flayer Jungle.
+
+FUN_00678910 stacks 79..83 (Lower Kurast, Bazaar, Upper Kurast, Causeway,
+Travincal) up from the Flayer Jungle, each centred on it
+(`x = top.x + top.w/2 − w/2`). FUN_006775c0 / FUN_00677680 link 75..83 as
+neighbours.
+
+d2d: `components/drlg` `act3_layout`; `diff_drlg.py 1-2000 75 layout`:
+2000/2000.
+
 ## Outdoor levels (DrlgType 3) — FUN_00675360
 
 The level's outdoor record (0x268 bytes, FUN_00675320) holds four cell
@@ -612,6 +660,33 @@ loaded file (0x60-byte records from `buf + 0x110`, rarity at +0x20);
 loaded DT1s are a list at 0x8adbb4 `{name[0x104], buf, lib, next}`,
 cached by name.
 
+## Act 3's jungle (FUN_0067f450, levels 76–78)
+
+Act 3's outdoor build: contact spans (FUN_00675770), then FUN_0067e910
+(the jungle), FUN_0067f190 (Kurast), FUN_0067f3b0 (Travincal); no
+borders. The neighbours are act 3's edge-sharing levels (FUN_006775c0:
+each pair of 75..83 whose rects touch on one axis and overlap on the
+other, FUN_0066b880 with −1, into each level's first free Vis slot,
+others in id order).
+
+FUN_0067e910 lays the level's 2x6 cells (act3_layout) at cell (col·4,
+row·4) through FUN_006743c0 (EDX x; stack y, def, file, border 0):
+first `rand(specials == 3 ? 6 : 2)` on the level seed (+0x1c4) picks a
+row of 0x6f2328 (the six orders of 0, 1, 2); a clearing (Def > 574)
+moves to its level's set (0x6f2240: 76 +0, 77 +10, 78 +20) with the
+next file of that row; other Defs roll their file (−1). The Spider
+Forest's bottom row is the Jungle Head (573, file 1 when the last cell
+is empty), the Flayer Jungle's top row the Tail (574, file 1 when cell 1
+is empty); both take the whole row.
+
+The finish's plain rooms (the empty cells) by LevelType (FUN_006750f0 /
+FUN_0067d2d0): DT1 mask 2 → 0x44103; 16, 22, 27, 28 → 1; 21 → 4; 30, 31
+→ 0x11; ground ORed into unclaimed floor cells: 16 0x100, 21 0x120000,
+22 0x100000, 27 0xa00000, 28 0x1600000, 31 0x600000 on level 117 only.
+
+d2d: `Gen::lay_jungle`, `act3_outdoor_level`, `plain_dt1_mask`;
+`diff_drlg.py 1-10 76|77|78 tiles` 10/10, rooms 10/10, units 5/5.
+
 ## Maze levels (DrlgType 1) — FUN_00673b30
 
 The level's maze row (LvlMaze by level, FUN_0061f490: `{level,
@@ -944,6 +1019,8 @@ Conditions those results hold under, so they aren't overstated:
 | Lut Gholein (level 40): rooms, tiles, units | diffed: 20/20 seeds, units 10/10 (`diff_drlg.py 1-20 40 tiles`) |
 | Act 2's mazes and presets (47–73): rooms, tiles, units, doors | diffed (list order), 5/5 each |
 | Act 2's desert (41–46): grids, tiles, units | diffed, 10/10 each |
+| Act 3's layout (rectangles 75–83, the jungle's cells) | diffed, 2000/2000 seeds |
+| Act 3's jungle (76–78): grids, rooms, tiles, units | diffed, 10/10 (units 5/5) |
 | Act 3+ outdoors and mazes; the Barracks' cross-level link to 27 (FUN_0066b790) | not ported |
 | Preset units that roll to stay (FUN_00667620) | ported outdoors (`stays`, units.hpp); diffed on Cold Plains' Cottages 2, whose row has Pops: presets with Scan or Pops roll at generation on the level seed (FUN_00667970), the rest on the seed of the room that copies them (room +0x14, the whole {low, high} — a maze room's was stepped once, so its high word isn't 666; diffed on the Jail and Catacombs). In the preset record's order, one step each — monsters 0xcc, 0xcd, 0x173, 0x174 kept when `low % 3 == 0`; MonPlace 0x21 when `low & 3`, 0x22 when odd, 0x23 when `!(low & 3)`, 0x24 always; objects 0xc4 / 0x105 when even, 0x245 when `low & 3`. It runs after the room's DT1 list and before its tiles (FUN_0061b730), whose seed FUN_0066ee40 resets, so tiles don't shift. Act 1: the Crypt, Jail, Catacombs, Fence Fill 1, Cottages 2 |
 | Units in other acts: the act 2 / act 4 MonPreset remaps, type-4 units (NPCs by name) | not ported |

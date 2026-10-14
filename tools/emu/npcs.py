@@ -3,10 +3,10 @@
 
     uv run python npcs.py <map seed> [thinks] [level]
 
-`level` 1 (the camp, the default) or 40 (Lut Gholein: act 2 is made for it
+`level` 1 (the camp, the default), 40 or 75 (Lut Gholein, the docks: the act is made for it
 as game.exe makes an act a player enters, FUN_0053ac70). Each unit thinks
 with its MonAI's think: Npc FUN_005e7130, Towner FUN_005e7540 (MonStats
-195, 196, 203), Vendor FUN_005e9e00 (204, 205); a Towner or Npc without a
+195, 196, 203, 294, 296), Vendor FUN_005e9e00 (204, 205); a Towner or Npc without a
 path is left out (game.exe's think does nothing with it).
 
 A fresh game at the seed, the Rogue Encampment's rooms brought up in list
@@ -27,11 +27,13 @@ from unicorn.x86_const import UC_X86_REG_EAX, UC_X86_REG_ECX, UC_X86_REG_EDX, UC
 
 import drlg
 import monsters
+import objgroups
 
 THINKS = 40
 
 
-TOWNER, VENDOR = (195, 196, 203), (204, 205)
+TOWNER, VENDOR = (195, 196, 203, 294, 296), (204, 205)
+HIREABLE = (359,)   # act3hire: the docks' iron wolves, Fight monsters (the merc's think, rules::hireable_think)
 
 
 def think_of(cls):
@@ -43,10 +45,9 @@ def dump(e, seed, thinks=THINKS, lid=1):
     act = monsters.act_of(e, g, lid, drlg.act_of(lid))
     lvl = drlg.find_level(e, e.r32(act + 0x48), lid)
     x0, y0 = e.s32(lvl + 0x1c) * 5, e.s32(lvl + 0x20) * 5
-    # Lut Gholein's Jerhyn markers (objects 121 / 122, InitFn 18 / 19) ask the
-    # game's quests, which this bare game hasn't: they make nothing here.
-    stubs = {addr: bytes(e.mu.mem_read(addr, 5)) for addr in (0x5448b0, 0x5448e0)}
-    for addr in stubs: e.hook(addr, lambda _e: 0, 0)
+    # The game's quests, which this bare game hasn't (objgroups.QUEST_STUBS).
+    stubs = {addr: bytes(e.mu.mem_read(addr, 5)) for addr in objgroups.QUEST_STUBS}
+    for addr, args in objgroups.QUEST_STUBS.items(): e.hook(addr, lambda _e: 0, args)
     made = []
     def on_made(mu, addr, size, _):                         # FUN_00555910 after FUN_005557d0: EAX the unit
         made.append(mu.reg_read(UC_X86_REG_EAX))
@@ -70,7 +71,7 @@ def dump(e, seed, thinks=THINKS, lid=1):
         if not unit or e.r32(unit) != 1: continue
         ctrl = e.r32(e.r32(unit + 0x14) + 0x28)
         cls = e.r32(unit + 4)
-        if not ctrl or (cls not in VENDOR and not e.r32(ctrl + 0x38)): continue
+        if not ctrl or cls in HIREABLE or (cls not in VENDOR and not e.r32(ctrl + 0x38)): continue
         path = e.r32(unit + 0x2c)
         def at(): return int.from_bytes(e.mu.mem_read(path + 2, 2), "little"), int.from_bytes(e.mu.mem_read(path + 6, 2), "little")
         def put(x, y):

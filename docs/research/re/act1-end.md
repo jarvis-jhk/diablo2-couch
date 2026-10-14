@@ -665,7 +665,15 @@ if act(level) != current act:
    FUN_0053acc0(game, player, 0x28, tile)
 ```
 
-FUN_0053acc0 is the act change:
+FUN_0053acc0 is the act change. An act's lifetime: the server builds an
+act the first time a player needs it (`game+0xbc+act*4` null: FUN_0053ac70
+-> FUN_006194a0) and frees its acts in one place only, the game's teardown
+(FUN_0052c7f0: each of the five, FUN_0061afd0). So an act left stays as it
+was, its dead dead and a corpse where it fell. The client keeps one act
+(DAT_007a0634) and swaps it on LoadAct (FUN_0044e100; FUN_0044c890 on
+leaving the game). Freeing a room1 (FUN_0061a840) takes its units out of
+the room (unit +0xc4 | 0x800000).
+
 
 ```
 if game+0xbc+act*4 == 0: FUN_0053ac70 -> FUN_006194a0 builds the act (seed game+0x7c)

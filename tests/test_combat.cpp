@@ -172,9 +172,10 @@ int main() {
     mon.elements[0] = { 0, 100, 40, 40, 0, "A1" };                           // fire, always
     Fighter defender;
     defender.dr_pct = 20; defender.dr_flat = 5; defender.res[0] = 75; defender.mdr = 2;
-    auto taken = monster_blow(defender, 1, false, mon, false, rng);
-    for (int i = 0; i < 20 && !taken.hit; ++i) taken = monster_blow(defender, 1, false, mon, false, rng);
+    auto taken = monster_blow(defender, 1, Motion::standing, mon, false, rng);
+    for (int i = 0; i < 20 && !taken.hit; ++i) taken = monster_blow(defender, 1, Motion::standing, mon, false, rng);
     assert(taken.hit && taken.damage == 75 + 8);                               // 100 x 80% - 5, 40 x 25% - 2
+    assert(taken.physical == 75 && taken.elemental == 8);                      // Bone Armor's part, Cyclone Armor's
     {                                                                  // cold chills, poison runs per tick (FUN_0057b7d0, FUN_0057c1e0)
         MonStats cold_mon = mon;
         cold_mon.elements[0] = { 2, 100, 10, 10, 40, "A1" };
@@ -183,11 +184,11 @@ int main() {
         chilly.res[2] = 50; chilly.res[3] = 25; chilly.plr = 20;
         MonStats poisoner = mon;                         // poison hit's own stats: every hit, length as set
         poisoner.poison_min = poisoner.poison_max = 40; poisoner.poison_len = 300;
-        auto poison_taken = monster_blow(defender, 1, false, poisoner, false, rng);
-        for (int i = 0; i < 20 && !poison_taken.hit; ++i) poison_taken = monster_blow(defender, 1, false, poisoner, false, rng);
+        auto poison_taken = monster_blow(defender, 1, Motion::standing, poisoner, false, rng);
+        for (int i = 0; i < 20 && !poison_taken.hit; ++i) poison_taken = monster_blow(defender, 1, Motion::standing, poisoner, false, rng);
         assert(poison_taken.hit && poison_taken.poison == 40 && poison_taken.poison_ticks == 300);
-        auto cold_hit = monster_blow(chilly, 1, false, cold_mon, false, rng);
-        for (int i = 0; i < 20 && !cold_hit.hit; ++i) cold_hit = monster_blow(chilly, 1, false, cold_mon, false, rng);
+        auto cold_hit = monster_blow(chilly, 1, Motion::standing, cold_mon, false, rng);
+        for (int i = 0; i < 20 && !cold_hit.hit; ++i) cold_hit = monster_blow(chilly, 1, Motion::standing, cold_mon, false, rng);
         assert(cold_hit.hit && cold_hit.damage == 100 + 5 && cold_hit.chill_ticks == 20);   // 40 less 50 % cold
         assert(cold_hit.poison == 60 && cold_hit.poison_ticks == 80);                     // 80 / 256 a tick less 25 %, 100 ticks less 20 %
         chilly.half_freeze = true;
@@ -201,8 +202,8 @@ int main() {
     agile.dodge = 100;
     int dodged = 0, evaded = 0;
     for (int i = 0; i < 100; ++i) {
-        dodged += monster_blow(agile, 1, false, mon, false, rng).dodged;
-        evaded += monster_blow(agile, 1, true, mon, false, rng).dodged;
+        dodged += monster_blow(agile, 1, Motion::standing, mon, false, rng).dodged;
+        evaded += monster_blow(agile, 1, Motion::walking, mon, false, rng).dodged;
     }
     assert(dodged > 85 && evaded == 0);
     {                                                                  // a skill's missile (FUN_0064b860's record)
@@ -223,18 +224,34 @@ int main() {
     claws.weapon_block = 100;
     int wblocked = 0, wmoving = 0;
     for (int i = 0; i < 100; ++i) {
-        wblocked += monster_blow(claws, 1, false, mon, false, rng).blocked;
-        wmoving += monster_blow(claws, 1, true, mon, false, rng).blocked;
+        wblocked += monster_blow(claws, 1, Motion::standing, mon, false, rng).blocked;
+        wmoving += monster_blow(claws, 1, Motion::walking, mon, false, rng).blocked;
     }
     assert(wblocked > 85 && wmoving == 0);
     agile.def_missile = 1000000000;                                    // vs missiles only
     int spikes = 0;
-    for (int i = 0; i < 100; ++i) spikes += monster_blow(agile, 99, false, mon, true, rng).hit;
+    for (int i = 0; i < 100; ++i) spikes += monster_blow(agile, 99, Motion::running, mon, false, rng, true).hit;   // a missile rolls even at a runner
     assert(spikes < 15);
     defender.block = 75;
-    int blocks = 0, moving_blocks = 0;
-    for (int i = 0; i < 1000; ++i) { blocks += monster_blow(defender, 1, false, mon, false, rng).blocked; moving_blocks += monster_blow(defender, 1, true, mon, false, rng).blocked; }
-    assert(blocks > 700 && blocks < 800 && moving_blocks > 200 && moving_blocks < 300);
+    int blocks = 0, walk_blocks = 0, run_blocks = 0;                  // block a third only running (FUN_0057dfb0)
+    for (int i = 0; i < 1000; ++i) {
+        blocks += monster_blow(defender, 1, Motion::standing, mon, false, rng).blocked;
+        walk_blocks += monster_blow(defender, 1, Motion::walking, mon, false, rng).blocked;
+        run_blocks += monster_blow(defender, 1, Motion::running, mon, false, rng).blocked;
+    }
+    assert(blocks > 700 && blocks < 800 && walk_blocks > 700 && walk_blocks < 800 && run_blocks > 200 && run_blocks < 300);
+    {                                                                  // a swing at a runner always lands (FUN_0057ec10)
+        Fighter fortress;
+        fortress.defense = 1000000000;
+        MonStats weak = mon;
+        weak.to_hit = 1;
+        int standing_hits = 0, running_hits = 0;
+        for (int i = 0; i < 100; ++i) {
+            standing_hits += monster_blow(fortress, 99, Motion::standing, weak, false, rng).hit;
+            running_hits += monster_blow(fortress, 99, Motion::running, weak, false, rng).hit;
+        }
+        assert(standing_hits < 15 && running_hits == 100);
+    }
     ClassGains gains{ .life_per_level = 8, .stamina_per_level = 4, .mana_per_level = 6, .stat_per_level = 5 };
     stats.values[d2d::d2s::kMaxLife] = stats.values[d2d::d2s::kLife] = 50 << 8;
     const std::vector<std::int64_t> next{ 0, 500, 1500, 3750 };

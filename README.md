@@ -30,7 +30,8 @@ Diablo II engine that runs natively on Linux, Windows and macOS.
 | | |
 |---|---|
 | Act I (all areas and quests) | ✅ playable in D2Decomp |
-| Acts II–V | 🚧 being built upstream (Act II has started) |
+| Act II (all areas and quests) | ✅ playable in D2Decomp |
+| Acts III–V | 🚧 being built upstream (Act III's docks and jungle so far) |
 | Two players on one screen | 📋 next — first prototype in Act I |
 | Controllers | 📋 planned |
 | Four players, Deck packaging | 📋 planned |

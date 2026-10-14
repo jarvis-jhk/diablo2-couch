@@ -355,11 +355,13 @@ inline Blow player_blow(const Fighter& fighter, const Target& target, int clvl, 
     return blow;
 }
 
-// A monster's attack on the player (`moving`: walking or running;
+// A monster's attack on the player (`motion`: its mode, standing, WL or RN;
 // `missile`: a spike rather than a swing): hit chance against defense plus
-// the vs-melee / vs-missile bonus; then the defender's rolls
-// (FUN_0057dfb0 / FUN_0057dd60): block (a third while moving), Weapon
-// Block standing (two claws: weapon class HT2), then evade
+// the vs-melee / vs-missile bonus, but a swing at a running player always
+// lands (FUN_0057ec10: mode 3 skips FUN_0057d9b0); then the defender's rolls
+// (FUN_0057dfb0 / FUN_0057dd60): block (a third while running, FUN_00622d00
+// and mode not 2: walking keeps it whole), Weapon Block standing (two claws:
+// weapon class HT2), then evade
 // while moving, else dodge a swing / avoid a missile; then physical damage
 // less damage-reduced % then flat (it can reach 0), and each elemental
 // attack (at its chance) less resistance, fire / lightning / cold less
@@ -377,27 +379,36 @@ inline int chill_length(const Fighter& defender, int len) {
     if (defender.cannot_freeze) return 0;
     return resisted(defender.half_freeze ? len / 2 : len, defender.res[2]);
 }
-struct Taken { bool hit = false, blocked = false, dodged = false; int damage = 0, poison = 0, poison_ticks = 0, chill_ticks = 0; };
-inline Taken monster_blow(const Fighter& defender, int dlvl, bool moving, const MonStats& attacker, bool second_attack, Rng& rng,
+// `physical` / `elemental` (fire, lightning, cold): the parts of `damage`
+// Bone Armor (22) and Cyclone Armor (25) absorb.
+struct Taken { bool hit = false, blocked = false, dodged = false; int damage = 0, poison = 0, poison_ticks = 0, chill_ticks = 0, physical = 0, elemental = 0; };
+enum class Motion : std::uint8_t { standing, walking, running };
+inline Taken monster_blow(const Fighter& defender, int dlvl, Motion motion, const MonStats& attacker, bool second_attack, Rng& rng,
                           bool missile = false) {
     Taken taken;
-    if (rng(100) >= hit_chance(attacker.to_hit, defender.defense + (missile ? defender.def_missile : defender.def_melee), attacker.level, dlvl)) return taken;
-    if (defender.block > 0 && rng(100) < (moving ? defender.block / 3 : defender.block)) { taken.blocked = true; return taken; }
+    const bool moving = motion != Motion::standing, running = motion == Motion::running;
+    if (!(running && !missile) && rng(100) >= hit_chance(attacker.to_hit, defender.defense + (missile ? defender.def_missile : defender.def_melee), attacker.level, dlvl))
+        return taken;
+    if (defender.block > 0 && rng(100) < (running ? defender.block / 3 : defender.block)) { taken.blocked = true; return taken; }
     if (!moving && defender.weapon_block > 0 && rng(100) < defender.weapon_block) { taken.blocked = true; return taken; }
     const int dodge = moving ? defender.evade : missile ? defender.avoid : defender.dodge;
     if (dodge > 0 && rng(100) < dodge) { taken.dodged = true; return taken; }
     taken.hit = true;
     int phys = second_attack ? rng.range(attacker.a2_min, attacker.a2_max) : rng.range(attacker.a1_min, attacker.a1_max);
     phys = std::max(phys * (100 - defender.dr_pct) / 100 - defender.dr_flat, 0);
-    taken.damage = phys;
+    taken.damage = taken.physical = phys;
     for (const auto& element : attacker.elements) {
         if (element.type < 0 || element.mode != (second_attack ? "A2" : "A1") || rng(100) >= element.pct) continue;
         const int roll = rng.range(element.min, element.max);
         switch (element.type) {
-            case 2: taken.damage += std::max(resisted(roll, defender.res[2]) - defender.mdr, 0); if (roll > 0) taken.chill_ticks = std::max(taken.chill_ticks, chill_length(defender, element.dur)); break;
+            case 2: taken.elemental += std::max(resisted(roll, defender.res[2]) - defender.mdr, 0); taken.damage += std::max(resisted(roll, defender.res[2]) - defender.mdr, 0); if (roll > 0) taken.chill_ticks = std::max(taken.chill_ticks, chill_length(defender, element.dur)); break;
             case 3: if (const int per = resisted(roll * 10, defender.res[3]); per >= taken.poison) { taken.poison = per; taken.poison_ticks = resisted(element.dur * 2, defender.plr); } break;
             case 4: taken.damage += std::max(roll - defender.mdr, 0); break;
-            default: taken.damage += std::max(resisted(roll, defender.res[std::size_t(element.type)]) - defender.mdr, 0); break;
+            default: {
+                const int dealt = std::max(resisted(roll, defender.res[std::size_t(element.type)]) - defender.mdr, 0);
+                taken.damage += dealt; taken.elemental += dealt;
+                break;
+            }
         }
     }
     if (attacker.poison_max > 0)

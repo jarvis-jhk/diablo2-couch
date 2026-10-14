@@ -194,7 +194,8 @@ def act_of(lid):
 def layout_dump(e, seed, lid):
     """The act's outdoor rectangles (act 2: levels 40..46) and Lut Gholein's
     LvlPrest file, as drlg-dump ... layout prints them; nothing is built."""
-    act = alloc_act(e, 1, seed, 0)            # act 2, whatever the level asked: the only layout compared
+    if lid >= 75: return act3_layout_dump(e, seed)
+    act = alloc_act(e, 1, seed, 0)            # act 2 for any level below 75
     out = []
     for l in sorted(levels(e, act), key=lambda l: e.r32(l + 0x1d0)):
         if 40 <= e.r32(l + 0x1d0) <= 46:
@@ -203,6 +204,22 @@ def layout_dump(e, seed, lid):
     town = find_level(e, act, 40)
     out.append(f"town file {e.s32(e.r32(town + 0x14) + 4)}")
     out.append(f"tombs {e.r32(act + 0x94)} {e.r32(act + 0x484)}")
+    return "\n".join(out)
+
+
+def act3_layout_dump(e, seed):
+    """Act 3's rectangles (75..83, FUN_006789b0), each jungle level's 2x6 LvlPrest
+    cells and special count (+0x1bc / +0x1b8), and the act's own roll (+0x474)."""
+    act = alloc_act(e, 2, seed, 0)
+    out = []
+    for lid in range(75, 84):
+        l = find_level(e, act, lid)
+        x, y, w, h = (e.s32(l + 0x1c + 4 * i) for i in range(4))
+        out.append(f"level {lid} at {x},{y} size {w}x{h}")
+        if 76 <= lid <= 78:
+            cells = e.r32(l + 0x1bc)
+            out.append(f"  cells {' '.join(str(e.s32(cells + 4 * i)) for i in range((w // 32) * (h // 32)))} specials {e.s32(l + 0x1b8)}")
+    out.append(f"roll {e.r32(act + 0x474)}")
     return "\n".join(out)
 
 

@@ -2021,6 +2021,7 @@ auto World::tick(const std::vector<Command>& cmds, std::uint32_t now_ms, std::ui
         // Levels: finished builds come in; the ones next to the player's
         // start building when it changes (GameData::level).
         game_data->poll_levels();
+        fight.spawning.game_quests = game_bits;          // the town markers' inits read them as rooms come up
         if (level != wanted_near) { want_nearby(*game_data, *level); wanted_near = level; }
         item_ids();
         // The day moves a frame a tick (40 ms); a stall doesn't fast-forward it.

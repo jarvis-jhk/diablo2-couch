@@ -1301,7 +1301,7 @@ auto Town::quest_bits() const -> const d2d::rules::QuestBits& {
 
 // The player's act (0-based): the act of the level the View has them on
 // (acts 1 and 2 so far; a joined game's too).
-auto Town::view_act() const -> int { return view.level && view.level->id >= d2d::rules::level_ids::kLutGholein ? 1 : 0; }
+auto Town::view_act() const -> int { return view.level ? d2d::rules::level_ids::act_of(view.level->id) : 0; }
 
 auto Town::toggle_quest_log() -> void {
         if (quest_log.open) { quest_log.open = false; return; }

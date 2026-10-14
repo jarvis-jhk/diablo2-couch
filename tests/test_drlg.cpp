@@ -62,5 +62,25 @@ int main() {
         assert(tombs.boss != tombs.staff && tombs.boss >= 66 && tombs.staff <= 72);
     }
     assert(lut_files[1] && lut_files[2]);
+    // Act 3 (FUN_006789b0; diffed 2000/2000 by diff_drlg.py 1-2000 75 layout):
+    // the jungle's three pieces clear of each other, 2x6 cells of jungle
+    // Defs each, the Spider Forest lowest; Kurast stacked up from the top.
+    LevelDefs act3 = { { 75, { 64, 48, 1000, 1000 } }, { 82, { 48, 16, 0, 0, true } }, { 83, { 64, 64, 0, 0, true } } };
+    for (int id : { 76, 77, 78 }) act3[id] = { 64, 192, 0, 0, true };
+    for (int id : { 79, 80, 81 }) act3[id] = { 80, 64, 0, 0, true };
+    for (std::uint32_t seed = 1; seed < 400; ++seed) {
+        const auto layout = act3_layout(act3, d2d::rules::Rng{ seed });
+        assert(!layout.failed && layout.levels.size() == 9);
+        for (std::size_t i = 1; i <= 3; ++i) {
+            for (std::size_t j = 1; j < i; ++j) assert(apart(layout.levels[i], layout.levels[j]));
+            assert(layout.levels[i].y <= layout.levels[1].y && layout.jungle[i - 1].presets.size() == 12);
+            for (const int def_id : layout.jungle[i - 1].presets) assert(def_id == 0 || (def_id >= 530 && def_id <= 584));
+        }
+        for (std::size_t i = 4; i < 9; ++i) assert(layout.levels[i].y + layout.levels[i].height == layout.levels[i - 1].y);
+    }
+    // No jungle row (or one too small): a failed layout, not a hang.
+    auto no_jungle = act3;
+    no_jungle.erase(76);
+    assert(act3_layout(no_jungle, d2d::rules::Rng{ 1 }).failed);
     std::puts("test_drlg: ok");
 }

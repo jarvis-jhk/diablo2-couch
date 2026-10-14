@@ -35,7 +35,6 @@
 #include <devctl.hpp>
 #include <install.hpp>
 #include <join.hpp>
-#include <level_ids.hpp>
 #include <log.hpp>
 #include <mpq.hpp>
 #include <screenshot.hpp>
@@ -692,8 +691,8 @@ int run_windowed(std::vector<std::uint8_t>& framebuffer,
             }
             case Screen::InGame: {
                 town.typed = text_this_frame;
-                // The act's palette follows the player's level (acts 1 and 2 so far).
-                if (const int act = town.view.level && town.view.level->id >= d2d::rules::level_ids::kLutGholein ? 1 : 0; act != scene->palette_act)
+                // The act's palette follows the player's level.
+                if (const int act = town.view_act(); act != scene->palette_act)
                     load_act_palettes(*scene, scene->mpqs, act);
                 town.update(framebuffer, mouse, keys_this_frame, screen, audio, now_ms, last_ms);
                 write_save_back();

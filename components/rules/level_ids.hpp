@@ -13,6 +13,10 @@ inline constexpr int kKurastDocks = 75;
 inline constexpr int kPandemoniumFortress = 103;
 inline constexpr int kHarrogath = 109;
 
+// The act (0..4) a level is in: each act's levels follow its town's Id.
+constexpr int act_of(int level_id) {
+    return level_id >= kHarrogath ? 4 : level_id >= kPandemoniumFortress ? 3 : level_id >= kKurastDocks ? 2 : level_id >= kLutGholein ? 1 : 0;
+}
 constexpr bool is_town(int level_id) {
     return level_id == kRogueEncampment || level_id == kLutGholein || level_id == kKurastDocks || level_id == kPandemoniumFortress || level_id == kHarrogath;
 }
@@ -68,6 +72,9 @@ inline constexpr int kFirstTalRashasTomb = 66;
 inline constexpr int kLastTalRashasTomb = 72;
 inline constexpr int kDurielsLair = 73;
 inline constexpr int kArcaneSanctuary = 74;
+inline constexpr int kSpiderForest = 76;
+inline constexpr int kFlayerJungle = 78;
+inline constexpr int kLowerKurast = 79;
 inline constexpr int kTravincal = 83;
 inline constexpr int kBloodyFoothills = 110;
 inline constexpr int kFrigidHighlands = 111;

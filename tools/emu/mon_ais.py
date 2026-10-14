@@ -1,5 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Act 2's monster thinks (docs/research/re/monster-ai.md) run natively.
+"""Act 2's monster thinks (docs/research/re/monster-ai.md) run natively,
+then the curse thinks (special AI 10 / 11) and the MonAI rows' other thinks
+(monster-ai.md "Curse thinks and other thinks").
 
     uv run python mon_ais.py <ai|all> [cases] [seed] [--dump tests/mon_ais_cases.inc]
 
@@ -39,7 +41,11 @@ AIS = {
     "ClawViper": 0x5f1b60, "PantherWoman": 0x5f22b0, "PantherJavelin": 0x5e1080, "Scarab": 0x5f2540,
     "BatDemon": 0x5f5040, "Baboon": 0x5f0cd0, "SandRaider": 0x5f0700, "GreaterMummy": 0x5f2b10,
     "SandMaggot": 0x5f1800, "Summoner": 0x5f85c0, "Vulture": 0x5f3170, "MaggotEgg": 0x5f6530, "MaggotLarva": 0x5f6220,
+    # The curse thinks (special AI table 0x73d358, row + 8: 10 Dim Vision /
+    # Cloak, 11 Terror / Howl) and the MonAI rows' other thinks (row + 12).
+    "DimVision": 0x5e8020, "Terror": 0x5e8140, "BatDemonOther": 0x5f4fd0, "SandMaggotOther": 0x5f1750,
 }
+CURSE_AIS = ("DimVision", "Terror", "BatDemonOther", "SandMaggotOther")
 ORDER = list(AIS)
 # Think acts (rules::MonAct) by name; units (rules::ThinkUnit).
 ACTS = ["idle", "a1", "a2", "s2", "skill", "walk", "run", "approach", "keep", "circle", "wander", "none", "die", "around",
@@ -88,6 +94,12 @@ def setup(rng, ai):
     s["group"] = rng.choice((None, "mon", "kin"))                         # FUN_0058f0d0: its group's leader
     s["leader"] = s["group"] == "mon"
     s["free"] = [None if rng.random() < 0.4 else (cx + rng.randint(-25, 25), cy + rng.randint(-25, 25)) for _ in range(2)]
+    # The curse / other thinks': an A1 mode (FUN_0046c140 bit 4), an RN mode
+    # (bit 15), interact (MonStats flag 9), Terror's state 0x38 on, the unit's
+    # mode (11 S4), the SandMaggot's command 14 +0x18.
+    if ai in CURSE_AIS:
+        s["a1"], s["rn"], s["interact"] = rng.random() < 0.8, rng.random() < 0.6, rng.random() < 0.15
+        s["afraid"], s["in_s4"], s["cast_word"] = rng.random() < 0.8, rng.random() < 0.3, rng.choice((0, 1, 1, 2))
     if ai == "Vulture":
         for k in range(2):                                                 # its spot words: a point, or unset
             if rng.random() < 0.5: s["ctrl"][1 + k] = s["spots"]["foe"][k] + rng.randint(-12, 12)
@@ -234,7 +246,25 @@ def install(e):
     e.hook(0x5de440, lambda e: out("fly", S32(e.arg(0)), S32(e.arg(1)), e.arg(2)) or 1, 3)
     e.hook(0x599420, lambda e: 0, 0)
     e.hook(0x553540, lambda e: cur["units"]["foe"], 2)                 # the unit its mode is at (the target)
-    e.hook(0x57ccb0, lambda e: out("die"), 2)                          # it dies (the egg hatched)                                   # Radament's: FUN_00599420 (the quest's)
+    e.hook(0x57ccb0, lambda e: out("die"), 2)
+    # The curse / other thinks'.
+    from unicorn.x86_const import UC_X86_REG_EDX as EDX
+    e.hook(0x46c140, lambda e: int(cur["s"]["a1"] if e.mu.reg_read(EDX) == 4 else cur["s"]["rn"] if e.mu.reg_read(EDX) == 15 else 0), 0)
+    e.hook(0x457490, lambda e: int(cur["s"]["interact"] and e.mu.reg_read(EDX) == 9), 0)
+    e.hook(0x639df0, lambda e: int(cur["s"].get("afraid", False) and e.arg(1) == 0x38), 2)
+    def toggle(e):                                                     # FUN_005b0e00 back to the MonAI row's think: the reset branch
+        out("toggle", e.arg(1))
+        for k in range(3): e.w32(e.arg(0) + 0x14 + 4 * k, 0)
+        return 0
+    e.hook(0x5b0e00, toggle, 2)
+    e.hook(0x540e60, lambda e: 0, 2)                                   # its pending think events dropped
+    e.hook(0x5417d0, lambda e: out("event", S32(e.arg(1)) - cur["s"]["frame"]), 4)   # a think event at frame + n
+    e.hook(0x573120, lambda e: out("unset"), 0)
+    e.hook(0x5df140, away, 3)
+    def command14(e):
+        e.w32(cur["cmd"] + 0x18, cur["s"]["cast_word"])
+        return cur["cmd"]
+    e.hook(0x58efa0, command14, 2)                          # it dies (the egg hatched)                                   # Radament's: FUN_00599420 (the quest's)
 
 
 def run_game(e, s, addr, rng_moves):
@@ -258,9 +288,15 @@ def run_game(e, s, addr, rng_moves):
     e.w32(params, ctrl); e.w32(params + 7 * 4, row)
     if s["target"]: e.w32(params + 8, units["foe"])
     e.w32(params + 20, s["dist"]); e.w32(params + 24, int(s["melee"]))
+    if s["ai"] in CURSE_AIS:
+        e.w32(mon + 0x10, 11 if s["in_s4"] else 1)
+        data, rows = alloc(0x1000), alloc(0x1a8 * 0x106)                 # MonStats: the unit's row's flag byte +0xd (bit 1: interact)
+        e.w32(0x744304, data); e.w32(data + 0xa80, 0x106); e.w32(data + 0xa78, rows)
+        e.mu.mem_write(rows + 0x1a8 * 0x100 + 0xd, bytes([2 if s["interact"] else 0]))
     CUR.update(s=s, out=[], units=units, names=names, paths=paths, moves=rng_moves, cmd=cmd, frees=0)
     e.call(addr, params, ecx=game, edx=mon)
-    return CUR["out"], [S32(e.r32(ctrl + 0x14 + 4 * k)) for k in range(3)], (e.r32(mon + 0x20), e.r32(mon + 0x24))
+    word = [e.r32(cmd + 0x18)] if s["ai"] == "SandMaggotOther" else []
+    return CUR["out"], [S32(e.r32(ctrl + 0x14 + 4 * k)) for k in range(3)] + word, (e.r32(mon + 0x20), e.r32(mon + 0x24))
 
 
 def outcome(s, out):
@@ -284,6 +320,7 @@ def outcome(s, out):
         elif k == "away":
             asks.append((item[2], item[4]))
             if item[4]: to("none")
+            elif not item[3] and s["ai"] == "Terror": to("idle", s["aidel"])   # flags 0: FUN_005a73e0's think aidel on
         elif k == "circle": to("circle", item[2], item[4], item[3], item[1])
         elif k == "wander": to("wander", item[1], item[2], item[3])
         elif k == "around": to("around", item[2], item[3], item[4], item[1])
@@ -309,10 +346,16 @@ def dump_case(s, act, pace, effects, asks, ctrl, seed):
     nums += [int(s["usable"]), s["command"] or 0, int(s["leader"]), int(s["aura"])]
     nums += [*s["spots"]["mon"], *s["spots"]["foe"], int(s["same_room"]), int(s["can_land"]), int(s["victim"]), int(s["group"] is not None)]
     nums += [c for f in s["free"] for c in ((1, *f) if f else (0, 0, 0))]
+    if s["ai"] in CURSE_AIS:
+        nums += [int(s["a1"] and not s["interact"]), int(s["rn"]), int(s["afraid"]), int(s["in_s4"]), s["cast_word"]]
+    else:
+        nums += [1, 0, 1, 0, 0]
     nums += list(s["seed"])
-    kinds = {"state": 0, "overlay": 1, "stat": 2, "rally": 3, "command_done": 4, "summoner_open": 5, "aura": 6, "land": 7, "takeoff": 8}
-    eff = [f"{kinds[x[0]]} {x[1] if len(x) > 1 else 0} {x[2] if len(x) > 2 else 0}" for x in effects]
-    tail = [ACTS.index(act[0])] + act[1:] + pace + ctrl + list(seed)
+    kinds = {"state": 0, "overlay": 1, "stat": 2, "rally": 3, "command_done": 4, "summoner_open": 5, "aura": 6, "land": 7, "takeoff": 8,
+             "toggle": 9, "unset": 10}
+    keep = lambda x: int(x[0] == "toggle" and s["ai"] == "SandMaggotOther")          # it puts the third word back after
+    eff = [f"{kinds[x[0]]} {x[1] if len(x) > 1 else 0} {x[2] if len(x) > 2 else keep(x)}" for x in effects]
+    tail = [ACTS.index(act[0])] + act[1:] + pace + ctrl[:3] + list(seed) + ctrl[3:4]   # the SandMaggot's command word after, last
     return " ".join(map(str, nums)) + " | " + " ; ".join(f"{n} {ok}" for n, ok in asks) + " | " + " ; ".join(eff) + " | " + " ".join(map(str, tail))
 
 

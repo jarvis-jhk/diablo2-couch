@@ -124,10 +124,12 @@ static std::string dump(const OutdoorAssets& assets, std::uint32_t seed, int id,
         for (const auto& note : notes) std::fprintf(stderr, "not implemented: %s\n", note.c_str());
         return out.str();
     }
-    const auto layout = id >= level_ids::kLutGholein ? act2_layout(level_defs(assets.levels), act_seed(seed)) : act1_from_map_seed(level_defs(assets.levels), seed);
+    const auto act3 = act3_layout(level_defs(assets.levels), act_seed(seed));
+    const auto layout = id >= level_ids::kKurastDocks ? act3.levels
+                      : id >= level_ids::kLutGholein ? act2_layout(level_defs(assets.levels), act_seed(seed)) : act1_from_map_seed(level_defs(assets.levels), seed);
     if (std::getenv("DRLG_LAYOUT"))
         for (const auto& placement : layout) std::fprintf(stderr, "layout %d at %d,%d %dx%d dir %d flip %d flags %x\n", placement.level, placement.x, placement.y, placement.width, placement.height, placement.dir, placement.flip, placement.flags);
-    const auto level = outdoor_level(assets.levels, layout, id);
+    const auto level = id >= level_ids::kKurastDocks ? act3_outdoor_level(assets.levels, act3, id) : outdoor_level(assets.levels, layout, id);
     const auto outdoor = generate_outdoor(assets.data, level, level_seed(seed, id));
     pf("level %d at %d,%d size %dx%d\n", id, level.rect.x, level.rect.y, level.rect.width, level.rect.height);
     pf("flags %x\n", outdoor.flags);
@@ -413,6 +415,22 @@ int main(int argc, char** argv) {
         const auto last = dash == std::string::npos ? first : std::uint32_t(std::stoul(range.substr(dash + 1), nullptr, 0));
         for (auto seed = first;; ++seed) {
             std::ostringstream out;
+            if (id >= level_ids::kKurastDocks) {     // act 3, as drlg.act3_layout_dump
+                const auto act3 = act3_layout(defs, act_seed(seed));
+                for (const auto& placement : act3.levels) {
+                    out << "level " << placement.level << " at " << placement.x << ',' << placement.y << " size " << placement.width << 'x' << placement.height << '\n';
+                    if (placement.level < level_ids::kSpiderForest || placement.level > level_ids::kFlayerJungle) continue;
+                    const auto& cells = act3.jungle[std::size_t(placement.level - level_ids::kSpiderForest)];
+                    out << "  cells";
+                    for (const int def_id : cells.presets) out << ' ' << def_id;
+                    out << " specials " << cells.specials << '\n';
+                }
+                out << "roll " << act3.roll << '\n';
+                if (argc > 5) std::ofstream(fs::path(argv[4]) / (std::to_string(seed) + ".txt")) << out.str();
+                else std::fputs(out.str().c_str(), stdout);
+                if (seed == last) break;
+                continue;
+            }
             auto layout = act2_layout(defs, act_seed(seed));
             std::ranges::sort(layout, {}, &Placed::level);
             for (const auto& placement : layout)
@@ -478,7 +496,7 @@ int main(int argc, char** argv) {
         const auto last = dash == std::string::npos ? first : std::uint32_t(std::stoul(range.substr(dash + 1), nullptr, 0));
         for (auto index = first;; ++index) {
             const std::uint32_t seed = index * 0x9e3779b1u;
-            for (int act : { 0, 1 })
+            for (int act : { 0, 1, 2 })
                 for (int diff : { 0, 1, 2 })
                     for (int clvl : { 1, 9, 30, 75 }) {
                         std::printf("%08x %d %d %d: ", seed, act, diff, clvl);
@@ -500,7 +518,7 @@ int main(int argc, char** argv) {
         const auto first = std::uint32_t(std::stoul(range.substr(0, dash), nullptr, 0));
         const auto last = dash == std::string::npos ? first : std::uint32_t(std::stoul(range.substr(dash + 1), nullptr, 0));
         for (auto seed = first;; ++seed) {
-            const auto text = dump_npcs(*game, seed, thinks ? std::atoi(thinks) : 40, id == 40 ? 40 : 1);
+            const auto text = dump_npcs(*game, seed, thinks ? std::atoi(thinks) : 40, id == 40 || id == 75 ? id : 1);
             if (argc > 5) std::ofstream(fs::path(argv[4]) / (std::to_string(seed) + ".txt")) << text;
             else std::fputs(text.c_str(), stdout);
             if (seed == last) break;

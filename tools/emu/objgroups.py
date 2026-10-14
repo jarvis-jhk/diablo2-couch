@@ -127,13 +127,16 @@ def step(e, at, n):
     e.w32(at, low); e.w32(at + 4, high)
 
 
-JERHYN_MARKERS = (0x5448b0, 0x5448e0)        # Lut Gholein's Jerhyn markers' InitFns (18 / 19)
+# The quest calls a bare game can't answer, as {address: stack args}: Lut
+# Gholein's Jerhyn markers' InitFns (18 / 19) make nothing, a quest flag
+# read (FUN_00544760, game +0x10f4: the docks' inits) is clear.
+QUEST_STUBS = {0x5448b0: 0, 0x5448e0: 0, 0x544760: 1}
 
 
 def game_dump(e, seed, levels, kind="shuffle"):
     """game_dump_hooked with the quest hooks it needs put back after, so a
     shared emulator (diff_drlg.py's other kinds) runs game.exe's own again."""
-    saved = {addr: bytes(e.mu.mem_read(addr, 5)) for addr in JERHYN_MARKERS}
+    saved = {addr: bytes(e.mu.mem_read(addr, 5)) for addr in QUEST_STUBS}
     try:
         return game_dump_hooked(e, seed, levels, kind)
     finally:
@@ -154,7 +157,7 @@ def game_dump_hooked(e, seed, levels, kind="shuffle"):
     act = monsters.act_of(e, g, levels[0], drlg.act_of(levels[0]))
     dact = e.r32(act + 0x48)
     # Lut Gholein's Jerhyn markers (InitFn 18 / 19) ask quests this bare game hasn't (npcs.py).
-    for addr in JERHYN_MARKERS: e.hook(addr, lambda _e: 0, 0)
+    for addr, args in QUEST_STUBS.items(): e.hook(addr, lambda _e: 0, args)
     rgn = e.r32(g + 0x10f0)
     made, pre, out = [], [0, 0], []
     def on_make(mu, addr, size, _):                         # FUN_00555230(ECX type, EDX class; x, y, ...)

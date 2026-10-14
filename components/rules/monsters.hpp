@@ -1095,9 +1095,11 @@ struct Think {
 // charging (FUN_0058f730), the leader's command done (FUN_0058ed10), the
 // Summoner's quest opened (FUN_0059c330), its aura (Skill n) started
 // (FUN_005701b0), a Vulture landing (FUN_005f2fc0) or taking off
-// (FUN_005f2eb0).
+// (FUN_005f2eb0), the AI toggled (FUN_005b0e00: id the special AI, value 1
+// keeping the third scratch word), its skill-set target cleared
+// (FUN_00573120).
 struct ThinkEffect {
-    enum Kind : std::uint8_t { state, overlay, stat, rally, command_done, summoner_open, aura, land, take_off } kind;
+    enum Kind : std::uint8_t { state, overlay, stat, rally, command_done, summoner_open, aura, land, take_off, toggle, unset } kind;
     int id = 0, value = 0;
 };
 struct ThinkIn {
@@ -1156,6 +1158,13 @@ struct ThinkIn {
     int self_x = 0, self_y = 0, target_x = 0, target_y = 0;
     bool same_room = true, can_land = false, victim = false, grouped = false;
     std::array<std::optional<std::pair<int, int>>, 2> free_spot{};
+    // The curse thinks' (special AI 10 / 11): it can swing (an A1 mode,
+    // FUN_0046c140 bit 4, and not interact, MonStats flag 9), it has an RN
+    // mode (bit 15), Terror's state (0x38) is on it. The other thinks': the
+    // BatDemon in S4 (unit +0x10 mode 11); the SandMaggot's AI command 14
+    // +0x18 (FUN_0058efa0).
+    bool swings = true, runs = false, afraid = true, in_s4 = false;
+    int* cast_word = nullptr;
 };
 
 // A monster's skill level (FUN_00573cb0): Sk*lvl + DifficultyLevels
@@ -1749,8 +1758,7 @@ Think mon_think(std::string_view ai_name, const ThinkIn& input, Rng& rng, Away&&
     // A2; hit aip2 % backs off 12 (state 2); aip3 %: aip4 % A2, else A1;
     // else stands 10; other states within 15 walk in (state 3), else state 4
     // and stand 15.
-    // ponytail: its other think (FUN_005f4fd0) runs only as a curse ends
-    // after its think left the curse's AI (monster-ai.md "Other thinks"); not ported.
+    // Its other think: other_think.
     if (ai_name == "BatDemon") {
         const int life = input.life_pct;
         auto mode = [&](MonAct act, int wait) { Think out{ act }; out.unit = ThinkUnit::none; out.wait = wait; return out; };
@@ -1901,9 +1909,7 @@ Think mon_think(std::string_view ai_name, const ThinkIn& input, Rng& rng, Away&&
     // circles 6; under aip3 eggs laid (state3) aip1 %: not circled (state
     // 2) it circles 6 (state 2), else Skill3 (an egg, event 20; state 1);
     // else waits 12.
-    // ponytail: its other think (FUN_005f1750) runs only as a curse ends
-    // after its think left the curse's AI (monster-ai.md "Other thinks");
-    // d2d's curses don't swap thinks, so it isn't ported.
+    // Its other think: other_think.
     if (ai_name == "SandMaggot") {
         const bool ready = *input.state2 < input.frame;
         const int second_dist = input.second ? input.second_dist : 0x7fffffff;
@@ -2079,6 +2085,95 @@ inline Think countess_think(const ThinkIn& input, const CountessIn& where, std::
     const int roll = rng(100);
     if (input.in_melee) return roll < input.aip[2] + 10 ? Think{ MonAct::a1 } : Think{ MonAct::idle, input.aip[1] };
     return roll < input.aip[0] ? Think{ MonAct::run } : Think{ MonAct::idle, input.aip[1] };
+}
+
+// The AI toggle (FUN_005b0e00(ctrl, special)): the think special names
+// (FUN_005b15d0: the special table 0x73d358's row, 0 the MonStats AI's
+// MonAI row). On that row's think already with an other think (the row's
+// fourth word) it swaps to that, ctrl[0] = special; else the scratch words
+// (+0x14..+0x1c) are cleared and the row's think set (its init run). Only
+// a MonAI row has an other think, so it's reached by toggling 0 on a
+// monster on its own think: an AI-swapping state (Dim Vision, Terror,
+// Cloak of Shadows) whose end (FUN_005c3370, on expiry or when another
+// curse takes its place, FUN_006269f0) comes while it's back on its own.
+// `special`: the monster's special AI (0 its own think), `other`: on its
+// row's other think.
+// ponytail: the init (row +4) and FUN_0058ede0 aren't run; d2d's thinks
+// take their first values as they go.
+inline void ai_toggle(int& special, bool& other, std::array<int*, 3> scratch, int next, bool has_other) {
+    if (next == 0 && special == 0 && !other && has_other) { other = true; return; }
+    special = next; other = false;
+    for (int* word : scratch) *word = 0;
+}
+
+// MonAI rows with an other think (the fourth word) d2d has: 15 SandMaggot,
+// 29 BatDemon. ponytail: rows 51, 52, 61, 65, 128, 135, 140, 145, 147, 152
+// (Acts 3..5) have one too; not ported, so they stay on their own think.
+inline bool has_other_think(std::string_view ai_name) { return ai_name == "SandMaggot" || ai_name == "BatDemon"; }
+
+// Dim Vision's and Cloak of Shadows' think (special AI 10, FUN_005e8020;
+// search type 1): in melee with a swing it swings (A1, mode 4); else 20 %
+// it wanders 3, else stands 10.
+inline Think dim_vision_think(const ThinkIn& input, Rng& rng) {
+    if (input.in_melee && input.swings) return { MonAct::a1 };
+    if (rng(100) < 20) return think_wander(rng, 3);
+    return { MonAct::idle, 10 };
+}
+
+// Terror's think (special AI 11, FUN_005e8140; Howl's too, FUN_005ddd00).
+// With state 0x38 gone it toggles back (FUN_005b0e00(ctrl, 0)) and thinks
+// next frame (FUN_005417d0(2, frame + 1)). Past its reach (state, 30 when
+// 0) it stands 10. Its pace is Run / Velocity (0..120 % on). The first time
+// (state3 0; state3 1) its skill-set target is cleared and it backs off 30
+// (running with an RN mode, FUN_005df140; else walking, FUN_005defe0);
+// after, in melee with a swing it swings (A1), else backs off 30 again
+// (flags 4), wandering 6 if it can't.
+// ponytail: its init (FUN_005e80e0) sets a skill-set target to the unit it
+// was at; d2d's search finds the same one.
+template <class Away>
+Think terror_think(const ThinkIn& input, Rng& rng, Away&& away) {
+    if (!input.afraid) {
+        input.effects->push_back({ ThinkEffect::toggle, 0, 0 });
+        Think out{ MonAct::none };
+        out.event = 1;
+        return out;
+    }
+    if (input.dist > (*input.state != 0 ? *input.state : 30)) return { MonAct::idle, 10 };
+    const int pace = input.velocity > 0 ? std::clamp(input.run * 100 / input.velocity - 100, 0, 120) : 0;
+    if (*input.state3 == 0) {
+        *input.state3 = 1;
+        input.effects->push_back({ ThinkEffect::unset, 0, 0 });
+        *input.pace = pace;
+        return away(30, input.runs) ? Think{ MonAct::none } : Think{ MonAct::idle, input.aidel };   // flags 0: aidel on when it can't (FUN_005a73e0)
+    }
+    if (input.in_melee && input.swings) return { MonAct::a1 };
+    *input.pace = pace;
+    if (away(30, input.runs)) return { MonAct::none };
+    return think_wander(rng, 6);
+}
+
+// The other thinks (the MonAI row's fourth word; ai_toggle). BatDemon's
+// (FUN_005f4fd0): in S4 it waits 1 (state 1); at state 4 it rises (S3,
+// FUN_005ddf90(10, none); state 1); else it toggles back (FUN_005b0e00(ctrl,
+// ctrl[0])) and stands 1. SandMaggot's (FUN_005f1750): with its AI command
+// 14's +0x18 at 1 and a Skill1 it casts Skill1 at the target (event 30; the
+// word 0); else it toggles back keeping the third scratch word, event 1.
+// ponytail: nothing found sets command 14's +0x18, so d2d's word stays 0.
+inline Think other_think(std::string_view ai_name, const ThinkIn& input) {
+    if (ai_name == "BatDemon") {
+        if (input.in_s4) { *input.state = 1; Think out{ MonAct::none }; out.wait = 1; return out; }
+        if (*input.state == 4) { *input.state = 1; Think out{ MonAct::s3 }; out.unit = ThinkUnit::none; return out; }
+        input.effects->push_back({ ThinkEffect::toggle, 0, 0 });
+        return { MonAct::idle, 1 };
+    }
+    if (ai_name == "SandMaggot") {
+        if (*input.cast_word == 1 && input.skill[0]) { *input.cast_word = 0; Think out{ MonAct::skill, 0 }; out.event = 30; return out; }
+        input.effects->push_back({ ThinkEffect::toggle, 0, 1 });
+        Think out{ MonAct::none };
+        out.event = 1;
+        return out;
+    }
+    return { MonAct::untraced };
 }
 
 }  // namespace d2d::rules

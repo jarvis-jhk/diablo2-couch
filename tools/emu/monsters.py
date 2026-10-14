@@ -57,7 +57,7 @@ def dump(e, seed, lid, difficulty=0):
     An act boss (FUN_005b1cf0 from FUN_005b2a00) adds `!<mods>` (the MonUMods it gave, `.`-joined) and `h`
     for its stat 0x76 (half freeze)."""
     g = new_game(e, seed, difficulty)
-    act = act_of(e, g, lid)
+    act = act_of(e, g, lid, drlg.act_of(lid))
     lvl = drlg.find_level(e, e.r32(act + 0x48), lid)
     if not lvl: raise SystemExit(f"monsters: level {lid} not built")
     x0, y0 = e.s32(lvl + 0x1c) * 5, e.s32(lvl + 0x20) * 5

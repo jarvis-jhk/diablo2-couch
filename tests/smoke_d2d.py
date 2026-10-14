@@ -358,10 +358,10 @@ try:
     assert all(m[5].split("/")[0] == m[5].split("/")[1] for m in mons)
     # Attack a monster until it's hurt.
     m = min(mons, key=lambda m: (float(m[1]) - x0) ** 2 + (float(m[2]) - y0) ** 2)
-    uid = m[-1].lstrip("#")
+    uid = m[-2].lstrip("#")                                         # then the sequence row drawn
     cmd(f"debug warp {float(m[1]) - 1:.2f} {float(m[2]):.2f}"); frames(6)
     for _ in range(40):
-        cur = next(r.split("\t") for r in cmd("monsters").splitlines()[:-1] if r.split("\t")[-1] == "#" + uid)
+        cur = next(r.split("\t") for r in cmd("monsters").splitlines()[:-1] if r.split("\t")[-2] == "#" + uid)
         if cur[5].split("/")[0] != cur[5].split("/")[1]:
             break
         cmd(f"cmd skill 0 {cur[1]} {cur[2]} {uid} 1"); frames(20)

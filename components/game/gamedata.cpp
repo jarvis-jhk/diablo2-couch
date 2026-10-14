@@ -816,7 +816,7 @@ void finish_level(Level& level) {
             for (int cell_x = 0; cell_x < map.width(); ++cell_x)
                 for (const auto& pick : level.picks[std::size_t(cell_y) * std::size_t(map.width()) + std::size_t(cell_x)]) {
                     if (!pick.stamp) continue;
-                    if (pick.layer == 1 || (pick.layer == 0 && pick.orient != 13 && pick.orient != 15)) stamp_tile(cell_x, cell_y, *pick.stamp);
+                    if (pick.layer == 1 || pick.layer == 2 || (pick.layer == 0 && pick.orient != 13 && pick.orient != 15)) stamp_tile(cell_x, cell_y, *pick.stamp);
                     for (int k = 0; k < 25 && pick.cell; ++k) level.walk[std::size_t(cell_y * 5 + k / 5) * std::size_t(walk_width) + std::size_t(cell_x * 5 + k % 5)] |= pick.cell;
                 }
         for (const auto& patch : level.patches)
@@ -1018,8 +1018,12 @@ std::size_t set_level_tiles(Level& level, const d2d::drlg::OutdoorAssets& assets
     level.room1_seeds.assign(made.size(), 0);
     level.nopop_rooms.assign(made.size(), false);
     level.room_areas.assign(made.size(), {});
+    level.room_floors.assign(made.size(), {});
     for (const auto& room : built)
         if (room.seed) {
+            for (const auto& tile : room.tiles)
+                if (tile.layer == 1 && tile.file && tile.index >= 0 && std::size_t(tile.index) < tile.file->tiles.size())
+                    level.room_floors[std::size_t(room.seed - made.data())].push_back({ tile.x, tile.y, std::uint16_t(tile.file->tiles[std::size_t(tile.index)].material) });
             level.room1_seeds[std::size_t(room.seed - made.data())] = room.room1_seed;
             level.room_areas[std::size_t(room.seed - made.data())] = room.areas.empty() ? std::vector<d2d::drlg::Area>{ { room.x, room.y, room.x + room.width, room.y + room.height, 1, false } } : room.areas;
             const auto preset = room.seed->kind == 2 ? assets.data.presets.find(room.seed->def) : assets.data.presets.end();
@@ -1098,7 +1102,8 @@ std::size_t set_level_tiles(Level& level, const d2d::drlg::OutdoorAssets& assets
 // An outdoor level of the act (the Blood Moor): drlg generate_outdoor
 // where the act's layout put it, on its level seed.
 bool build_outdoor(const GameData& game_data, d2d::mpq::Stack& mpqs, d2d::drlg::OutdoorAssets& assets, Level& level) {
-    const auto outdoor_level = d2d::drlg::outdoor_level(assets.levels, game_data.layout_of(level.id), level.id);
+    const auto outdoor_level = d2d::rules::level_ids::act_of(level.id) == 2 ? d2d::drlg::act3_outdoor_level(assets.levels, game_data.act3_layout, level.id)
+                                                                            : d2d::drlg::outdoor_level(assets.levels, game_data.layout_of(level.id), level.id);
     if (outdoor_level.rect.width == 0) { d2d::log::warn("{}: the layout didn't place it", level.name); return false; }
     const auto dt1s = load_level_dt1s(level, mpqs, assets, level.type, game_data.tile_pixels ? d2d::dt1::Pixels::decode : d2d::dt1::Pixels::skip);
     assets.data.dt1s = &dt1s.heads;                          // stamps pick their shadows as they go (game.exe's rolls)
@@ -1194,6 +1199,7 @@ std::unique_ptr<Level> build_level(const GameData& game_data, GameData::LevelBui
         level->layer = num(text("Layer"));
         level->light = level_light(text("Intensity"), text("Red"), text("Green"), text("Blue"));
         level->rain = text("Rain") == "1";
+        level->teleport = d2d::drlg::to_int(text("Teleport"), 1);
         for (std::size_t env_row = 0; env_row < builder.sound_env.size(); ++env_row)
             if (builder.sound_env.get(env_row, "Index") == text("SoundEnv")) {
                 level->song = num(builder.sound_env.get(env_row, "Song"));

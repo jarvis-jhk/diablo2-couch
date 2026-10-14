@@ -475,3 +475,35 @@ Concrete examples of monsters that carry `|= 0x40`: any champion mob
 rolled with cpick 36 (Blood Moor fallen1 champions, Cold Plains
 zombies etc.). No unique monster is Ghostly by default in vanilla —
 it's rolled per-pack on champion mods only.
+
+## Act 3's jungle (2026-10-13)
+
+Checked: `diff_drlg.py 76|77|78 monsters` (rooms and seeds), `LEVELS=75,76,77,78
+diff_drlg.py game`.
+
+- **Water spawns.** FUN_005b2a00 hands a spawnCol 1 type (but rows
+  0x102..0x107, the tentacles, and 0x99) to FUN_005b2700 instead of its
+  ring walk: the room's floor list (room1 +8: entries +8, count +0xc;
+  0x30-byte `{.., +8 x, +0xc y, .., +0x18 tile}`), from `rand(count)` on
+  the room seed (0 taken as 1) round to the one before the start
+  (never tried), a tile with DT1 material bit 2 (water, tile +6) whose
+  middle subtile (x·5 + 3, y·5 + 3) has no 0x100 and a plus clear of
+  0x1c09 at one of (0,−3) (3,0) (0,3) (−3,0) (0x6e2d50). The asked spot
+  is ignored. FUN_0054dc40's 20 tries each check the area (FUN_0061b130)
+  and WarpDist, then that scan. The Great Marsh's Swamp Dwellers.
+- **Tentacles.** A leader of base 0x105 (FUN_005b2830 → FUN_005b2570):
+  PartyMin..Max on its seed (FUN_004cc790), then a step `% 6`; each
+  minion1 at its spot only (radius −1, flags 0x40) at 0x6e2cf0[6k + r],
+  r going (r + 5) % 6; k 0 for a head placed with flags 4 (MonPlace 10,
+  north-south), else 1.
+- **MonPlace in FUN_0054e600:** 0x16 / 0x17 the level's 0x8d / 0x116
+  (fetish, fetish shaman) as the Fallen are; 10 / 11 a tentacle head
+  (0x105 down NextInClass by level: 0x54eb60 — 76–78 one, 92–93 two,
+  else none), its spot only; 9, 0x0c, 0x0d, 0x13–0x15, 0x21–0x24 make
+  nothing there.
+- **The Dark Wanderer** (object 368, InitFn 43, FUN_005bd1f0, a3q7):
+  MonStats 0x170 at the marker's x + 7, its spot only, once a game
+  (a3q7's init, FUN_005bd300, sets the record's "due" byte).
+- The collision grid (FUN_0064c900) takes the shadow layer's DT1
+  subtile flags too (act 2's desert's prickly shadows; Act 1's shadows
+  carry none).

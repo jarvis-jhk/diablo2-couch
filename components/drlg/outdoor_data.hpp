@@ -81,7 +81,7 @@ template <class Read> void load_outdoor_assets(OutdoorAssets& assets, Read&& rea
     for (std::size_t row = 0; row < prest.size(); ++row) {
         const int def = to_int(prest.get(row, "Def"));
         const auto name = prest.get(row, std::optional<std::size_t>{ 0 });
-        if (def < 1 || !(name.starts_with("Act 1 - ") || name.starts_with("Act 2 - ") || name == "Act 3 - Town")) continue;   // acts 1 and 2's presets, Kurast Docks
+        if (def < 1 || !(name.starts_with("Act 1 - ") || name.starts_with("Act 2 - ") || name.starts_with("Act 3 - "))) continue;   // acts 1 to 3's presets
         Preset preset{ to_int(prest.get(row, "SizeX")), to_int(prest.get(row, "SizeY")), to_int(prest.get(row, "Files")),
                   to_int(prest.get(row, "Scan")), to_int(prest.get(row, "Pops")),
                   to_int(prest.get(row, "LevelId")), to_int(prest.get(row, "KillEdge")), std::uint32_t(std::stoul("0" + std::string(prest.get(row, "Dt1Mask")))), {} };
@@ -183,6 +183,14 @@ inline d2d::rules::Rng act_seed(std::uint32_t map_seed) {
 }
 inline std::vector<Placed> act1_from_map_seed(const LevelDefs& defs, std::uint32_t map_seed) { return act1_layout(defs, act_seed(map_seed)); }
 
+// Two rects that touch on one axis and overlap on the other
+// (FUN_0066b880 with overlap -1).
+inline bool edge_shared(const Placed& first, const Placed& second) {
+    const int dx = second.x < first.x ? first.x - second.width - second.x : second.x - first.width - first.x;
+    const int dy = second.y < first.y ? first.y - second.height - second.y : second.y - first.height - first.y;
+    return (dx == 0 && dy < 0) || (dy == 0 && dx < 0);
+}
+
 // A placed outdoor level's generator input. Vis starts as Levels.txt's
 // and each chain link adds the pair both ways in the first free slot
 // (vis 0, warp -1; FUN_006772c0 -> FUN_00642920); the walkable ones
@@ -194,13 +202,14 @@ inline OutdoorLevel outdoor_level(const d2d::txt::Table& levels, const std::vect
         return nullptr;
     };
     if (const auto* placement = placed(id)) level.rect = *placement;
-    if (const auto* town = placed(id >= level_ids::kLutGholein ? level_ids::kLutGholein : 1)) level.town = *town;
+    if (const auto* town = placed(id >= level_ids::kKurastDocks ? level_ids::kKurastDocks : id >= level_ids::kLutGholein ? level_ids::kLutGholein : 1)) level.town = *town;
     const auto row = level_row(levels, id);
     if (!row) return level;
     level.sub_type = to_int(levels.get(*row, "SubType"), -1);
     level.sub_theme = to_int(levels.get(*row, "SubTheme"), -1);
     level.sub_waypoint = to_int(levels.get(*row, "SubWaypoint"), -1);
     level.sub_shrine = to_int(levels.get(*row, "SubShrine"), -1);
+    level.level_type = to_int(levels.get(*row, "LevelType"), 2);
     std::array<int, 8> vis{}, warp{};
     for (int i = 0; i < 8; ++i) {
         vis[std::size_t(i)] = to_int(levels.get(*row, "Vis" + std::to_string(i)));
@@ -218,12 +227,28 @@ inline OutdoorLevel outdoor_level(const d2d::txt::Table& levels, const std::vect
             if (record.level == id) add(other);
             else if (other == id) add(record.level);
         }
+    // Act 3's (FUN_006775c0): each of 75..83 whose rect shares an edge with
+    // this one's (FUN_0066b880, overlap -1), in id order.
+    if (const auto* self = placed(id); self && id >= level_ids::kKurastDocks && id <= level_ids::kTravincal)
+        for (int other = level_ids::kKurastDocks; other <= level_ids::kTravincal; ++other)
+            if (const auto* rect = placed(other); rect && other != id && edge_shared(*self, *rect)) add(other);
     for (int i = 0; i < 8; ++i)
         if (vis[std::size_t(i)] && warp[std::size_t(i)] == -1)
             if (const auto* placement = placed(vis[std::size_t(i)])) {
                 const auto other = level_row(levels, vis[std::size_t(i)]);
                 level.neighbours.push_back({ *placement, i, other && to_int(levels.get(*other, "DrlgType")) == 2 });
             }
+    return level;
+}
+
+// An act 3 level's input: its layout's rects and, for the jungle, its cells.
+inline OutdoorLevel act3_outdoor_level(const d2d::txt::Table& levels, const Act3Layout& layout, int id) {
+    auto level = outdoor_level(levels, layout.levels, id);
+    if (id >= level_ids::kSpiderForest && id <= level_ids::kFlayerJungle) {
+        const auto& cells = layout.jungle[std::size_t(id - level_ids::kSpiderForest)];
+        level.jungle = cells.presets;
+        level.jungle_specials = cells.specials;
+    }
     return level;
 }
 

@@ -351,8 +351,22 @@ lines (missile names aren't passed in). What it does:
   record flags 2, so FUN_0057dbf0 **skips FUN_0057b7d0** (no crit, gear
   elements, leech, conversion); hit class 0x65. A monster's Smite:
   FUN_005a4f50 mode 5 (A2's damage, elements and to-hit), stun calc2,
-  FUN_0057ec10's hit roll (not sure to hit), the skill's ResultFlags /
-  HitFlags on a hit, hit class 0x65.
+  FUN_0057ec10's hit roll (not sure to hit); on a hit (result & 1) the
+  skill's ResultFlags (+0x12e, Smite's 8: knockback) into the result and
+  HitFlags (+0x130, none) into the flags; hit class 0x65; FUN_0057dbf0
+  (EDX 0x80), FUN_0057d4f0.
+- **Knockback** (result flag 8, FUN_0057cee0): on a player mode 0x13 (KB,
+  FUN_00580a70 -> FUN_0057f190 -> FUN_0057f090): path type 8, 5 subtiles
+  on from the attacker (FUN_00648cf0 / FUN_00648e40); no path, NU
+  (FUN_0057f020). On a monster with no KB mode (MonStats2 bit 13) it's
+  turned into a get-hit (flag 4); else mode 13 (FUN_005a7e60 /
+  FUN_005a7c20; start FUN_005a77d0: GH and KB modes, alive): path type 8,
+  5 subtiles, 10 for class 0x4e (sandleaper1); each frame along the path
+  (FUN_005a8630 -> FUN_00554ca0) till the mode ends, then FUN_005a8520:
+  GH (mode 3), a Sand Leaper instead thinking 15 frames on (45 stunned).
+  The player's KB is drawn as GH (PlrMode.txt). d2d: `Fight::land` and
+  `monster_update`'s KB (a monster), `Fight::knock` (the player), an even
+  slide over the mode (path type 8 adds no pace, 0x6eb648[8] = 0).
 - Record flags seen: 1 = the physical is built (FUN_0057b7d0 doesn't roll
   the weapon), 2 = don't run FUN_0057b7d0 at all, 0x1000 = self damage;
   FUN_0057b7d0 marks 0x20.
@@ -726,6 +740,15 @@ lines (missile names aren't passed in). What it does:
   (FUN_0064a710). Hit **12** (FUN_005aa730): with hops > 1, a new one from
   the hit point at another unit within sHitPar1 (else aurarange) subtiles,
   filter 0x88583, not the one just hit, a hop fewer.
+- **Missile do 14** (FUN_005aef70, Grim Ward's grimwardsmall / medium /
+  large): every Param1 frames (6; FUN_0064a3b0 the missile's age) it runs
+  skill srvdofunc Param2 (30, the curse; FUN_0056d810 -> 0x7322b0) at the
+  missile's skill and level (FUN_0064a280 / FUN_0064a210), the missile its
+  caster. With no target unit the point is its own spot (FUN_0056d2c0), so
+  Terror (Grim Ward's auratargetstate) lands round it: aurarangecalc ln12,
+  auralencalc par6 (60) / AiCurseDivisor, the AI swap as a Necromancer's
+  Terror (monster-ai.md "Curse thinks"). d2d: the missile update runs
+  `spot` with the skill as do 30.
 - **Do 28** (FUN_005ca3e0 -> FUN_0056ede0: Meteor, Blizzard, Eruption):
   srvmissilea standing at the target point (within 100). Blizzard's centre
   (missile do **10**, FUN_005aea60) and Eruption's (**25**, FUN_005af880)
@@ -868,7 +891,8 @@ lines (missile names aren't passed in). What it does:
 - Curses: do **30** (FUN_005c37c0) and **61** (FUN_005c3f20, Confuse):
   auratargetstate (+0x82) with its aurastats for auralen frames on every
   unit within aurarange of the target (FUN_0056e780 -> FUN_005c35c0 /
-  FUN_005c3de0). **59** (FUN_005c3b90, Attract) on the one unit. **6**
+  FUN_005c3de0). Dim Vision and Terror swap the monster's AI (special 10 / 11)
+  and land only where FUN_0056e2f0 lets (monster-ai.md "Curse thinks"). **59** (FUN_005c3b90, Attract) on the one unit. **6**
   (FUN_005db1c0, Inner Sight / Slow Missiles) round the caster. **71**
   (FUN_005d8570, Taunt) on the monster (or the nearest within 20).
 - War cries: do **68** (FUN_005d83e0): a nova of srvmissilea (FUN_0056d400)
@@ -891,10 +915,34 @@ lines (missile names aren't passed in). What it does:
   (+0x1c; 1, 2, 4) for Confuse (FUN_005c3f20), Attract (FUN_005c3bcc), and
   do 30's curses whose auratargetstate is 23 dimvision or 56 terror
   (FUN_005c3400); the other curses keep auralen.
-- Aura event functions seen: 1 Chilling Armor (hitbymissile), 2 Frozen
-  Armor (damagedinmelee), 3 Shiver Armor (attackedinmelee), 4 Iron Maiden
-  (domeleedamage), 5 Life Tap (damagedinmelee / damagedbymissile), 22 /
-  25 Bone / Cyclone Armor (absorbdamage), 24 Energy Shield (absorbdamage).
+- Aura event functions (FUN_0056e740 -> table 0x7325b0 by auraeventfunc,
+  registered with FUN_005c0ad0; ECX the wearer, then the other unit, the
+  hit, skill, level):
+  - **1** Chilling Armor (FUN_005cab40, hitbymissile): the missile's owner
+    (FUN_00552fd0: unit +0x98 when +0xc8 bit 10), hostile (FUN_00554200),
+    and the missile's row ReturnFire (flag bit 9, +5 & 2; checked against
+    Missiles.txt): the skill's srvmissilea (+0x48) from the wearer at the
+    owner's spot (FUN_0059fa30, flags 0x20).
+  - **2** Frozen Armor (FUN_005cac50, damagedinmelee): a player or monster
+    whose hit did damage (+8 over 0) gets a hit with flag 0x20 and calc1
+    (+0x138) frames' freeze (+0x34; FUN_0057c6c0), the skill's overlay
+    (+0x110).
+  - **3** Shiver Armor (FUN_005cad40, attackedinmelee): the skill's
+    element (FUN_0056e0c0) as a hit (result 0x4021, flags 0xd;
+    FUN_0057c6c0, FUN_0057cee0), the overlay.
+  - **4** Iron Maiden (FUN_005c5f50) / **5** Life Tap (FUN_005c61e0): on
+    the cursed unit, calc1 % of the damage back / as life to the attacker
+    (Iron Maiden's calc2 / calc3 when the wearer is a player or pet).
+  - **22** Bone Armor (FUN_005c6370, absorbdamage): its pool stat
+    (record +0x54) takes the hit's physical (+8); at 0 the state goes.
+  - **24** Energy Shield (FUN_005ca6c0): calc1 % of each damage type of
+    DAT_006e30e0 (+8, +0x10, +0x1c, +0x24, +0x20; the flagged +0x38..+0x40
+    only from a monster), mana (stat 8) taken 16 / calc2 a point; at 0 the
+    state goes.
+  - **25** Cyclone Armor (FUN_005c87a0): the pool takes fire, lightning
+    and cold (+0x10, +0x1c, +0x24; FUN_005c8780 each).
+  d2d: `buff_events` (Foe::fired_by, damaged_by), `absorb` (Taken::physical
+  / elemental).
 - Built: `self_cast` (all of the above), `start_state`, `state_of`,
   `absorb`, `buff_events`, `buff_tick` (Blaze, Thunder Storm),
   `Monster::curse / cry` with `monster_states` (damage %, pace %, Iron
@@ -902,11 +950,35 @@ lines (missile names aren't passed in). What it does:
   in `land`, Battle Orders' maxima in `update_fighters`, Redemption in
   `aura_pulse`, Conversion (st 32 / do 79), Leap / Dragon Flight /
   Telekinesis as spot skills, Grim Ward's totem, `Loot::put`; devctl
-  `debug states`. Not traced: the event functions (the published
-  effects), Thunder Storm's pace and reach, Confuse / Attract / Conversion
-  (the monster only stops seeing the player's side), Battle Command's
-  +1 skills, the war cries on the merc and pets, Leap's and Dragon
-  Flight's movement (they arrive at once).
+  `debug states`.
+- **Thunder Storm** (do 29, FUN_005ca4d0): the cast puts the state on with
+  the skill and level in stats 0x15e / 0x15f, a periodic skill run every
+  perdelay frames while it lasts; each run strikes (srvmissilea, hit at once,
+  FUN_005adf10) the monster within Param7 subtiles (FUN_005c8bc0, record
+  +0x160; 17) whose unit id is next after the last struck (FUN_006444a0 /
+  FUN_00644560), round to the lowest (FUN_0056bd10 with callback 0x56bcd0).
+- **Battle Command**'s aurastat1 item_allskills (1) adds to every skill
+  while its state is on (World's `skill_level`).
+- **War cries on allies** (hit 18, FUN_005ab0b0): the nova's missile
+  reaching a unit FUN_00554de0 calls an ally gives it the state too
+  (FUN_005d8290: the caster's auralen and level, aurastats FUN_005c6cc0).
+  d2d: `merc_cry` (Shout's armor %, Battle Orders' life % on the merc),
+  a pet's buffs (`Pet::bo_life`, its armor %), those within the missile's
+  reach as it's cast.
+- **Leap** (start 40, FUN_005d9d50; do 77, FUN_005da370): the point pulled
+  back to aurarangecalc subtiles (FUN_005d9a10, FUN_006417f0), a free spot
+  (mask 0x1c09, three tries) reached in a line (FUN_00645910, 0x804) within
+  reach, state 0x12; at its first event it flies there (FUN_005d9f70: path
+  type 9 at the class's run velocity, CharStats +0x41 << 8; a monster's
+  MonStats Run), at the next it lands (FUN_005da120) and knocks back each
+  monster within calc1 subtiles (result 9, FUN_0056bad0). d2d:
+  `Fight::leap`.
+- **Dragon Flight** (start 12, FUN_005c9030: the target within
+  aurarangecalc, neither in town; do 52, FUN_005d7850): the flight is at
+  once, to the free spot nearest the target (FUN_00554ea0), unless the
+  level's Teleport (Levels.txt, FUN_0061db70 +4) is 0, or 2 without a clear
+  line (FUN_006229f0, 0x804); then the kick. `Level::teleport` holds the
+  column (Acts 1–2: 1, Duriel's Lair 2); Teleport obeys it too.
 
 ### The rest (phase 6, part 5)
 - Royal Strike's releases: **40** (FUN_005d5010: the count's missile

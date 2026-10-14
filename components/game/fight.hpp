@@ -193,6 +193,11 @@ struct Fight {
     int   attack_mon = -1;
     int   pmode = -1;
     std::uint32_t pmode_until = 0;
+    // Knocked back (mode 0x13, drawn as GH: PlrMode.txt): from, to, cells.
+    std::optional<std::array<float, 4>> knock;
+    // Leap in flight (do 77): from, to, its start and landing, its skill and level.
+    struct Leap { float from_x = 0, from_y = 0, to_x = 0, to_y = 0; std::uint32_t start = 0, lands = 0; int skill = -1, level = 1; };
+    std::optional<Leap> leap;
     bool  pstruck = false;                 // this swing's hit is resolved
     float prate = 1.f;                     // the mode's animation rate (attack speed, FHR, FBR)
     d2d::rules::Fighter player_combat;                // the player in a fight, as of this frame
@@ -233,6 +238,7 @@ struct Fight {
         std::vector<Charge> charges;               // a Shadow's charge-ups' charges (as the player's)
         std::vector<SelfState> buffs;              // a Shadow's self states (Burst of Speed, Fade, Venom, Cloak, Blade Shield)
         std::unordered_map<int, int> buff_stats;   // their aurastats summed (pet_buffs)
+        int bo_life = 0;                           // a war cry's maxhp percent on its life (pet_buffs)
         std::uint32_t blade_next = 0;              // its Blade Shield's next strike
     };
     // What a Shadow summons while the pets take their turns (traps, Blade
@@ -271,6 +277,7 @@ struct Fight {
     std::vector<SelfState> self_states;
     int absorb_pool = 0, absorb_skill = -1;        // Bone / Cyclone Armor's damage left to absorb
     std::uint32_t blaze_frame = 0, storm_next = 0; // Blaze's last flame, Thunder Storm's next bolt
+    int storm_last = -1;                            // the unit id Thunder Storm struck last (FUN_00644560)
     std::uint32_t storm_frame = 0;                 // the last frame buff_tick ran its paced strikes
     std::uint32_t blade_next = 0;                  // Blade Shield's next strike
     std::int64_t bo_life = 0, bo_mana = 0;         // Battle Orders' life and mana on the maxima (256ths)
@@ -305,6 +312,10 @@ struct Fight {
     // (skill_armor_percent), melee strikers freeze (merc_buff_events), and
     // the pick passes it over while it runs (FUN_005e4d30, its state on).
     struct MercBuff { int skill = -1, level = 0; std::uint32_t until = 0; } merc_buff;
+    // A war cry's state on it (hit 18, FUN_005ab0b0 -> FUN_005d8290: Shout's
+    // defense %, Battle Orders' life %, Battle Command's), apart from its own.
+    MercBuff merc_cry;
+    [[nodiscard]] int merc_cry_stat(int stat) const;
     void merc_buff_events(Foe& foe, std::uint32_t now_ms);
     // What the merc's think reads of the player: its mode (2 walk, 3 run, 6
     // walk in town, 1 else) and footsteps (player data +0xa0 / +0xa8, 20
@@ -529,17 +540,16 @@ struct Fight {
     // The player's buffs as the fight goes (their aura events, +0x84):
     // Frozen Armor freezes a melee attacker for calc1 frames (func 2),
     // Shiver Armor hits one with its cold (3), Chilling Armor answers a
-    // missile with its bolt at the nearest monster (1); Bone / Cyclone
-    // Armor absorb (22 / 25) and Energy Shield takes calc1 % of the damage
+    // ReturnFire missile with its bolt at the shooter (1); Bone / Cyclone
+    // Armor absorb physical / elemental (22 / 25) and Energy Shield takes calc1 % of the damage
     // from mana at calc2 / 16 mana a point (24). Blaze leaves its fire
-    // where the player walks; Thunder Storm strikes a monster within 5 cells
-    // every 1.6 s.
-    // ponytail: the event functions aren't traced (the published effects);
-    // Bone Armor takes any damage, Cyclone Armor too (not only elements);
-    // Chilling Armor's bolt goes at the nearest monster, not the shooter;
-    // Thunder Storm's pace and reach are the published ones.
-    int absorb(int damage);
+    // where the player walks; Thunder Storm strikes the monsters within
+    // Param7 subtiles in turn, every perdelay frames.
+    // Traced in skills.md "Aura event functions" and "Thunder Storm".
+    int absorb(const Foe& foe);
     void buff_events(Foe& foe, std::uint32_t now_ms);
+    // Chilling Armor's answer, after the frame's missiles have struck.
+    void return_fire(const Foe& foe, std::uint32_t now_ms);
     void buff_tick(std::uint32_t now_ms);
     // The skill states on the monsters (their curse and cry slots): what
     // they add up to this frame. Aurastats damagepercent (25) and

@@ -9,6 +9,8 @@
 // objgroups; levels in turn in one game: drlg-dump ... game.
 #include "gamedata.hpp"
 #include <level_ids.hpp>
+#include <quests.hpp>
+#include <units.hpp>
 #include <monsters.hpp>
 #include <montypes.hpp>
 #include <object_ids.hpp>
@@ -58,6 +60,7 @@ struct ObjectRooms {
     Rect room{};
     d2d::rules::Rng seed;                               // the room's (room1 +0x6c)
     d2d::rules::Rng game;                               // the game seed (game +0xd0): a step per unit made
+    std::array<std::uint8_t, 96> game_quests{};         // Spawning's
     std::bitset<128> superuniques;                      // made (game +0x1d30)
     d2d::rules::Region region;                          // the level's monster region: their looks
     Level::GroupRoom* out = nullptr;
@@ -377,9 +380,34 @@ struct ObjectRooms {
     [[nodiscard]] d2d::rules::SpawnRoom bounds(bool in_area) const {
         return in_area ? d2d::rules::SpawnRoom{ area.x, area.y, area.w, area.h, seed } : d2d::rules::SpawnRoom{ room.x, room.y, room.w, room.h, seed };
     }
+    // spawnCol 1 (but rows 0x102..0x107, 0x99): FUN_005b2a00 takes FUN_005b2700's
+    // spot instead of the asked one: from rand(n) (0 taken as 1) round the
+    // room's floor list, stopping short of the one before it, a water tile
+    // (material 2) whose middle subtile holds no unit (0x100) with a plus
+    // clear of 0x1c09 at one of (0,-3) (3,0) (0,3) (-3,0).
+    [[nodiscard]] bool by_water(int type) const {
+        const auto* info = type_at(type);
+        return info && info->spawn_col == 1 && (type < 0x102 || type > 0x107) && type != 0x99;
+    }
+    bool water_spot(int& out_x, int& out_y) {
+        if (index >= level.room_floors.size() || level.room_floors[index].empty()) return false;
+        const auto& floors = level.room_floors[index];
+        const int count = int(floors.size());
+        const int start = std::max(seed(count), 1), stop = start - 1;
+        static constexpr std::array<std::pair<int, int>, 4> kAround = { { { 0, -3 }, { 3, 0 }, { 0, 3 }, { -3, 0 } } };
+        for (int at_index = start; at_index != stop; at_index = (at_index + 1) % count) {
+            if (at_index >= count || !(floors[std::size_t(at_index)].material & 2)) continue;   // past the list (count 1): game.exe reads beyond it
+            const int x = floors[std::size_t(at_index)].x * 5 + 3, y = floors[std::size_t(at_index)].y * 5 + 3;
+            if (const auto flags = at(x, y); flags == 0x27 || (flags & 0x100)) continue;
+            for (const auto& [dx, dy] : kAround)
+                if (!hit_shape(x + dx, y + dy, 2, 0x1c09)) { out_x = x; out_y = y; return true; }
+        }
+        return false;
+    }
     // FUN_005b2a00 round (x, y) out to radius (-1: the spot only), in the
     // area being populated when `bound` (its rect and its id), else the room.
     bool put(int type, int x, int y, int radius, bool bound, int& out_x, int& out_y) {
+        if (by_water(type)) return water_spot(out_x, out_y);
         const bool in_area = bound && area.w > 0;
         auto spawn_room = bounds(in_area);
         const bool ok = d2d::rules::monster_detail::place(spawn_room, x, y, radius, [&](int test_x, int test_y) { return (!in_area || area_id(test_x, test_y) == area.id) && fits(type, test_x, test_y); }, out_x, out_y);
@@ -394,6 +422,15 @@ struct ObjectRooms {
         auto by_way = [&](int x, int y) {
             return nearby && std::ranges::any_of(ways, [&](const auto& way) { return (x - way.first) * (x - way.first) + (y - way.second) * (y - way.second) < warp_dist; });
         };
+        if (by_water(type)) {                            // FUN_0054dc40's 20 tries, each its area then the water (FUN_005b3040)
+            const int left = spawn_room.x + 1, top = spawn_room.y + 1, span_x = spawn_room.x + spawn_room.width - left, span_y = spawn_room.y + spawn_room.height - top;
+            for (int tries = 0; tries < 20; ++tries) {
+                const int x = seed(span_x) + left, y = seed(span_y) + top;
+                if (by_way(x, y) || (in_area && area_id(x, y) != area.id)) continue;
+                if (int water_x, water_y; water_spot(water_x, water_y)) { out_x = x; out_y = y; return true; }
+            }
+            return false;
+        }
         const bool ok = d2d::rules::room_spot(spawn_room, [&](int test_x, int test_y) { return (!in_area || area_id(test_x, test_y) == area.id) && fits(type, test_x, test_y); }, by_way, out_x, out_y);
         seed = spawn_room.seed;
         return ok;
@@ -447,10 +484,26 @@ struct ObjectRooms {
     }
     // FUN_005b2830: PartyMin..Max on the leader's seed, minion1 / minion2 in
     // turn, radius 4 round it in its room (FUN_005b23c0, no party of their own).
+    // A tentacle head's (base 0x105, FUN_005b2570): its minion1s, each at its
+    // spot only, at 0x6e2cf0's offsets from a step of its seed % 6 down,
+    // row 0 for a north-south head (MonPlace 10), row 1 else.
+    bool tentacle_ns = false;
     void party(int row, d2d::rules::Rng& own, int at_x, int at_y) {
         const auto* type = type_at(row);
         if (!type || type->minion[0] < 0) return;
         const int kinds = type->minion[1] >= 0 ? 2 : 1;
+        if (type->base == int(game_data.mon_bin[0x105])) {
+            static constexpr std::array<std::pair<int, int>, 12> kSpread = { { { -1, -4 }, { 1, 4 }, { 1, -3 }, { -1, 3 }, { 0, 2 }, { 0, -2 },
+                                                                                { -3, -1 }, { 3, 1 }, { 2, -1 }, { -2, 1 }, { 1, 0 }, { -1, 0 } } };
+            const int count = own.range(type->party_min, type->party_max);
+            int turn = int(own.next() % 6);
+            for (int i = 0; i < count; ++i) {
+                const auto [dx, dy] = kSpread[std::size_t((tentacle_ns ? 0 : 6) + turn)];
+                turn = (turn + 5) % 6;
+                if (int to_x, to_y; put(type->minion[0], at_x + dx, at_y + dy, -1, false, to_x, to_y)) made(type->minion[0], to_x, to_y);
+            }
+            return;
+        }
         for (int i = 0, count = own.range(type->party_min, type->party_max); i < count; ++i)
             if (int to_x, to_y; put(type->minion[std::size_t(i % kinds)], at_x, at_y, 4, false, to_x, to_y)) made(type->minion[std::size_t(i % kinds)], to_x, to_y);
     }
@@ -630,6 +683,27 @@ struct ObjectRooms {
         else pick = std::array{ 5, 6, 0x8b, 0x8c, 0x8d, 0x90, 0xb0, 0xb1, 0xc6, 0xf0, 0xf1, 0xf2, 0xf3 }[low % 13];
         return id == 580 && level.id == d2d::rules::level_ids::kTowerCellarLevel5 ? 0x173 : pick;
     }
+    // MonStats `hc_idx` made at the unit's spot (else within `retry`); an
+    // NPC (Flavie, the towns') stands where it was made and walks the unit's
+    // DS1 path (`walks`: a marker's unit (FUN_005b2f20) takes none).
+    void monster_or_npc(int hc_idx, const d2d::drlg::Unit& unit, int retry, bool walks = true) {
+        const auto row = game_data.mon_bin[std::size_t(hc_idx)];
+        if (spawns) leader = int(spawns->size());                                              // a placement of its own (FUN_005b2f20)
+        last_made.reset();
+        monster(int(row), unit.x, unit.y, retry);
+        if (!game_data.mon_is_npc[row] || game_data.mon_npc[row].code.empty()) return;
+        auto npc = game_data.mon_npc[row];
+        const auto [spot_x, spot_y] = last_made ? last_spot : std::pair{ unit.x, unit.y };     // where it was made: its spot, or the free one nearest
+        npc.x = (float(spot_x) + 0.5f) / 5;
+        npc.y = (float(spot_y) + 0.5f) / 5;
+        for (std::size_t k = 0; walks && k < unit.path.size(); ++k) {                          // its DS1 path (the town AIs walk it)
+            npc.path.emplace_back((float(unit.x + unit.path[k].first) + 0.5f) / 5, (float(unit.y + unit.path[k].second) + 0.5f) / 5);
+            npc.actions.push_back(k < unit.actions.size() ? unit.actions[k] : 0);
+        }
+        // Its unit seed after its init's draws (the look, the life: made()'s), what its think rolls on (town-npcs.md).
+        if (last_made) npc.seed = *last_made;
+        level.npcs.push_back(std::move(npc));
+    }
     // FUN_005559a0: the room's preset units, the monsters last (`monsters`: normal's, here).
     void presets(std::size_t room_at, bool monsters) {
         const int nmon = int(game_data.mon_bin.size()), nsu = int(game_data.superuniques.size());
@@ -642,6 +716,21 @@ struct ObjectRooms {
                 // FUN_0054f370: FUN_005540a0(unit, 1); in the Maggot Lair (62-64) only 51 in 100, an object-seed draw after it's made.
                 const bool lair = level.id >= d2d::rules::level_ids::kMaggotLairLevel3 - 2 && level.id <= d2d::rules::level_ids::kMaggotLairLevel3;
                 if (unit.id == 580 && level.npcs.size() > before && (!lair || rgn.next() % 100 <= 50)) level.npcs.back().sparkle = true;
+                // The docks' markers, each making its NPC there as the game's quest
+                // words stand: InitFn 49 (FUN_005b70b0) Hratli (0xfd) by the dock
+                // till word 0x10 has bit 13, InitFn 50 (FUN_005b7160) at his shop
+                // after; InitFn 52 (FUN_005bce80, object 0x17e: the DS1's Natalya,
+                // units.hpp) Natalya (0x129), else within 3, till word 0x16 has bit 13.
+                // ponytail: their quest records' "made" bits aren't kept: a room comes up once.
+                const int init = obj(unit.id, "InitFn");
+                const bool hratli_moved = d2d::rules::qbit(game_quests, 0x10, 13);
+                if ((init == 49 && !hratli_moved) || (init == 50 && hratli_moved)) monster_or_npc(0xfd, unit, 0, false);
+                if (init == 52 && !d2d::rules::qbit(game_quests, 0x16, 13)) monster_or_npc(0x129, unit, 3, false);
+                // InitFn 43 (FUN_005bd1f0, a3q7, object 368 by the jungle's head): the Dark
+                // Wanderer (0x170) 7 subtiles east of it, its spot only; a3q7's init (FUN_005bd300)
+                // leaves him due in every game.
+                // ponytail: his walk (a3q7's think) isn't ported; he stands.
+                if (init == 43) { auto east = unit; east.x += 7; monster_or_npc(0x170, east, 0, false); }
             }
             else if (unit.type == d2d::rules::unit_type::kWarp) game.next();                                                          // a warp tile: a unit made
         }
@@ -669,25 +758,21 @@ struct ObjectRooms {
             if (level.unit_rooms[i] != int(room_at) || unit.type != d2d::rules::unit_type::kMonster || (unit.flags & 1) || unit.id < 0) continue;
             leader = int(spawns->size());                                                              // FUN_00555910: a placement of its own
             if (unit.id < nmon) {
-                const auto row = game_data.mon_bin[std::size_t(unit.id)];
                 const bool stay = unit.id == 0xe5 || (unit.id >= 0x11c && unit.id <= 0x120) || unit.id == 0x188 || unit.id == 0x189;   // FUN_0054e3a0
-                last_made.reset();
-                monster(int(row), unit.x, unit.y, stay ? 0 : 4);
-                if (game_data.mon_is_npc[row] && !game_data.mon_npc[row].code.empty()) {                // an NPC (Flavie, Lut Gholein's) stands at its spot
-                    auto npc = game_data.mon_npc[row];
-                    const auto [spot_x, spot_y] = last_made ? last_spot : std::pair{ unit.x, unit.y };     // where it was made: its spot, or the free one nearest
-                    npc.x = (float(spot_x) + 0.5f) / 5;
-                    npc.y = (float(spot_y) + 0.5f) / 5;
-                    for (std::size_t k = 0; k < unit.path.size(); ++k) {                                   // its DS1 path (the town AIs walk it)
-                        npc.path.emplace_back((float(unit.x + unit.path[k].first) + 0.5f) / 5, (float(unit.y + unit.path[k].second) + 0.5f) / 5);
-                        npc.actions.push_back(k < unit.actions.size() ? unit.actions[k] : 0);
-                    }
-                    // Its unit seed after its init's draws (the look, the life: made()'s), what its think rolls on (town-npcs.md).
-                    if (last_made) npc.seed = *last_made;
-                    level.npcs.push_back(std::move(npc));
-                }
-            } else if (const int code = unit.id - nmon - nsu; code == 0x11 || code == 0x12 || code == 0x05) {
-                monster(code == 0x05 ? int(game_data.mon_bin[0x10b]) : own(code == 0x11 ? 0x13 : 0x3a), unit.x, unit.y, code == 0x05 ? 0 : 4);   // Fallen, shamans, Blood Raven
+                monster_or_npc(unit.id, unit, stay ? 0 : 4);
+            } else if (const int code = unit.id - nmon - nsu; code == 0x11 || code == 0x12 || code == 0x16 || code == 0x17 || code == 0x05) {
+                // Fallen, shamans, fetishes, fetish shamans (FUN_0054e600's 0x54eb74: the level's of that base), Blood Raven
+                const int base = code == 0x11 ? 0x13 : code == 0x12 ? 0x3a : code == 0x16 ? 0x8d : 0x116;
+                monster(code == 0x05 ? int(game_data.mon_bin[0x10b]) : own(base), unit.x, unit.y, code == 0x05 ? 0 : 4);
+            }
+            else if (code == 10 || code == 11) {                                                       // a tentacle head (0x105, FUN_0054da60):
+                const int depth = level.id >= 0x4c && level.id <= 0x4e ? 1 : level.id >= 0x5c && level.id <= 0x5d ? 2 : 0;   // 0x54eb60 by level
+                int row = int(game_data.mon_bin[0x105]);
+                // ponytail: NextInClass as the next row of its base (tentaclehead1..3 are)
+                for (int step = 0; step < depth && std::size_t(row + 1) < types.size() && types[std::size_t(row + 1)].base == types[std::size_t(row)].base; ++step) ++row;
+                tentacle_ns = code == 10;
+                monster(row, unit.x, unit.y, 0);                                                         // its spot only; NS (10) in mode 4
+                tentacle_ns = false;
             }
             else if ((code == 0x02 || code == 0x03) && !level.mon.umon.empty())                         // FUN_005bde80: normal's pick is a umon
                 monster(level.mon.umon[std::size_t(seed(int(level.mon.umon.size())))], unit.x, unit.y, 0, -1, code);
@@ -824,6 +909,7 @@ void ObjectRooms::load(Spawning& spawning, std::size_t room_index) {
     rgn = spawning.objects;
     game = spawning.game;
     superuniques = spawning.superuniques;
+    game_quests = spawning.game_quests;
     region = std::size_t(level.id) < spawning.regions.size() ? spawning.regions[std::size_t(level.id)] : d2d::rules::Region{};
     auto& state = spawning.levels[&level];
     rooms_up(spawning);
@@ -881,9 +967,9 @@ void place_objects(const GameData& game_data, GameData::LevelBuilder& builder, L
             town = { game_data.town.world_x, game_data.town.world_y, game_data.town.ds1.width(), game_data.town.ds1.height() };
             has_town = true;
         }
-    } else if (level.id != d2d::rules::level_ids::kLutGholein)
+    } else if (const int town_id = level.id < d2d::rules::level_ids::kKurastDocks ? d2d::rules::level_ids::kLutGholein : d2d::rules::level_ids::kKurastDocks; level.id != town_id)
         for (const auto& placed : game_data.layout_of(level.id))
-            if (placed.level == d2d::rules::level_ids::kLutGholein) { town = { placed.x, placed.y, placed.width, placed.height }; has_town = true; }
+            if (placed.level == town_id) { town = { placed.x, placed.y, placed.width, placed.height }; has_town = true; }
     if (has_town) {
         const auto [town_x, town_y, town_w, town_h] = town;
         for (std::size_t i = 0; i < level.rooms.size(); ++i) {

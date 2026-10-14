@@ -138,10 +138,12 @@ d2d matches both, and the one-poison-at-a-time rule.
 - Monster attack rating: stat 19 + dex × 5 + the skill's bonus, × (100 +
   stat 119) / 100.
 - `c = AR × 100 / (AR + DEF)`; `c = c × 2 × alvl / (alvl + dlvl)`, clamped
-  5..95; hit when the attacker's seed % 100 < c.
+  5..95; hit when the attacker's seed % 100 < c. A swing at a player in
+  mode 3 (RN) skips the roll and lands (FUN_0057ec10); a missile still rolls.
 - Then the defender's rolls (FUN_0057dfb0 → FUN_0057dd60), each cancelling
   the hit: **block** (the defender's seed % 100 < chance, the chance a third
-  while the player moves), then Weapon Block (claws), **dodge** (stat 338,
+  while the player runs: FUN_00622d00's moving, modes 2 / 3 / 6, and not
+  mode 2, so walking keeps it whole), then Weapon Block (claws), **dodge** (stat 338,
   melee, standing), **avoid** (339, missiles), **evade** (340, walking or
   running).
 - Block chance (FUN_00622720): players need a shield; `(stat 20 +

@@ -176,6 +176,29 @@ Checked: `THINKS=30 diff_drlg.py 1-20 40 npcs` (npcs.py with level 40:
 act 2 made for it, the Jerhyn markers stubbed, each unit's MonAI think):
 20/20.
 
+## The Kurast Docks (level 75)
+
+The docks' DS1 holds Cain, Asheara, Alkor, Ormus and Meshif with paths
+(MonAI Npc), act3male / act3female (294 / 296, Towner) and three act3hire
+(359, MonAI Hireable: Fight monsters, the merc's think). Natalya (0x129)
+loads as object 0x17e (FUN_00665950). Three marker objects (token `ss`)
+make NPCs as their rooms come up, each through FUN_005b2f20 (no DS1
+path), on the game's quest words (FUN_00544760 → FUN_0065c310: word ·16 +
+bit of game +0x10f4 +0xc):
+
+| object | InitFn | makes |
+|---|---|---|
+| 378 | 49, FUN_005b70b0 | Hratli (0xfd) at it, while word 0x10 lacks bit 13 |
+| 379 | 50, FUN_005b7160 | Hratli at it (his shop) once word 0x10 has bit 13; its unit +0xc4 \|= 0x3000000 |
+| 382 | 52, FUN_005bce80 | Natalya at it, else within 3, while word 0x16 lacks bit 13 |
+
+Each keeps its unit in a quest record (types 0xe, 0x14: +0 / +1 made, +0xc
+the unit id) so a room coming up again doesn't make a second one.
+
+Checked: `diff_drlg.py 1-20 75 npcs` 20/20 and `LEVELS=75 diff_drlg.py
+1-20 0 game` 20/20 (the oracle stubs the quest-word read as clear:
+objgroups.QUEST_STUBS).
+
 ## The other wanderer — FUN_0054ef50
 
 Unrelated to the town: when a room's seed step (FUN_0054f060) has its low

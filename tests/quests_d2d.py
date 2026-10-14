@@ -83,6 +83,11 @@ def level():
     return int(cmd("debug level").split()[1])
 
 
+def alive():
+    rows = [line.split("\t") for line in cmd("monsters").splitlines() if line and not line.startswith("ok")]
+    return [row for row in rows if len(row) > 5 and not row[5].startswith("0/")]
+
+
 def go(level_id):
     cmd(f"debug goto {level_id}")
     until(f"arrive on level {level_id}", lambda: level() == level_id)
@@ -306,6 +311,9 @@ try:
     assert bits(6) & 0x4, f"Cain didn't give quest 6: {cmd('debug quest 6 show')}"
     go(37)
     until("Andariel's death counts", lambda: bits(6) & 0x2, 30)
+    go(2)                                               # the Blood Moor cleared: within the act it stays so
+    time.sleep(1)
+    assert not alive(), f"the Blood Moor wasn't cleared: {len(alive())} left"
     go(1)
     open_menu("Warriv")
     assert any(l.split("\t")[0].lower().startswith(("go east", "east")) for l in cmd("menu").splitlines()), f"no way east: {cmd('menu')!r}"
@@ -319,6 +327,13 @@ try:
     menu_pick("go west")
     until("the caravan lands in the camp", lambda: level() == 1, 30)
     print("OK: Warriv's caravan goes back west")
+    # Act 1 was left and stays as it was: game.exe's server keeps its acts
+    # until the game ends (FUN_0052c7f0), so the Blood Moor is still clear.
+    cmd("debug goto 2")
+    until("back in the Blood Moor", lambda: level() == 2)
+    time.sleep(2)
+    assert not alive(), f"the Blood Moor came back after the trip east: {len(alive())} alive"
+    print("OK: an act left stays as it was (the Blood Moor still clear)")
     cmd("quit")
 finally:
     if proc.poll() is None:

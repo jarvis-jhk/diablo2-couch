@@ -7,9 +7,12 @@
 #include <level_ids.hpp>
 #include <rules.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
+#include <limits>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -282,6 +285,223 @@ inline int courtyard_file(const std::vector<Placed>& layout, d2d::rules::Rng act
         if (placement.dir == 3) return 1 - int(act_seed.next() & 1);
     }
     return -1;
+}
+
+// Act 3's layout (FUN_006789b0; drlg.md "Act 3's layout"). The jungle's
+// three levels are pieces grown up from the docks, each a grid of 32-tile
+// cells holding one LvlPrest Def (0 none); the Kurast levels stack above
+// the top piece.
+struct JungleCells { std::vector<int> presets; int specials = 0; };   // row-major, width / 32 a row; specials: Defs past 574
+struct Act3Layout {
+    std::vector<Placed> levels;                   // 75..83
+    std::array<JungleCells, 3> jungle;            // 76, 77, 78
+    int roll = 0;                                 // FUN_00642da0's act 3 roll (act +0x474)
+    bool failed = false;                          // game.exe asserts (OutPlace.cpp 0x78c / 0x799), or no layout could be made
+    int tries = 0;                                // grids and river paths laid (bounded)
+};
+
+// The clearing Defs by a cell's branch bits >> 4 (0x6f13bc), and a path
+// cell's Def by its low bits and one branch bit 0x10..0x80 (0x6f13f0).
+inline constexpr std::array<int, 16> kJungleClearings = { 256, 575, 576, 577, 578, 579, 580, 0, 581, 582, 583, 0, 584, 0, 0, 0 };
+inline constexpr std::array<std::array<int, 4>, 15> kJungleBranches = { {
+    { 0, 0, 0, 0 }, { 0, 545, 546, 547 }, { 548, 0, 549, 550 }, { 0, 0, 551, 552 }, { 553, 554, 0, 555 },
+    { 0, 556, 0, 557 }, { 558, 0, 0, 559 }, { 0, 0, 0, 560 }, { 561, 562, 563, 0 }, { 0, 564, 565, 0 },
+    { 566, 0, 567, 0 }, { 0, 0, 568, 0 }, { 569, 570, 0, 0 }, { 0, 571, 0, 0 }, { 572, 0, 0, 0 } } };
+
+// The jungle (FUN_00677880): three pieces, each grown off a random earlier
+// one (rand(5): above, or beside a third / two thirds up), a river path up
+// each, branches off it into clearings and the pieces next door; a branch
+// that finds nothing starts the cells over.
+inline Act3Layout act3_layout(const LevelDefs& defs, d2d::rules::Rng act_seed) {
+    Act3Layout out;
+    out.roll = int(act_seed.next() & 1);
+    const auto def = [&](int level) { const auto found = defs.find(level); return found == defs.end() ? LevelDef{} : found->second; };
+    const auto docks = def(level_ids::kKurastDocks);
+    out.levels.push_back({ level_ids::kKurastDocks, docks.offset_x, docks.offset_y, docks.width, docks.height });
+    const int width = def(level_ids::kSpiderForest).width, height = def(level_ids::kSpiderForest).height;
+    const int cols = width / 32, rows = height / 32;
+    if (cols < 2 || rows < 4) { out.failed = true; return out; }   // the ways in and out need 2 columns, 4 rows (Levels.txt row missing or short)
+    // ponytail: game.exe retries without end; 1000 is far past any seed's need (2000 diffed seeds), it marks the layout failed
+    constexpr int kTries = 1000;
+    struct Piece { int x = 0, y = 0, dir = 0; std::vector<int> children; int cell_x = 0, cell_y = 0; JungleCells cells; };
+    std::array<Piece, 3> pieces;
+    pieces[0].x = docks.offset_x;
+    pieces[0].y = docks.offset_y - height;
+    int min_x = pieces[0].x, min_y = pieces[0].y, max_x = pieces[0].x + width;
+    const int max_y = docks.offset_y;
+    // FUN_006777d0's offsets up: a third, two thirds of the height (asm's rounding).
+    const int third = [&] { const int half = (int((std::int64_t(height) * 0x55555555) >> 32) - height) >> 1; return half + int(unsigned(half) >> 31); }();
+    const int two_thirds = [&] { const int part = int((std::int64_t(-2 * height) * 0x55555556) >> 32); return part + int(unsigned(part) >> 31); }();
+    for (int count = 1; count < 3;) {
+        const int parent = act_seed(count);
+        Piece piece;
+        piece.dir = int(act_seed.next() % 5);
+        const std::array<std::pair<int, int>, 5> offset = { { { 0, -height }, { -width, third }, { width, third }, { -width, two_thirds }, { width, two_thirds } } };
+        piece.x = pieces[std::size_t(parent)].x + offset[std::size_t(piece.dir)].first;
+        piece.y = pieces[std::size_t(parent)].y + offset[std::size_t(piece.dir)].second;
+        const Placed rect{ 0, piece.x, piece.y, width, height };
+        bool clear = true;
+        for (int other = 0; other < count && clear; ++other)
+            clear = apart({ 0, pieces[std::size_t(other)].x, pieces[std::size_t(other)].y, width, height }, rect);
+        if (!clear) continue;
+        pieces[std::size_t(parent)].children.push_back(count);
+        min_x = std::min(min_x, piece.x);
+        min_y = std::min(min_y, piece.y);
+        max_x = std::max(max_x, piece.x + width);
+        pieces[std::size_t(count++)] = piece;
+    }
+    const int grid_w = (max_x - min_x) / 32 + 2, grid_h = (max_y - min_y) / 32 + 2;
+    const auto cells = std::size_t(grid_w * grid_h);
+    std::vector<int> owner, order, mark, bits;
+    const std::array<int, 4> step = { -grid_w, grid_w, 1, -1 };   // up, down, right, left
+    const std::array<int, 4> branch_bit = { 0x80, 0x40, 0x20, 0x10 };
+    for (bool done = false; !done;) {
+        if (++out.tries > kTries) { out.failed = true; return out; }
+        owner.assign(cells, 0); order.assign(cells, 0); mark.assign(cells, 0); bits.assign(cells, 0);
+        for (int index = 0; index < 3; ++index) {
+            auto& piece = pieces[std::size_t(index)];
+            piece.cell_x = (piece.x - min_x) / 32 + 1;
+            piece.cell_y = (piece.y - min_y) / 32 + 1;
+            int side = index == 0 ? int(act_seed.next() & 1) : int(piece.dir % 2 == 1);
+            const int bottom = piece.cell_y + rows - 1;
+            const auto cell_at = [&](int row, int col) { return std::size_t(row * grid_w + col); };
+            int branches = 0;
+            do {
+                for (int row = piece.cell_y; row <= bottom; ++row)
+                    for (int col = piece.cell_x; col < piece.cell_x + cols; ++col) {
+                        owner[cell_at(row, col)] = index + 1;
+                        order[cell_at(row, col)] = mark[cell_at(row, col)] = bits[cell_at(row, col)] = 0;
+                    }
+                int col = side + piece.cell_x, row = bottom;
+                if (index != 0) {                 // the way in from the piece below
+                    mark[cell_at(bottom, col)] = 1;
+                    mark[cell_at(bottom, col + (side == 0 ? 1 : -1))] = 2;
+                }
+                for (const int child : piece.children) {   // the ways out, by the side the child went
+                    const int dir = pieces[std::size_t(child)].dir;
+                    const int exit_row = piece.cell_y + (dir == 0 ? 0 : dir <= 2 ? 3 : 1);
+                    mark[cell_at(exit_row, piece.cell_x + (dir == 2 || dir == 4 ? 1 : 0))] = 1;
+                }
+                branches = index != 0;
+                int steps = 0, number = (index + 1) * 100;
+                while (row >= piece.cell_y) {     // the river, bottom to top, now and then a column over
+                    order[cell_at(row, col)] = number++;
+                    if (steps != 0 && row != piece.cell_y && act_seed.next() % 3 == 0) {
+                        steps = 0;
+                        col += side == 0 ? 1 : -1;
+                        side ^= 1;
+                        continue;
+                    }
+                    ++steps;
+                    const auto beside = cell_at(row, col + (side == 0 ? 1 : -1));
+                    if (steps > 1 && row > 1 && mark[beside] == 0) { ++branches; mark[beside] = 2; }
+                    --row;
+                }
+            } while (branches < 2 && ++out.tries <= kTries);
+            if (out.tries > kTries) { out.failed = true; return out; }
+            while (branches > 3) {                // at most three: drop one at random
+                const int drop = act_seed(branches);
+                int seen = 0;
+                for (int row = piece.cell_y, found = 0; row < piece.cell_y + rows && !found; ++row)
+                    for (int col = piece.cell_x; col < piece.cell_x + cols && !found; ++col)
+                        if (mark[cell_at(row, col)] == 2 && seen++ == drop) { mark[cell_at(row, col)] = 0; found = 1; }
+                --branches;
+            }
+        }
+        // Each cell's links: 8 up, 4 down, 2 right, 1 left.
+        for (int cell = 0; cell < int(cells); ++cell) {
+            int dir = 0;
+            const auto own = owner[std::size_t(cell)];
+            const std::array<int, 4> flag = { 8, 4, 2, 1 };
+            if (mark[std::size_t(cell)] == 1) {   // a way out joins the piece's lowest-numbered neighbour
+                int best = std::numeric_limits<int>::max();
+                for (int side = 0; side < 4; ++side) {
+                    const auto next = std::size_t(cell + step[std::size_t(side)]);
+                    if (order[next] != 0 && order[next] < best && owner[next] == own) { dir = flag[std::size_t(side)]; best = order[next]; }
+                }
+                for (int side = 0; side < 4; ++side)
+                    if (dir & flag[std::size_t(side)]) bits[std::size_t(cell + step[std::size_t(side)])] |= flag[std::size_t(side ^ 1)];
+                for (int side = 0; side < 4; ++side) {
+                    const auto next = std::size_t(cell + step[std::size_t(side)]);
+                    if (mark[next] == 1 && owner[next] != own) dir |= flag[std::size_t(side)];
+                }
+            }
+            if (const int number = order[std::size_t(cell)]; number != 0)
+                for (int side = 0; side < 4; ++side)
+                    if (std::abs(number - order[std::size_t(cell + step[std::size_t(side)])]) == 1) dir |= flag[std::size_t(side)];
+            bits[std::size_t(cell)] |= dir;
+        }
+        // The branches: each joins a path cell of its piece, else starts over.
+        done = true;
+        for (int cell = 0; cell < int(cells) && done; ++cell) {
+            int value = bits[std::size_t(cell)];
+            const auto own = owner[std::size_t(cell)];
+            const auto path = [&](int next) { return bits[std::size_t(next)] != 0 && bits[std::size_t(next)] < 0xf; };
+            const int start = int(act_seed.next() & 3);
+            const bool empty = value == 0;
+            if (mark[std::size_t(cell)] != 2) { bits[std::size_t(cell)] |= value; continue; }
+            for (int k = 0; k < 4; ++k) {
+                const int side = (k + start) & 3, next = cell + step[std::size_t(side)];
+                if (owner[std::size_t(next)] == own && path(next)) { value |= branch_bit[std::size_t(side)]; break; }
+            }
+            if (value == 0) { done = false; break; }
+            if (empty) {                          // a clearing: maybe into the piece next door, maybe one more path
+                bool none = true;
+                for (int k = 0; k < 4 && none; ++k) {
+                    const int side = (k + start) & 3, next = cell + step[std::size_t(side)];
+                    if (owner[std::size_t(next)] != own && mark[std::size_t(next)] == 2) { value |= branch_bit[std::size_t(side)]; none = false; }
+                }
+                bool more = (act_seed.next() & 1) != 0 && none;
+                const int again = int(act_seed.next() & 3);
+                for (int k = 0; k < 4 && more; ++k) {
+                    const int side = (again + k) & 3;
+                    if (path(cell + step[std::size_t(side)]) && !(value & branch_bit[std::size_t(side)])) { value |= branch_bit[std::size_t(side)]; more = false; }
+                }
+            }
+            for (int side = 0; side < 4; ++side)
+                if (value & branch_bit[std::size_t(side)]) bits[std::size_t(cell + step[std::size_t(side)])] |= branch_bit[std::size_t(side ^ 1)];
+            mark[std::size_t(cell)] = 0;
+            bits[std::size_t(cell)] |= value;
+        }
+    }
+    // Bits to LvlPrest Defs: 529 + links, a clearing by its branches, a
+    // path cell with a branch through 0x6f13f0.
+    for (auto& value : bits) {
+        int def_id = value & 15;
+        if (def_id == 0) {
+            if (value > 15 && (def_id = kJungleClearings[std::size_t(value >> 4)]) == 0) out.failed = true;
+        } else if (value < 16) {
+            def_id += 529;
+        } else {
+            // ponytail: a second branch indexes the table by a Def (game.exe reads past it); counted as failed
+            for (int column = 0; column < 4; ++column)
+                if (value & (0x10 << column)) def_id = def_id < 15 ? kJungleBranches[std::size_t(def_id)][std::size_t(column)] : 0;
+            if (def_id == 0) out.failed = true;
+        }
+        value = def_id;
+    }
+    for (auto& piece : pieces)
+        for (int row = 0; row < rows; ++row)
+            for (int col = 0; col < cols; ++col) {
+                const int def_id = bits[std::size_t((piece.cell_y + row) * grid_w + piece.cell_x + col)];
+                piece.cells.presets.push_back(def_id);
+                piece.cells.specials += def_id > 574;
+            }
+    // The lowest piece is the Spider Forest, the highest the Flayer Jungle.
+    std::stable_sort(pieces.begin(), pieces.end(), [](const Piece& first, const Piece& second) { return first.y > second.y; });
+    for (int index = 0; index < 3; ++index) {
+        const auto& piece = pieces[std::size_t(index)];
+        out.levels.push_back({ level_ids::kSpiderForest + index, piece.x, piece.y, width, height });
+        out.jungle[std::size_t(index)] = piece.cells;
+    }
+    // Kurast (FUN_00678910): 79..83 stacked up from the Flayer Jungle, centred on it.
+    const Placed top = out.levels.back();
+    for (int level = level_ids::kLowerKurast, rise = 0; level <= level_ids::kTravincal; ++level) {
+        const auto kurast = def(level);
+        rise -= kurast.height;
+        out.levels.push_back({ level, top.x + top.width / 2 - kurast.width / 2, top.y + rise, kurast.width, kurast.height });
+    }
+    return out;
 }
 
 }  // namespace d2d::drlg

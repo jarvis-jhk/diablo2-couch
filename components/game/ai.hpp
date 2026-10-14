@@ -168,7 +168,6 @@ struct Monster {
     std::string_view last_mode = "NU";        // as of the last sound check
     std::uint32_t mode_until = 0;             // ms: an attack / get-hit / death ends
     std::uint32_t next_act = 0;               // ms: may attack again (aidel)
-    std::uint32_t flee_until = 0;             // ms: running from the player
     bool struck = false;                      // this attack's hit is resolved
     bool aware = false;                       // has noticed the player
     // AI control flag 8: it has found a target once, and needs no line of
@@ -199,15 +198,20 @@ struct Monster {
     // Skills' states on it (their auratargetstate): one curse at a time
     // (Amplify Damage .. Lower Resist, Confuse, Attract), one other
     // (Battle Cry, Taunt, Inner Sight, Cloak of Shadows' blindness).
-    struct SkillState { int skill = -1, level = 0; std::uint32_t until = 0; };
+    // `swaps`: its end toggles the AI back (FUN_005c3370: Dim Vision's,
+    // Terror's, Cloak of Shadows').
+    struct SkillState { int skill = -1, level = 0; std::uint32_t until = 0; bool swaps = false; };
     SkillState curse, cry;
     // What they do to it, as of this frame (Fight::monster_states): its
     // damage % and speed %, the share of its melee damage it takes back
-    // (Iron Maiden), and until when it can't see (Dim Vision, Cloak).
+    // (Iron Maiden), Terror's state (0x38) on it.
     int dmg_pct = 0, speed_pct = 0, reflect_pct = 0;
-    std::uint32_t blind_until = 0;
+    bool afraid = false;
+    // Converted from a higher level (state 0x6d): its own level and life
+    // (stats 0xb0 / 0xb1), put back as Conversion ends (FUN_005d01a0).
+    int own_level = 0, own_max_life = 0;
     // Its alignment (stat 0xac: 0 evil, 1 neutral while Confuse or Attract
-    // is on it) and its skill-set target (monster data +0x38 kind, +0x34
+    // is on it, 2 good while Conversion is: in its caster's list, FUN_005b1900) and its skill-set target (monster data +0x38 kind, +0x34
     // value, FUN_00573090: 2 a monster by id, Attract's; 3 Confuse's
     // search), cleared when due (event 10 -> FUN_00573120).
     int align = 0, set_kind = 0, set_id = 0;
@@ -249,10 +253,13 @@ struct Monster {
     int move_pct = 0;
     std::uint32_t laid_until = 0;
     // Its unit seed (+0x20) as its look left it: what its thinks draw. A
-    // special AI (AI control [0], FUN_005b0e00: the Countess's 0xd), its
-    // map AI's points (subtiles), half freeze durations (stat 0x76).
+    // special AI (AI control [0], FUN_005b0e00: the Countess's 0xd, Dim
+    // Vision's / Cloak's 10, Terror's / Howl's 11) or its MonAI row's other
+    // think (`other`, rules::ai_toggle), its map AI's points (subtiles),
+    // half freeze durations (stat 0x76).
     d2d::rules::Rng seed;
     int special = 0;
+    bool other = false;
     std::vector<std::pair<int, int>> path;
     bool half_freeze = false;
     [[nodiscard]] bool alive() const { return hit_points > 0; }
@@ -273,16 +280,21 @@ struct Monster {
 struct Foe {
     float x = 0, y = 0;
     int level = 1;
-    bool alive = true, moving = false;        // moving: block falls to a third
+    bool alive = true, moving = false;        // moving: walking or running (evade, not dodge)
     d2d::rules::Fighter fighter;                    // defense, block, reductions, resistances, thorns
     int damage = 0;                           // life lost this frame, whole points
+    int physical = 0, elemental = 0;          // of it, physical and fire / lightning / cold (the absorbs')
     int poison = 0, poison_ticks = 0;         // poison taken this frame: life per tick (256ths), for ticks
     int chill_ticks = 0;                      // chilled this frame, ticks
     int stun_ticks = 0;                       // stunned this frame (a monster's Smite), ticks
+    std::optional<std::pair<float, float>> knocked_from;   // knocked back this frame by a unit there (result flag 8: Smite)
     bool blocked = false;                     // blocked a hit this frame
-    std::vector<const Monster*> melee_by;     // who struck at it in melee this frame (Frozen / Shiver Armor)
-    int missile_hits = 0;                     // missiles that reached it this frame (Chilling Armor)
+    std::vector<const Monster*> melee_by;     // who struck at it in melee this frame (Shiver Armor)
+    std::vector<const Monster*> damaged_by;   // of those, whose blow did damage (Frozen Armor: the event's +8 over 0)
+    std::vector<int> fired_by;                // the owners of the ReturnFire missiles that reached it this frame (Chilling Armor)
     int hits = 0;                             // hits that landed this frame (each wears its armour)
+    bool running = false;                     // the player in RN: always hit by a swing, block a third
+    [[nodiscard]] d2d::rules::Motion motion() const { return running ? d2d::rules::Motion::running : moving ? d2d::rules::Motion::walking : d2d::rules::Motion::standing; }
     int mana_burn = 0;                        // mana it lost to Mana Burn this frame
     struct Cast { int skill = -1, level = 0; };
     Cast cursed;                              // a curse cast on it this frame (a Cursed boss's Amplify Damage, the Summoner's Weaken)
@@ -294,7 +306,7 @@ struct Foe {
     void take(const d2d::rules::Taken& taken) {
         blocked = blocked || taken.blocked;
         hits += taken.hit ? 1 : 0;
-        damage += taken.damage;
+        damage += taken.damage; physical += taken.physical; elemental += taken.elemental;
         if (taken.poison > 0 && taken.poison >= poison) { poison = taken.poison; poison_ticks = taken.poison_ticks; }   // the stronger (FUN_0057ac50)
         chill_ticks = std::max(chill_ticks, taken.chill_ticks);
     }
@@ -310,6 +322,7 @@ struct Missile {
     int dir = 0;                              // 0..31, DCC order
     std::uint32_t born = 0, dies = 0;
     d2d::rules::MonStats src;                 // a monster's: its stats, A2 damage = the missile's
+    int owner = -1;                           // a monster's: its Monster::id (unit +0x98, FUN_00552fd0)
     int min = 0, max = 0, attack_rating = 0, level = 1;  // the merc's: damage, attack rating, level; a skill's level
     bool friendly = false;                    // the merc's, the player's: hits monsters, not the player
     bool by_merc = false;                     // a merc's skill: its weapon damage, attack rating and level, no synergies
@@ -468,8 +481,8 @@ void missiles_update(const Level& level, std::vector<Missile>& ms_, std::span<Fo
                 missile.struck->push_back(key);
                 const auto& row = *missile.row;
                 const int burn = std::max(d2d::rules::resisted(rng.range(row.elo, row.ehi), foe.fighter.res[std::size_t(std::clamp(row.etype, 0, 2))]) - foe.fighter.mdr * 256, 0);
-                foe.damage += burn >> 8;
-                if (int(rng(256)) < (burn & 255)) ++foe.damage;
+                const int dealt = (burn >> 8) + (int(rng(256)) < (burn & 255) ? 1 : 0);
+                foe.damage += dealt; foe.elemental += dealt;
             }
             return false;
         }
@@ -478,8 +491,8 @@ void missiles_update(const Level& level, std::vector<Missile>& ms_, std::span<Fo
             const int key = -100 - int(&foe - foes.data());         // a ring's missiles strike each foe once
             if (std::ranges::contains(*missile.struck, key)) continue;
             missile.struck->push_back(key);
-            foe.take(d2d::rules::monster_blow(foe.fighter, foe.level, foe.moving, missile.src, true, rng, true));
-            ++foe.missile_hits;
+            foe.take(d2d::rules::monster_blow(foe.fighter, foe.level, foe.motion(), missile.src, true, rng, true));
+            if (missile.info->return_fire && missile.owner >= 0) foe.fired_by.push_back(missile.owner);
             return true;
         }
         return false;
@@ -499,6 +512,15 @@ void make_boss(const GameData& game_data, Monster& monster, d2d::rules::Boss kin
                int difficulty, d2d::rules::Rng& rng);
 // MonUMod poison hit's init (FUN_005a1e00): its own poison stats.
 void poison_hit(const GameData& game_data, Monster& monster, int difficulty, bool unique);
+// Whether a skill may put the monster on a special think (FUN_0056e2f0 ->
+// FUN_005dd480; FUN_00623470, FUN_005b0da0): a WL mode (MonStats2), not
+// MonStats boss, SwitchAI, targetable (unit +0xc4 & 4) or dead, not a
+// unique or superunique (monster data +0x16 & 0xa).
+// ponytail: state 0x36 (uninterruptable) isn't d2d's; class 0x1ec's
+// state 0x8f test is Act 5's.
+bool swaps_ai(const GameData& game_data, const Monster& monster);
+// FUN_005b0e00(ctrl, special): rules::ai_toggle on the monster.
+void ai_toggle(const GameData& game_data, Monster& monster, int special);
 
 // A plain monster of MonStats row `type` at (x, y) cells: its components
 // and stats rolled (a boss's by make_boss instead: `stats` false).

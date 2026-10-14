@@ -477,9 +477,9 @@ void register_game_verbs(d2d::devctl::Channel& channel, Window& win, Screen& scr
             out += "\n";
             for (const auto& monster : town.fight.monsters)
                 if (monster.curse.skill >= 0 || monster.cry.skill >= 0 || monster.stun_until > 0)
-                    out += std::format("{} hp={} curse={} cry={} dmg%={} speed%={} reflect%={} flee={} blind={} stun={}\n", monster.npc.name, monster.hit_points,
-                                       monster.curse.skill, monster.cry.skill, monster.dmg_pct, monster.speed_pct, monster.reflect_pct, monster.flee_until, monster.blind_until,
-                                       monster.stun_until);
+                    out += std::format("{} hp={} curse={} cry={} dmg%={} speed%={} reflect%={} align={} stun={} ai={}{} afraid={}\n", monster.npc.name, monster.hit_points,
+                                       monster.curse.skill, monster.cry.skill, monster.dmg_pct, monster.speed_pct, monster.reflect_pct, monster.align,
+                                       monster.stun_until, monster.special, monster.other ? "/other" : "", int(monster.afraid));
             return out + "ok\n";
         }
         if (args.size() >= 2 && args[1] == "pets") {      // each pet: row level life dmg th ac res ranged/aura
@@ -563,9 +563,10 @@ void register_game_verbs(d2d::devctl::Channel& channel, Window& win, Screen& scr
             static constexpr std::array<const char*, 5> kBoss = { "-", "champion", "unique", "superunique", "minion" };
             std::string mods;
             for (const int mod : monster.mods) mods += (mods.empty() ? "" : ",") + std::to_string(mod);
-            out += std::format("{}\t{:.2f}\t{:.2f}\t{}\t{}\t{}/{}\t{}\t{}\t{}\tlvl{}\t{}\t#{}\n", scene->monsters.types[std::size_t(monster.type)].id,
+            const std::string row = monster.seq_frame >= 0 ? std::format("{}:{}", monster.seq_mode, monster.seq_frame) : "-";   // a sequence's row as drawn
+            out += std::format("{}\t{:.2f}\t{:.2f}\t{}\t{}\t{}/{}\t{}\t{}\t{}\tlvl{}\t{}\t#{}\t{}\n", scene->monsters.types[std::size_t(monster.type)].id,
                                monster.unit.x, monster.unit.y, screen_x, screen_y, monster.hit_points, monster.stats.hit_points, monster.mode, kBoss[std::size_t(monster.boss)], mods.empty() ? "-" : mods,
-                               monster.stats.level, monster.npc.name, monster.id);
+                               monster.stats.level, monster.npc.name, monster.id, row);
         }
         return out + "ok\n";
     });

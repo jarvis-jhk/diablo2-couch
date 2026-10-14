@@ -169,6 +169,7 @@ struct Level {
     int night_ambience = 0, day_event = 0, night_event = 0, event_delay = 0;   // its Night Ambience, Day / Night Event, Event Delay (sound ticks)
     int light = -1;                                    // Levels.txt Intensity when it has its own light (caves: 0), -1 the day's
     bool rain = false;                                 // Levels.txt Rain: the weather reaches it
+    int teleport = 1;                                  // Levels.txt Teleport: 0 no, 1 yes, 2 only in a clear line (FUN_0061db70 +4)
     d2d::ds1::Map ds1;
     std::vector<d2d::dt1::Archive> dt1s;
     // Keyed by (style, seq, type) — one map covers floors, walls, trees,
@@ -291,6 +292,10 @@ struct Level {
     // preset's by walls (drlg BuiltRoom::areas), else the whole room
     // (FUN_0066ccb0). FUN_0054ec90 rolls each. By `rooms` index.
     std::vector<std::vector<d2d::drlg::Area>> room_areas;
+    // Each room's floor tiles in its list's order (room1 +8: +8 / +0xc):
+    // level tile x, y and DT1 material flags (2 water: FUN_005b2700's spots).
+    struct Floor { int x, y; std::uint16_t material; };
+    std::vector<std::vector<Floor>> room_floors;
     // Plain outdoor rooms on a road cell (g2c 0x80; room data +0x54 & 0x80):
     // FUN_00552560 (FUN_0061abb0) places no object groups there.
     std::vector<bool> road_rooms;
@@ -555,10 +560,12 @@ struct GameData {
     std::uint32_t map_seed = 3;                        // act layout + levels (3: townE1)
     std::vector<d2d::drlg::Placed> act1_layout;        // where act 1's levels sit (act tiles)
     std::vector<d2d::drlg::Placed> act2_layout;        // act 2's (its own act tiles: the acts overlap)
+    d2d::drlg::Act3Layout act3_layout;                 // act 3's, and its jungle's cells
     // The layout level `id`'s act placed it in (empty for acts not laid out).
     [[nodiscard]] const std::vector<d2d::drlg::Placed>& layout_of(int id) const {
         static const std::vector<d2d::drlg::Placed> kNone;
-        return id < d2d::rules::level_ids::kLutGholein ? act1_layout : id < d2d::rules::level_ids::kKurastDocks ? act2_layout : kNone;
+        return id < d2d::rules::level_ids::kLutGholein ? act1_layout : id < d2d::rules::level_ids::kKurastDocks ? act2_layout
+             : id < d2d::rules::level_ids::kPandemoniumFortress ? act3_layout.levels : kNone;
     }
     // Mercenary units by hireling.txt Id (the save's merc type): the
     // monster, and the first name key (merc01, merca201, MercX101, ...).
@@ -607,6 +614,7 @@ struct GameData {
                          int vel_lev = 0, max_vel = 0, accel = 0, activate = 0;   // its flight (rules::MissileFlight)
                          std::string skill; int lev_range = 0, hit_func = 0, hit_par1 = 0;
                          bool to_hit = false, collide_kill = true, pierce = false;
+                         bool return_fire = false;   // ReturnFire (record flag bit 9, +5 & 2): Chilling Armor answers it (FUN_005cab40)
                          // Its own element (a row with no Skill: FUN_0064b100 / 0064b1d0 /
                          // 0064b2a0 by level): Skill::etype order, frze as cold.
                          int etype = -1, emin = 0, emax = 0, hitshift = 8, elen = 0;
@@ -762,10 +770,10 @@ struct GameData::LevelBuilder {
 // places it against the town, the generator fills it, its tiles come from
 // the Act 1 wilderness DT1s (LvlTypes).
 // The levels d2d builds so far: Act 1's (the town is GameData::town),
-// Act 2's and Kurast Docks (75: Meshif's boat lands there; the rest of
-// Act 3 isn't built).
+// Act 2's, Kurast Docks (75: Meshif's boat lands there) and the jungle
+// (76-78; the rest of Act 3 isn't built).
 constexpr std::array kBuiltLevels{ 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55,
-                                    56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75 };
+                                    56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78 };
 
 // A composite's COF and timing (the World's part of a composite).
 struct CofAnim { d2d::cof::Cof cof; GameData::AnimTiming timing; std::string path; bool ok = false; };
@@ -812,6 +820,9 @@ struct Spawning {
     std::vector<d2d::rules::Region> regions;               // by Levels.txt Id
     std::unordered_map<const Level*, LevelState> levels;
     std::bitset<128> superuniques;                         // spawned this game (game +0x1d30)
+    // The game's quest words (World::game_bits, a d2d::rules::QuestBits), as
+    // the town markers' inits read them (FUN_00544760).
+    std::array<std::uint8_t, 96> game_quests{};
     const Level* room_level = nullptr;                     // the player's room
     int room = -1;
 };

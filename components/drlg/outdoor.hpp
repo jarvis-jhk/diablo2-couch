@@ -51,8 +51,11 @@ struct Neighbour { Placed rect; int slot = 0; bool preset = false; };   // prese
 struct OutdoorLevel {
     Placed rect;                                        // level, tiles, layout flags
     int sub_type = -1, sub_theme = -1, sub_waypoint = -1, sub_shrine = -1;
+    int level_type = 2;                                 // Levels.txt LevelType
     std::vector<Neighbour> neighbours;                  // Vis slot order
     Placed town;                                        // the Den goes far from it
+    std::vector<int> jungle;                            // act 3's jungle (76-78): its 32-tile cells' Defs (act3_layout)
+    int jungle_specials = 0;                            // and how many are clearings (level +0x1b8)
 };
 // A plain room's DS1 words ((8+1)x(8+1), row-major) as game.exe keeps
 // them at room data +0x00 / +0x14 / +0x28 (orientation, wall, floor),
@@ -876,6 +879,30 @@ struct Gen {
         by_road(def, -1);
         if (extra && (seed.next() & 1)) by_road(49, -1);
     }
+    // ---- act 3's jungle (FUN_0067e910): each 32-tile cell's Def at (col 4,
+    // row 4) cells, a clearing moved to its level's set (0x6f2240: +0, +10,
+    // +20) with its file from a rolled row of 0x6f2328; the Spider Forest's
+    // bottom row the Jungle Head (573), the Flayer Jungle's top row the
+    // Tail (574), file 1 when the cell beside is empty.
+    [[nodiscard]] bool is_jungle() const { return level.rect.level >= level_ids::kSpiderForest && level.rect.level <= level_ids::kFlayerJungle; }
+    void lay_jungle() {
+        static constexpr std::array<std::array<int, 3>, 6> kFiles = { { { 0, 1, 2 }, { 1, 0, 2 }, { 0, 2, 1 }, { 1, 2, 0 }, { 2, 0, 1 }, { 2, 1, 0 } } };
+        const int id = level.rect.level, cols = level.rect.width / 32, rows = level.rect.height / 32;
+        if (level.jungle.size() < std::size_t(cols * rows)) { note("drlg: jungle level " + std::to_string(id) + " without its cells"); return; }
+        const int order = seed(level.jungle_specials == 3 ? 6 : 2);
+        std::size_t next = 0;
+        int special = 0;
+        for (int row = 0; row < rows; ++row) {
+            if (id == level_ids::kSpiderForest && row == rows - 1) { place(0, row * 4, 0x23d, level.jungle[std::size_t(rows * cols - 1)] == 0, false); next += 2; continue; }
+            if (id == level_ids::kFlayerJungle && row == 0) { place(0, 0, 0x23e, level.jungle[1] == 0, false); next += 2; continue; }
+            for (int col = 0; col < cols; ++col) {
+                int def = level.jungle[next++], file = -1;
+                if (def > 0x23e && special < 3) { def += (id - level_ids::kSpiderForest) * 10; file = kFiles[std::size_t(order)][std::size_t(special++)]; }
+                if (def) place(col * 4, row * 4, def, file, false);
+            }
+        }
+    }
+
     // ---- act 2's desert (FUN_0067f980): LevelType 16, levels 41-46.
     [[nodiscard]] bool is_desert() const { return level.rect.level >= level_ids::kRockyWaste && level.rect.level <= level_ids::kCanyonOfTheMagi; }
     [[nodiscard]] int border_base() const { return is_desert() ? 0x16c : 4; }   // the border defs FUN_006752a0 is handed
@@ -1094,11 +1121,16 @@ inline void room_tiles(Room& room, const OutdoorData& data, const OutdoorLevel& 
     stamp_room(room, data, level, rng, level.sub_waypoint, 0, (room.flags >> 16) & 3, notes);
     stamp_room(room, data, level, rng, level.sub_shrine, 0, (room.flags >> 12) & 0xf, notes);
     stamp_room(room, data, level, rng, level.sub_type, level.sub_theme, room.theme_mask, notes);
-    // The LevelType's ground (FUN_0067d2d0): the desert ORs 0x100 into every
-    // floor cell nothing has claimed (no bits of 0x3f0ff80).
-    if (desert)
+    // The LevelType's ground (FUN_0067d2d0), ORed into every floor cell
+    // nothing has claimed (no bits of 0x3f0ff80): the desert 0x100, the
+    // jungle 0x120000, Kurast 0x100000, Act 5's 0xa00000 / 0x1600000, the
+    // Frozen Tundra (117) 0x600000.
+    const std::uint32_t ground = level.level_type == 0x10 ? 0x100u : level.level_type == 0x15 ? 0x120000u : level.level_type == 0x16 ? 0x100000u
+                               : level.level_type == 0x1b ? 0xa00000u : level.level_type == 0x1c ? 0x1600000u
+                               : level.level_type == 0x1f && level.rect.level == level_ids::kFrozenTundra ? 0x600000u : 0u;
+    if (ground)
         for (auto& floor_word : room.floor)
-            if ((floor_word & 0x3f0ff80) == 0) floor_word |= 0x100;
+            if ((floor_word & 0x3f0ff80) == 0) floor_word |= ground;
     room.seed = rng;
     // FUN_0067c600 on the wall and floor grids: every edge cell | 4 (its tile
     // may be shared with the room next to it, FUN_0066e940).
@@ -1112,17 +1144,33 @@ inline void room_tiles(Room& room, const OutdoorData& data, const OutdoorLevel& 
 // level-relative: 4 wall layers, 2 floors, 1 shadow.
 // ponytail: plain-room tiles take a DT1 variant at draw time (first
 // match), not game.exe's rarity pick on the room seed (FUN_0066d820).
+// A plain room's DT1 mask by LevelType (FUN_006750f0): the wilderness
+// 0x44103; the desert, Kurast, the Siege, Bloody Foothills 1; the jungle
+// 4; Act 5's highlands 0x11.
+constexpr std::uint32_t plain_dt1_mask(int level_type) {
+    switch (level_type) {
+        case 2: return 0x44103;
+        case 0x10: case 0x16: case 0x1b: case 0x1c: return 1;
+        case 0x15: return 4;
+        case 0x1e: case 0x1f: return 0x11;
+        default: return 0;
+    }
+}
+
 inline Outdoor generate_outdoor(const OutdoorData& data, const OutdoorLevel& level, d2d::rules::Rng seed) {
     using namespace outdoor_detail;
     Outdoor out;
     Gen gen(data, level, seed, out.notes);
     const int id = level.rect.level;                    // FUN_006807f0
     const bool wild = id >= level_ids::kBloodMoor && id <= level_ids::kTamoeHighland;
-    const bool desert = gen.is_desert();
-    if (!wild && !desert && id != level_ids::kBurialGrounds && id != level_ids::kMooMooFarm) gen.note("drlg: outdoor level " + std::to_string(id) + " not implemented");
+    const bool desert = gen.is_desert(), jungle = gen.is_jungle();
+    if (!wild && !desert && !jungle && id != level_ids::kBurialGrounds && id != level_ids::kMooMooFarm) gen.note("drlg: outdoor level " + std::to_string(id) + " not implemented");
     gen.neighbours();
     gen.outline();
-    if (desert) {                                                                         // FUN_0067f980
+    if (jungle) {                                                                         // FUN_0067f450: no borders
+        gen.contacts();
+        gen.lay_jungle();
+    } else if (desert) {                                                                  // FUN_0067f980
         gen.contacts();
         gen.borders();
         gen.lay_desert();
@@ -1203,8 +1251,7 @@ inline Outdoor generate_outdoor(const OutdoorData& data, const OutdoorLevel& lev
             } else if (!(flags & 0x100)) {                    // FUN_0067d540
                 auto room_rng = alloc();
                 out.rooms.push_back({ cell_x * 8, cell_y * 8, room_rng.low });
-                // Its DT1 mask by LevelType (FUN_006750f0): 2 the wilderness 0x44103, 16 the desert 1.
-                Room room{ cell_x * 8, cell_y * 8, gen.g18.get(cell_x, cell_y), room_rng.low, 0, desert ? 1u : 0x44103u, {}, {}, {}, {}, {}, {} };
+                Room room{ cell_x * 8, cell_y * 8, gen.g18.get(cell_x, cell_y), room_rng.low, 0, plain_dt1_mask(level.level_type), {}, {}, {}, {}, {}, {} };
                 if (level.sub_type != -1 && level.sub_theme != -1) {                     // FUN_006706a0
                     std::uint32_t bit = 0;
                     for (const auto& sub : data.subs) {
