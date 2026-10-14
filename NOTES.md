@@ -57,3 +57,5 @@
   (repo .clang-tidy) clean; the full build still needs CI (no SDL3 here).
 - Not wired: needs two heroes in one process (COUCH.md seams 1/3). Server-side PlayerSession
   is still upstream's planned stage 1; the upstream contact issue is still unopened.
+- CI run 38506809924 on 3e6d394: Linux GCC, Windows MSVC, macOS Clang green (incl. clang-tidy
+  and header checks); test_couch built and passed on all three, ctest 35/35.
