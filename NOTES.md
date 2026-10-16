@@ -80,3 +80,14 @@
   several heroes (seat 3). Virtual tests don't certify physical pads or the Deck.
 - CI run 38872356099 on dbf5db0: Linux GCC, Windows MSVC, macOS Clang and both Flatpak
   bundles green; source SHA checked in the job logs, test_couch_pads passed, ctest 38/38.
+
+## 2026-10-16 — Warpzone descriptor
+- Warpzone (jarvis-jhk/warpzone) lists us in games/diablo2-couch.toml. Its asset globs are
+  case-sensitive and matched nothing (`*linux*`, `*windows*` vs CPack's
+  `d2d-<ver>-Linux-x86_64.tar.gz` / `d2d-<ver>-Windows-AMD64.zip`), and it had no `[launch]`.
+  Fixed in jarvis-jhk/warpzone PR #2 (exact patterns, exec `d2d-*-<os>/d2d[.exe]`,
+  prerelease = true); layout checked on the dbf5db0 CI artifacts.
+- Open (ROADMAP M2): d2d does not persist `--data`, so the launcher's one-shot import only
+  covers the first start. The inherited launcher's update check is off (empty
+  D2LAUNCHER_UPDATE_URL); if we turn it on it must respect `.warpzone-managed`.
+- Online via Warpzone is an M3 item, after couch co-op.

@@ -23,7 +23,14 @@ upstream's plan in `docs/PLAN.md`; we merge it as it lands.
 - [ ] Four players; UI layout scaling for 1280×800 (Deck).
 - [ ] Linux/Windows/Deck builds, installer, safe auto-update, first-start changelog.
 - [ ] Anonymous fault relay (ntfy → GitHub issue).
+- [ ] Warpzone tier 0 (launcher install/update/data hand-over): `d2d --data <dir>` persists
+      `data =` into d2d.cfg (the hand-over passes it only once); any own updater stays silent
+      when the install dir has `.warpzone-managed`; recheck games/diablo2-couch.toml in
+      jarvis-jhk/warpzone against the release assets (docs/integration.md there).
 - [ ] First release v0.1.0 (Act I couch co-op), hardware evidence recorded separately.
 
 ## M3 — Full game
 - [ ] Follow upstream Acts II–V; each act tested in couch co-op as it arrives.
+- [ ] Online co-op through Warpzone (rooms/invites, hole-punch/relay, C API
+      crates/capi/include/warpzone.h), after the couch milestones. No chat or free-text
+      player content; warpzone.virtualtabletop.io is the only Jan domain allowed in the repo.
