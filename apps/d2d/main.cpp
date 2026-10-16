@@ -17,6 +17,7 @@
 
 #include "audio.hpp"
 #include "common.hpp"
+#include "couch.hpp"
 #include "cursor.hpp"
 #include "devctl_verbs.hpp"
 #include "frontend.hpp"
@@ -102,6 +103,9 @@ static std::uint32_t game_seed(const d2d::d2s::Header& header) {
 }
 static int         g_scale = 1;          // window = game res * g_scale
 static bool        g_fullscreen = false; // d2d.cfg fullscreen = 1 (Alt+Enter flips and saves it)
+// Diablo 2 Couch: the first pad plays the menus' hero (else pads join as
+// further heroes). d2d.cfg pad_player1 = 1 / 0; unset: on on a Steam Deck.
+static bool        g_pad_player1 = false;
 
 // What a failed join shows (tcpip-menu.md, "Join errors"): game.exe's
 // "Cannot Connect to Server" (0x145b) when the host doesn't answer, its
@@ -161,6 +165,8 @@ int run_windowed(std::vector<std::uint8_t>& framebuffer,
         d2d::log::error("SDL_Init: {}", SDL_GetError());
         return 1;
     }
+    // Diablo 2 Couch: controllers. Without them the game still runs.
+    if (!SDL_InitSubSystem(SDL_INIT_GAMEPAD)) d2d::log::warn("SDL gamepads: {}", SDL_GetError());
     const int sdl_v = SDL_GetVersion();
     d2d::log::info("Initializing SDL... done! SDL {}.{}.{} ({})", SDL_VERSIONNUM_MAJOR(sdl_v),
                    SDL_VERSIONNUM_MINOR(sdl_v), SDL_VERSIONNUM_MICRO(sdl_v), SDL_GetCurrentVideoDriver());
@@ -326,6 +332,9 @@ int run_windowed(std::vector<std::uint8_t>& framebuffer,
     // beachball suspect; that beachball was the pan-left float loop.
     bool text_active = false;
     Town town(scene ? &*scene : nullptr, character, g_start_cam_x, g_start_cam_y);
+    CouchPads couch_pads;                       // Diablo 2 Couch: the controllers (couch.hpp)
+    town.couch.pads = &couch_pads;
+    town.couch.pad_hosts = g_pad_player1;
     // The characters' saves (character_store.hpp): the World writes through
     // it when the player leaves the game or quits; the roster is read again.
     const CharacterStore characters{ save_dir, scene && scene->item_tables ? &*scene->item_tables : nullptr };
@@ -412,7 +421,9 @@ int run_windowed(std::vector<std::uint8_t>& framebuffer,
         current_phase.store(std::uint32_t(MainPhase::PollEvents),
                             std::memory_order_relaxed);
         SDL_Event event;
+        couch_pads.begin_frame();
         while (SDL_PollEvent(&event)) {
+            couch_pads.event(event);
             // SDL3 doesn't rescale event coords under logical presentation;
             // convert so the mouse lands in 800x600 game pixels.
             SDL_ConvertEventToRenderCoordinates(win.renderer, &event);
@@ -1061,6 +1072,7 @@ int main(int argc, char** argv) {
     g_start_cam_y    = start_cam_y;
     g_scale          = std::clamp(scale, 1, 8);   // cfg value isn't CLI-checked
     g_fullscreen     = cfg["fullscreen"] == "1";
+    g_pad_player1    = cfg.contains("pad_player1") ? cfg["pad_player1"] == "1" : std::getenv("SteamDeck") != nullptr;
     if (cfg.contains("master_volume")) g_master_volume = std::clamp(std::atoi(cfg["master_volume"].c_str()), 0, 100);
     if (cfg.contains("music_volume")) g_music_volume = std::clamp(std::atoi(cfg["music_volume"].c_str()), 0, 100);
 

@@ -57,6 +57,7 @@ public:
     [[nodiscard]] game::World& guest(std::size_t index) { return *guests_[index]; }
     [[nodiscard]] const game::World& guest(std::size_t index) const { return *guests_[index]; }
     [[nodiscard]] game::World& host() { return *host_; }
+    [[nodiscard]] const game::World& host() const { return *host_; }
 
     // One tick: the host's commands, then each guest's (guest_cmds[i], or
     // none past its end). With no guests it is exactly World::tick.

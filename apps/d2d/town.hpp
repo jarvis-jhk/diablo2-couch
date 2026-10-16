@@ -6,6 +6,7 @@
 
 #include "audio.hpp"
 #include "common.hpp"
+#include "couch.hpp"
 #include "gamemenu.hpp"
 #include "netgame.hpp"
 #include "panels.hpp"
@@ -127,8 +128,11 @@ std::pair<int, std::uint32_t> view_seq(const Scene& scene, int cls, const View& 
 // (FUN_004755a0: +0x18 toward +0x1c); a new light starts at its first
 // radius (FUN_00474160; an overlay's InitRadius).
 // ponytail: light quality is taken as high (2: shadows on).
+// `heroes` (Diablo 2 Couch): the local heroes' feet, the player's first,
+// when the camera isn't on the player; each carries the player's light.
 Lighting frame_light(const Scene& scene, const View& view, float cam_x, float cam_y, std::span<const View::Shot> effects = {}, int ambient = -1,
-                     std::span<const Unit> units = {}, const Unit* player_look = nullptr, std::uint32_t now = 0);
+                     std::span<const Unit> units = {}, const Unit* player_look = nullptr, std::uint32_t now = 0,
+                     std::span<const std::pair<float, float>> heroes = {});
 
 struct Town {
     const Scene* scene = nullptr;
@@ -149,6 +153,7 @@ struct Town {
     LocalTransport net;                    // the commands to the World, as their wire form (single player)
     View view;                             // what the World told the client after its last tick
     ViewEncoder view_enc;                  // the host's memory of what this client was sent
+    Couch couch{ world };                  // Diablo 2 Couch: the other local heroes and the pads (couch.hpp)
     std::unique_ptr<NetGame> net_game;     // --join: a game on a game.exe host (its other players and monsters)
     std::unordered_map<std::uint32_t, Monster> net_monsters;
     struct ShownMode { int mode = -1; std::uint32_t skill_ms = 0, since = 0; };   // since: world ms

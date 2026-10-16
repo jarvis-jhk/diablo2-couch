@@ -97,17 +97,17 @@ file(CONFIGURE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/d2d_icon.hpp" CONTENT
 
 add_executable(d2d
     main.cpp common.cpp cursor.cpp frontend.cpp gamemenu.cpp ingame.cpp items.cpp load.cpp panels.cpp
-    netgame.cpp scene.cpp skilltree.cpp store.cpp town.cpp ui.cpp window.cpp world_view.cpp
+    netgame.cpp scene.cpp skilltree.cpp store.cpp town.cpp ui.cpp window.cpp world_view.cpp couch.cpp
     $<$<PLATFORM_ID:Windows>:${PROJECT_SOURCE_DIR}/apps/icon/d2d.rc>)
 target_include_directories(d2d PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
 target_link_libraries(d2d PRIVATE
     ${ffmpeg_target}   # first: its headers before a system FFmpeg's in /opt/homebrew/include
-    game net mpq d2s rules drlg txt userdir cof compcode dc6 dcc ds1 dt1 font palette tbl devctl screenshot
+    game couch_party net mpq d2s rules drlg txt userdir cof compcode dc6 dcc ds1 dt1 font palette tbl devctl screenshot
     SDL3::SDL3 CLI11::CLI11 ${OPENAL_LIBRARY})
 target_include_directories(d2d SYSTEM PRIVATE ${OPENAL_INCLUDE_DIR})
 d2d_check_headers(d2d_headers LINK
     ${ffmpeg_target}   # first: its headers before a system FFmpeg's in /opt/homebrew/include
-    game net mpq d2s rules drlg txt userdir cof compcode dc6 dcc ds1 dt1 font palette tbl devctl screenshot
+    game couch_party net mpq d2s rules drlg txt userdir cof compcode dc6 dcc ds1 dt1 font palette tbl devctl screenshot
     SDL3::SDL3 CLI11::CLI11 ${OPENAL_LIBRARY})
 if(TARGET d2d_headers)
     target_include_directories(d2d_headers SYSTEM PRIVATE ${OPENAL_INCLUDE_DIR})

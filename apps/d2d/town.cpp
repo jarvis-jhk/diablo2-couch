@@ -18,6 +18,7 @@
 
 #include <d2gs/c2s.hpp>
 #include <d2s_items.hpp>
+#include <group_camera.hpp>
 #include <level_ids.hpp>
 #include <light.hpp>
 #include <log.hpp>
@@ -204,7 +205,7 @@ std::pair<int, std::uint32_t> view_seq(const Scene& scene, int cls, const View& 
 }
 
 Lighting frame_light(const Scene& scene, const View& view, float cam_x, float cam_y, std::span<const View::Shot> effects , int ambient ,
-                     std::span<const Unit> units , const Unit* player_look , std::uint32_t now) {
+                     std::span<const Unit> units , const Unit* player_look , std::uint32_t now, std::span<const std::pair<float, float>> heroes) {
     Lighting lighting;
     if (!view.level || scene.act_lit[31].entries().empty()) return lighting;
     lighting.pal = &scene.act_lit;
@@ -242,7 +243,10 @@ Lighting frame_light(const Scene& scene, const View& view, float cam_x, float ca
     auto lamp = [&](std::uint64_t key, float x, float y, int radius, bool shadowed, int first = -1) {
         stamp8(x, y, eased(key, radius, first < 0 ? radius : first), shadowed);
     };
-    lamp(1, cam_x, cam_y, std::max(0, 13 + view.light_bonus), true);   // FUN_00460930: 13 + the bonus, capped at 18
+    const auto [hero_x, hero_y] = heroes.empty() ? std::pair{ cam_x, cam_y } : heroes.front();
+    lamp(1, hero_x, hero_y, std::max(0, 13 + view.light_bonus), true);   // FUN_00460930: 13 + the bonus, capped at 18
+    for (std::size_t k = 1; k < heroes.size(); ++k) lamp(7ull << 32 | k, heroes[k].first, heroes[k].second, 13, true);   // the other local heroes'
+
     static constexpr std::array<std::string_view, 8> kModes{ "NU", "OP", "ON", "S1", "S2", "S3", "S4", "S5" };
     auto lit = [&](const Npc& npc, std::string_view mode) {
         const auto found = std::ranges::find(kModes, mode.empty() ? std::string_view(npc.mode) : mode);
@@ -273,7 +277,7 @@ Lighting frame_light(const Scene& scene, const View& view, float cam_x, float ca
         }
     };
     for (const auto& each_unit : units) overs(each_unit, each_unit.x, each_unit.y);
-    if (player_look) overs(*player_look, cam_x, cam_y);
+    if (player_look) overs(*player_look, hero_x, hero_y);
     std::erase_if(eases, [&](const auto& entry) { return now - entry.second.seen > 2000; });
     return lighting;
 }
@@ -334,6 +338,7 @@ auto Town::enter() -> void {
         quest_log = {};                           // done animations play again in a new game
         mini = {};                                // open (FUN_004567f0; ponytail: not the "Mini Panel" registry value)
         game_menu.open = false;
+        couch.clear();                            // last game's guests leave, saved
         world.enter(character);
         skillbar.new_game();
         publish();
@@ -344,6 +349,7 @@ auto Town::enter() -> void {
 // (FUN_0045a5c0).
 auto Town::save() -> std::string {
         if (scene && level) save_automap(automap, automap_dir(world), character.name, scene->map_seed, level->layer);
+        if (const auto err = couch.save(); !err.empty()) d2d::log::warn("couch: {}", err);
         return world.save();
     }
 
@@ -1573,17 +1579,29 @@ auto Town::walk(const Mouse& mouse, bool over_ui, std::uint32_t frame_ms, std::u
             if (host_npc && host_npc->id != net_chat_npc) { net_chat_npc = host_npc->id; net_game->send_items({ c2s::npc_chat(true, 1, net_chat_npc) }); }
         }
         for (const auto& command : input(mouse, over_ui)) send(command);
+        if (!net_game && scene) {                  // the pads: guests' heroes, and the host's with pad_player1
+            std::vector<Command> from_pad;
+            couch.frame(*scene, world.characters, frame_ms, from_pad);
+            for (const auto& command : from_pad) send(command);
+        }
         // Fixed ticks of kTickMs; after a stall, a few to catch up, then the
         // clock skips ahead (game.exe catches up one frame at most).
         if (world_ms == 0 || frame_ms - world_ms > 1000) world_ms = frame_ms - std::min<std::uint32_t>(frame_ms - last_ms, kTickMs);
         // A local game pauses under the game menu (FUN_0044efa0: game mode
         // 0 / 1, UI 9 or 0xb up, the player in a room): it draws and plays
         // sounds, the server's frame (FUN_0052fc20) doesn't run.
-        if (!net_game && game_menu.open) world_ms = frame_ms;
+        // With guests on the couch it doesn't (docs/COUCH.md seam 7).
+        if (!net_game && game_menu.open && !couch.active()) world_ms = frame_ms;
         bool ticked = false;
         for (int ticks = 0; frame_ms - world_ms >= kTickMs && ticks < 5; ++ticks) {
             prev_x = view.player.x; prev_y = view.player.y;
-            world.tick(net.receive(), world_ms + kTickMs, world_ms);
+            if (couch.active()) {
+                couch.party.tick(net.receive(), couch.guest_cmds, world_ms + kTickMs, world_ms);
+                for (auto& commands : couch.guest_cmds) commands.clear();
+                couch.ticked();
+            } else {
+                world.tick(net.receive(), world_ms + kTickMs, world_ms);
+            }
             world_ms += kTickMs;
             ticked = true;
         }
@@ -1758,8 +1776,23 @@ auto Town::draw(std::vector<std::uint8_t>& framebuffer, const Mouse& mouse, std:
         const bool jump = std::hypot(unit.x - prev_x, unit.y - prev_y) > 2.f;
         cam_x = jump ? unit.x : prev_x + (unit.x - prev_x) * blend;
         cam_y = jump ? unit.y : prev_y + (unit.y - prev_y) * blend;
+        // Diablo 2 Couch: one camera for every local hero on the level
+        // (couch/group_camera.hpp); the guests drawn as other players.
+        const std::pair<float, float> hero_at{ cam_x, cam_y };
+        std::vector<std::pair<float, float>> heroes;
+        if (!net_game) view.others.clear();
+        if (couch.active() && !net_game) {
+            std::vector<d2d::couch::Point> feet{ { cam_x, cam_y } };
+            for (std::size_t i = 0; i < couch.party.size(); ++i)
+                if (couch.party.guest(i).level == world.level) feet.push_back(couch.slid(i, blend));
+            const auto camera = d2d::couch::group_camera(feet, couch.party.frame);
+            cam_x = camera.x; cam_y = camera.y;
+            for (const auto& foot : feet) heroes.emplace_back(foot.x, foot.y);
+            couch.into_view(view, blend);
+        }
         state_clock.now = frame_ms;
         view_units(*scene, view, cam_x, cam_y, &merc_label, extra, den_beams, frame_ms, &character.name, std::max(character.character_class, 0), &state_clock);
+        if (couch.active() && !net_game) couch.units(*scene, extra);
         // The host's overhead messages (0x26 type 5): a shrine's comes as
         // its string id in decimal ("3684", ShrMsg1). Each stays (length x 8
         // + 125) frames (FUN_00661110). An object's goes on d2d's object
@@ -1808,7 +1841,7 @@ auto Town::draw(std::vector<std::uint8_t>& framebuffer, const Mouse& mouse, std:
         std::uint32_t mode_ms = unit.mode_ms;
         float rate = pmode >= 0 && pmode != kModeDD ? view.prate : 1.f;
         if (!view.seq.empty() && attack_mode(pmode)) { std::tie(mode, mode_ms) = view_seq(*scene, int(cls), view, frame_ms); rate = 1.f; }   // an SQ skill's frame
-        const auto light = frame_light(*scene, view, cam_x, cam_y, den_beams, den_ambient(), extra, &player_look, frame_ms);
+        const auto light = frame_light(*scene, view, cam_x, cam_y, den_beams, den_ambient(), extra, &player_look, frame_ms, heroes);
         render_ingame(framebuffer, *scene, *view.level, ui_cls,
                       view.gfx,
                       character.name, character.hardcore,
@@ -1821,9 +1854,10 @@ auto Town::draw(std::vector<std::uint8_t>& framebuffer, const Mouse& mouse, std:
                       nullptr, nullptr, nullptr, extra, rate, light.pal ? &light : nullptr, level->rain ? &rain : nullptr,
                       !(pmode == kModeDD && !view.corpses.empty()),    // dead, the corpse lies there instead
                       &player_look, alt_held || (SDL_GetModState() & SDL_KMOD_ALT) != 0,   // D2's "Show Items" (Alt)
-                      Hud{ view.poisoned, view.running, run_down });
+                      Hud{ view.poisoned, view.running, run_down }, heroes.empty() ? nullptr : &hero_at);
         view_overlays(framebuffer, *scene, view, hovered_monster());
         skillbar.draw(framebuffer, held ? -1 : mouse.x, held ? -1 : mouse.y);
+        if (couch.active() || couch.picker) couch.draw(framebuffer, *scene);   // the guests' corners, the hero picker
         if (net_game && net_game->trade.state != 0) {
             std::vector<d2d::d2s::Item> theirs;
             for (const auto& [id, stocked] : net_game->store_items) {

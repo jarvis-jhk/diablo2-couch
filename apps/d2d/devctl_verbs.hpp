@@ -125,6 +125,46 @@ void register_game_verbs(d2d::devctl::Channel& channel, Window& win, Screen& scr
                                 " | trade <npc> [gamble] | buy <stock> | sell <item> | close\n");
         return std::string("ok\n");
     });
+    // Diablo 2 Couch (couch.hpp): guests without pads, for scripted tests.
+    // couch join <save> | leave <guest> | cmd <guest> move <x> <y> | cmd <guest>
+    // skill <id> <x> <y> [unit] [left] | cmd <guest> resurrect | state
+    channel.on("couch", [&](const std::vector<std::string>& verb_args) {
+        if (screen != Screen::InGame || !scene) return std::string("err not in a game\n");
+        const std::string verb = verb_args.size() > 1 ? verb_args[1] : "";
+        auto& couch = town.couch;
+        if (verb == "join" && verb_args.size() >= 3) {
+            const auto err = couch.join_named(*scene, town.world.characters, verb_args[2]);
+            return err.empty() ? std::string("ok\n") : "err " + err + "\n";
+        }
+        if (verb == "state") {
+            std::string out;
+            for (std::size_t i = 0; i < couch.party.size(); ++i) {
+                const auto& guest = couch.party.guest(i);
+                out += std::format("guest={} name={} level={} at={:.2f},{:.2f} life={}/{} exp={} pmode={} dead={}\n", i, guest.character.name,
+                                   guest.level ? guest.level->id : -1, guest.player.x, guest.player.y, guest.character.stats.fixed(d2d::d2s::kLife),
+                                   guest.character.stats.fixed(d2d::d2s::kMaxLife), guest.character.stats.get(d2d::d2s::kExp),
+                                   guest.fight.pmode >= 0 ? kModeCode[guest.fight.pmode] : "-", guest.fight.dead() ? 1 : 0);
+            }
+            return out + "ok\n";
+        }
+        const std::size_t guest = verb_args.size() > 2 ? std::size_t(std::atoi(verb_args[2].c_str())) : couch.party.size();
+        if (guest >= couch.party.size()) return std::string("err couch join <save> | leave <guest> | cmd <guest> move <x> <y> | cmd <guest> skill <id> <x> <y> [unit] [left] | cmd <guest> resurrect | state\n");
+        if (verb == "leave") {
+            for (std::size_t seat = 0; seat < couch.seat_hero.size(); ++seat)
+                if (couch.seat_hero[seat] == &couch.party.guest(guest)) couch.clear_seat(seat);
+            return std::string("ok\n");
+        }
+        couch.guest_cmds.resize(couch.party.size());
+        auto float_arg = [&](std::size_t index) { return index < verb_args.size() ? std::stof(verb_args[index]) : 0.f; };
+        auto int_arg = [&](std::size_t index, int fallback = -1) { return index < verb_args.size() ? std::atoi(verb_args[index].c_str()) : fallback; };
+        const std::string what = verb_args.size() > 3 ? verb_args[3] : "";
+        auto& out = couch.guest_cmds[guest];
+        if (verb == "cmd" && what == "move" && verb_args.size() >= 6) out.push_back(cmd::Move{ float_arg(4), float_arg(5), true });
+        else if (verb == "cmd" && what == "skill" && verb_args.size() >= 7) out.push_back(cmd::UseSkill{ int_arg(4, 0), float_arg(5), float_arg(6), int_arg(7), int_arg(8, 0) != 0 });
+        else if (verb == "cmd" && what == "resurrect") out.push_back(cmd::Resurrect{});
+        else return std::string("err couch cmd <guest> move <x> <y> | skill <id> <x> <y> [unit] [left] | resurrect\n");
+        return std::string("ok\n");
+    });
     channel.on("key", [&](const std::vector<std::string>& args) {
         if (args.size() < 2) return std::string("err key <name>\n");
         const SDL_Keycode key = SDL_GetKeyFromName(args[1].c_str());

@@ -307,10 +307,14 @@ jobs:
     permissions:
       contents: write
     steps:
+      # Fork (diablo2-couch): only our d2d-* packages (the Flatpak bundles
+      # carry upstream's app id), and a tag makes a DRAFT prerelease under our
+      # name: it is published by hand once the assets are downloaded and
+      # checked (CLAUDE.md), never on its own.
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: '*'
+          pattern: 'd2d-*'
           path: release-assets
           merge-multiple: true
 
@@ -321,8 +325,8 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           if ! gh release view "$TAG" --repo "$REPOSITORY" >/dev/null 2>&1; then
-            gh release create "$TAG" --repo "$REPOSITORY" \
-              --title "D2: Decomped - $TAG" --generate-notes
+            gh release create "$TAG" --repo "$REPOSITORY" --draft --prerelease \
+              --title "Diablo 2 Couch $TAG" --notes "Draft: the assets are being checked."
           fi
           gh release upload "$TAG" --repo "$REPOSITORY" \
             release-assets/* --clobber

@@ -56,6 +56,9 @@ void render_ingame(std::vector<std::uint8_t>& framebuffer,
                    const Lighting* light = nullptr, d2d::rules::Rain* rain = nullptr, bool player_visible = true,
                    const Unit* player_look = nullptr,     // its states' colour shift and overlays
                    bool show_items = false,
-                   const Hud& hud = {});            // the HUD's poison tint, run button
+                   const Hud& hud = {},             // the HUD's poison tint, run button
+                   // Diablo 2 Couch: the player's feet when the camera isn't on
+                   // them (a shared screen's group camera); null: at the camera.
+                   const std::pair<float, float>* hero_at = nullptr);
 
 }  // namespace d2d::client
