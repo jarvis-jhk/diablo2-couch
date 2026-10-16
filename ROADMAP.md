@@ -57,6 +57,10 @@ becomes a GitHub issue; Flatpak for Linux/Deck, Windows zip, assets checksum-ver
       pads take the party along, and each guest's save gets the party's progress (Acts
       II/III opened, Andariel/Duriel done, waypoints reached, the act it is in).
       2026-10-16: couch/progress.hpp + pads pull; v0.0.3 published, Act II item closed.
+      Act III (combined item diablo2-act-iii-couch), done when: prerelease v0.0.4 where the
+      party sails to Kurast with player 1 and plays Act III through Mephisto; quest items a
+      guest walks to go into player 1's pack, quest objects a guest uses act for player 1,
+      and Mephisto's kill reaches every guest's save.
 - [ ] Online co-op through Warpzone (rooms/invites, hole-punch/relay, C API
       crates/capi/include/warpzone.h), after the couch milestones. No chat or free-text
       player content; warpzone.virtualtabletop.io is the only Jan domain allowed in the repo.

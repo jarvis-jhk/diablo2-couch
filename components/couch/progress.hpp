@@ -46,6 +46,15 @@ void share_waypoints(const std::array<std::uint8_t, N>& before, const std::array
     for (std::size_t i = 0; i < N; ++i) guest[i] = std::uint8_t(guest[i] | (after[i] & ~before[i]));
 }
 
+// The save header's act progression (difficulty x 4 or 5 + act, World::
+// open_act: Mephisto's death makes it Act IV's) the host reached this tick,
+// for a guest on the host's difficulty; never lowered, and never another
+// difficulty's (that would open Nightmare to a guest still in Normal).
+inline void share_progression(int before, int after, int host_difficulty, int guest_difficulty, std::uint8_t& guest) {
+    if (after <= before || host_difficulty != guest_difficulty) return;
+    guest = std::uint8_t(std::max<int>(guest, after));
+}
+
 // A guest joining a game the host has taken into a later act: the travel
 // words up to that act, so its save may start there (the act it is saved
 // in follows the party's, World::set_act).

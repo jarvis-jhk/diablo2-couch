@@ -24,7 +24,14 @@
 //    teleport pad brings the others to whoever took it, and the leash undoes
 //    a step that would pull the party off the screen;
 // 5. what the host earned in the tick (the act bosses, the acts opened, the
-//    waypoints) is the guests' too, in their own saves (progress.hpp).
+//    waypoints, the act progression) is the guests' too, in their own saves
+//    (progress.hpp).
+//
+// Player 1 carries the party's quests: a quest object a guest uses (a
+// stand, an altar, Khalim's chests, the lever, the orb, the Sanctuary's
+// portal: World::quest_object) is used as the host's, and a quest item a
+// guest walks to goes into the host's pack, since only the host talks to
+// NPCs, cubes and wields Khalim's Will.
 //
 // ponytail: a guest's missiles are resolved in the host's pass, so their
 // kills and leech count as the host's; a guest's town portal is the game's

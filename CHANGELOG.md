@@ -3,6 +3,17 @@
 Diablo 2 Couch releases (prereleases while the couch co-op is a preview). The launcher
 shows a version's section once, on the first start after an update.
 
+## v0.0.4 (2026-10-16)
+
+- Act III together: quest items a guest picks up (Khalim's eye, heart and brain, the jade
+  figurine, the Gidbinn, Lam Esen's tome, and in earlier acts the Cube and the staff
+  pieces) go into player 1's pack, who talks to the NPCs and uses the Cube — so no quest
+  gets stuck in a guest's pockets.
+- Quest objects a guest uses (Khalim's chests, Lam Esen's stand, the sewer lever, the
+  Gidbinn's altar, the compelling orb, the Arcane Sanctuary's portal) work as player 1's.
+- Mephisto's death and the act reached count for every guest's save, like Andariel and
+  Duriel.
+
 ## v0.0.3 (2026-10-16)
 
 - Act II together: the Arcane Sanctuary's teleport pads take the whole party along

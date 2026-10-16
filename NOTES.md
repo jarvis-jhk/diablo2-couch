@@ -212,3 +212,26 @@
   d2d-launcher.exe, SDL3.dll. Combined item diablo2-act-ii-couch closed with it.
   Open for Jan's test: crossing to Lut Gholein with guests, the Arcane pads, a guest's save
   starting in Act II with the shared waypoints.
+
+## 2026-10-16 — Act III couch (combined item diablo2-act-iii-couch)
+- Upstream main unchanged since af67c23. Act III is fetch quests, and a guest could strand
+  every one: a guest picking up Khalim's eye/heart/brain, the jade figurine, the Gidbinn or
+  Lam Esen's tome kept it in a pack it has no panel for, while only the host talks, cubes and
+  wields the Will (upstream polls the host's `carries()`). A guest using a quest object ran
+  it with the GUEST's quest bits and carries against the host's lent records (Khalim's chest
+  drops no part to a guest whose own save finished Khalim's Will; Lam Esen's stand took the
+  guest's bits; the Sanctuary's portal moved the guest, and follow() snapped it back).
+- Fix: a guest's tick leaves quest objects (World::quest_object: the Act I–III stands,
+  stones, altars, chests, journal, Sanctuary portal, lever, orb, hellgate) and quest items
+  (item_base `quest`) to the host: `couch_for_host` / `couch_quest_items`, which Party runs
+  as host.operate / host.pick_up (pick_up = the old pickup branch with the malus line,
+  extracted). No room in the host's pack: the item stays on the floor. This fixes Act I/II's
+  quest items too (Cube, staff pieces, scrolls). World::operate takes no distance, so the
+  host uses an object the guest stands at.
+- Mephisto: word 22 was already shared; World::open_act raises the header's progression,
+  which no guest got (Andariel/Duriel too). share_progression passes the host's gain to a
+  guest on the same difficulty, never lowering, never across difficulties. Test in
+  test_couch_progress; negative control (difficulty guard off) fails the Nightmare/Normal
+  case. Known: each player in Durance 3 gets a soulstone in game.exe; a guest gets bit 0xb
+  without a stone (only the host's drops, and goes to the host): Act IV's Hellforge is
+  player 1's, like the other NPC rewards. The hellgate is upstream's "Act 4 isn't built".

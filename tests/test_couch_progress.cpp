@@ -74,5 +74,25 @@ int main() {
     Bits camp{};
     open_acts(0, camp);
     assert(camp == Bits{});
+
+    // Mephisto dies (Act III's boss): the host's word 22 bits 13, 0, 11 and
+    // its progression to Act IV's (3 in Normal) reach a guest in Normal.
+    Bits meph_before{}, meph_after{}, meph_guest{};
+    set(meph_after, 22, 13); set(meph_after, 22, 0); set(meph_after, 22, 11);
+    share_quests(meph_before, meph_after, meph_guest);
+    assert(bit(meph_guest, 22, 0) && bit(meph_guest, 22, 13) && bit(meph_guest, 22, 11));
+    std::uint8_t progress = 2;
+    share_progression(2, 3, 0, 0, progress);
+    assert(progress == 3);
+    // Never lowered, nothing without a gain, never across difficulties.
+    std::uint8_t ahead = 7;
+    share_progression(2, 3, 0, 0, ahead);
+    assert(ahead == 7);
+    std::uint8_t still = 1;
+    share_progression(3, 3, 0, 0, still);
+    assert(still == 1);
+    std::uint8_t normal = 1;
+    share_progression(7, 8, 1, 0, normal);     // the host in Nightmare, the guest in Normal
+    assert(normal == 1);
     return 0;
 }

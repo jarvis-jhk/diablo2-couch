@@ -96,7 +96,11 @@ whoever stepped on it. What the party achieves counts for every hero's own save:
 and Duriel beaten, the next act opened, the waypoints found on the way, the act you are
 in — so a guest's hero later starts in Lut Gholein with those waypoints, alone or as
 player 1. Quest rewards fetched from an NPC (Den of Evil's skill point, Radament's book,
-Charsi's imbue) are still player 1's only. The game no longer pauses under the Esc menu while guests
+Charsi's imbue) are still player 1's only. Player 1 also carries the party's quests: a quest
+item a guest walks to (the Horadric Cube, Khalim's eye, the jade figurine, Lam Esen's tome …)
+goes into player 1's pack, and a quest object a guest uses (Khalim's chests, the sewer lever,
+the Gidbinn's altar, the compelling orb) works as if player 1 had used it. Mephisto's death
+counts for everyone's save too. The game no longer pauses under the Esc menu while guests
 play. Each guest is saved when player 1 saves and leaves.
 
 Not there yet: guests have no inventory, stash, merchant or skill-tree screens, can't

@@ -193,6 +193,7 @@ void Party::tick(const std::vector<game::Command>& host_cmds, std::span<const st
     const game::Level* level_before = host.level;
     const int pads_before = host.couch_pads;
     const auto quests_before = host.quests();
+    const int progression_before = host.character.header.progression;
     const auto waypoints_before = host.character.header.waypoints[std::size_t(std::clamp(host.character.header.active_difficulty(), 0, 2))];
     // 1. The guests' sides for the monsters; everyone in everyone's way.
     sides_.resize(guests_.size());
@@ -253,6 +254,16 @@ void Party::tick(const std::vector<game::Command>& host_cmds, std::span<const st
                 if (other.get() != &guest) follow(*other, guest);
             pulled = true;
         } else if (same_level && !moved && !pulled) leash(i + 1, guest.player, guest);
+        // The quest objects the guest used and the quest items it reached
+        // are the host's: player 1 carries the party's quests (talks, cubes,
+        // wields Khalim's Will), so nothing a guest finds strands a quest.
+        // An item with no room in the host's pack stays on the floor.
+        for (const int npc : guest.couch_for_host)
+            if (guest.level == host.level && std::size_t(npc) < host.level->npcs.size()) host.operate(npc, now_ms);
+        for (const int id : guest.couch_quest_items)
+            if (const int ground = host.loot.index_of(id); ground >= 0) host.pick_up(std::size_t(ground));
+        guest.couch_for_host.clear(); guest.couch_quest_items.clear();
+        if (guest.level != host.level) follow(guest, host);      // the host took a quest's portal
     }
     // 4. What the party earned this tick, in each guest's own save.
     const auto& host_waypoints_now = host.character.header.waypoints[std::size_t(std::clamp(host.character.header.active_difficulty(), 0, 2))];
@@ -260,6 +271,8 @@ void Party::tick(const std::vector<game::Command>& host_cmds, std::span<const st
         share_quests(quests_before, host.quests(), guest->quests());
         share_waypoints(waypoints_before, host_waypoints_now,
                         guest->character.header.waypoints[std::size_t(std::clamp(guest->character.header.active_difficulty(), 0, 2))]);
+        share_progression(progression_before, host.character.header.progression, host.character.header.active_difficulty(),
+                          guest->character.header.active_difficulty(), guest->character.header.progression);
     }
 }
 

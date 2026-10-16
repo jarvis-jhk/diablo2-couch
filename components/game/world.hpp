@@ -552,10 +552,19 @@ struct World {
     // level changes). `couch_crowd`: the other heroes and theirs, in the way.
     // `couch_frames`: the 40 ms frames the host's tick ran (a guest's stamina).
     // `couch_pads`: teleport pads taken (the party comes along, not the leash).
+    // `couch_for_host` / `couch_quest_items`: a guest's tick leaves the quest
+    // objects it uses (their indices) and the quest items it reaches (their
+    // ground ids) to the host, who carries the party's quests.
     bool couch_guest = false;
     std::vector<UnitState*> couch_crowd;
     int couch_frames = 0;
     int couch_pads = 0;
+    std::vector<int> couch_for_host, couch_quest_items;
+    // Whether the OperateFn is a quest's (its effect reads the user's quest
+    // bits or what it carries).
+    static bool quest_object(int operate_fn);
+    // Picks up loot.ground[index] (the malus' quest line with it).
+    void pick_up(std::size_t index);
 
 };
 

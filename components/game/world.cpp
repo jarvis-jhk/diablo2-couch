@@ -1354,6 +1354,23 @@ auto World::khalim_parts() const -> d2d::rules::KhalimQuest::Parts {
 // FUN_00544160: a quest item taken from the player, the cursor's first.
 // FUN_00538680: act `act` (0-based) open, the save's progression at
 // least difficulty x 4 (5 in LoD) + act.
+auto World::pick_up(std::size_t index) -> void {
+        const bool malus = loot.ground[index].item.code == "hdm";
+        loot.take(index);
+        if (malus && holding_malus() && tools.picked_up(quests())) d2d::log::info("Tools of the Trade: the malus picked up (the player's line, FUN_00553380)");
+    }
+
+// Diablo 2 Couch: the quest objects (the stands, altars, chests, stones,
+// levers, portals of a quest), which a guest leaves to the host.
+auto World::quest_object(int operate_fn) -> bool {
+        namespace ops = d2d::rules::operate_fn;
+        static constexpr std::array kQuest{ ops::kMoldyTome, d2d::rules::ToolsQuest::kStand, ops::kCairnStone, ops::kGibbet, ops::kInifussTree,
+                                            ops::kSunAltar, ops::kOrifice, ops::kJournal, ops::kSanctuaryPortal, ops::kCubeChest, ops::kScrollChest, ops::kShaftChest,
+                                            ops::kLamTome, ops::kKhalimHeart, ops::kKhalimEye, ops::kKhalimBrain, ops::kSewerLever, ops::kCompellingOrb,
+                                            ops::kGidbinnAltar, ops::kHellgate };
+        return std::ranges::find(kQuest, operate_fn) != kQuest.end();
+    }
+
 auto World::open_act(int act) -> void {
         const int diff = character.header.active_difficulty();
         character.header.progression = std::uint8_t(std::max<int>(character.header.progression, diff * (character.header.expansion() ? 5 : 4) + act));
@@ -2170,7 +2187,8 @@ auto World::tick(const std::vector<Command>& cmds, std::uint32_t now_ms, std::ui
                 if (operable(npc.operate_fn) || npc.operate_fn == d2d::rules::operate_fn::kMoldyTome || npc.operate_fn == d2d::rules::ToolsQuest::kStand || npc.operate_fn == d2d::rules::operate_fn::kCairnStone || npc.operate_fn == d2d::rules::operate_fn::kGibbet || npc.operate_fn == d2d::rules::operate_fn::kInifussTree
                     || npc.operate_fn == d2d::rules::operate_fn::kSunAltar || npc.operate_fn == d2d::rules::operate_fn::kOrifice
                     || npc.operate_fn == d2d::rules::operate_fn::kJournal || npc.operate_fn == d2d::rules::operate_fn::kSanctuaryPortal) {
-                    operate(interact_npc, now_ms);
+                    if (couch_guest && quest_object(npc.operate_fn)) couch_for_host.push_back(interact_npc);   // Diablo 2 Couch: the host's to use
+                    else operate(interact_npc, now_ms);
                 } else if (npc.operate_fn == d2d::rules::operate_fn::kStash) {
                     events.push_back(ev::OpenUI{ ev::OpenUI::stash, interact_npc });
                 } else if (npc.operate_fn == d2d::rules::operate_fn::kWaypoint) {
@@ -2206,9 +2224,9 @@ auto World::tick(const std::vector<Command>& cmds, std::uint32_t now_ms, std::ui
             const auto ground_index = std::size_t(loot.index_of(pick_item));
             const auto& ground_item = loot.ground[ground_index];
             if (std::hypot(ground_item.x - player.x, ground_item.y - player.y) <= 1.f) {
-                const bool malus = ground_item.item.code == "hdm";
-                loot.take(ground_index);
-                if (malus && holding_malus() && tools.picked_up(quests())) d2d::log::info("Tools of the Trade: the malus picked up (the player's line, FUN_00553380)");
+                const auto base = game_data->rules.item_base.find(ground_item.item.code);
+                if (couch_guest && base != game_data->rules.item_base.end() && base->second.quest) couch_quest_items.push_back(pick_item);   // Diablo 2 Couch: into the host's pack
+                else pick_up(ground_index);
                 pick_item = -1; player.walking = false; player.path.clear();
             } else {
                 target_x = ground_item.x; target_y = ground_item.y; player.walking = true;
