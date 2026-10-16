@@ -156,3 +156,9 @@
 - Warpzone: jarvis-jhk/warpzone PR #2 (descriptor patterns) is still open, and its
   Linux/Deck entries point at the tarball, which needs glibc 2.43 — so Warpzone on the
   Deck needs an older-base tarball first.
+- Warpzone lane asked (t_mvb0neix3xjch8) for WARPZONE_DATA_D2LOD (launcher ≥0.1.2, warpzone
+  PR #8): d2d now takes it like --data when neither --data nor D2_MPQ_DIR is given and the
+  folder holds d2data.mpq (else the usual search goes on), and remembers it as data =.
+  The descriptor's [[data]] (`./d2exp.mpq`, import_args `--data {path}`) already matches;
+  no `present` (d2d keeps the path in d2d.cfg, not as a file) and no `known` fingerprints
+  (no game data here to hash), so no warpzone PR for it.

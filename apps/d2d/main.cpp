@@ -1006,6 +1006,17 @@ int main(int argc, char** argv) {
     // decision 5). No guessing: the launcher writes `data =` into d2d.cfg.
     {
         const char* env = std::getenv("D2_MPQ_DIR");
+        // Fork: the game folder the Warpzone launcher found (its descriptor's
+        // [[data]] id d2lod), used like --data when nothing more explicit is
+        // given and it holds the MPQs; else the usual search goes on.
+        if (const char* warpzone = std::getenv("WARPZONE_DATA_D2LOD");
+            data_dir_str.empty() && !(env && *env) && warpzone && *warpzone) {
+            const std::string_view text = warpzone;
+            if (d2d::install::find_file(fs::path(std::u8string(text.begin(), text.end())), "d2data.mpq")) {
+                data_dir_str = text;
+                d2d::log::info("  Warpzone found the game data: {}", data_dir_str);
+            }
+        }
         const char* base = SDL_GetBasePath();
         std::error_code cwd_ec;
         const auto found = d2d::install::resolve_data_dir(data_dir_str, env ? env : "", base ? fs::path(base) : fs::path{},

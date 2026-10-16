@@ -10,6 +10,8 @@ shows a version's section once, on the first start after an update.
 - The launcher tells you when a newer Diablo 2 Couch release is out (not in installs
   that Warpzone manages) and shows this list once after an update.
 - `d2d --data <dir>` is remembered, so later starts find the game data without it.
+- Installed through the Warpzone launcher, the game uses the Diablo II folder the
+  launcher found (`WARPZONE_DATA_D2LOD`) without asking.
 - Anonymous crash reports: if the game did not close normally, the next start sends
   one line (version, platform, "crash") so the bug can be fixed. Nothing else is sent.
   Turn it off with `fault_reports = 0` in d2d.cfg or `D2COUCH_NO_REPORT=1`.
