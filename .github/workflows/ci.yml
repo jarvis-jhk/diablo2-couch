@@ -250,7 +250,8 @@ jobs:
       # tidy and tests passed; those are earlier steps and fail the job
       # themselves.
       - name: Upload package
-        if: github.event_name == 'push'
+        # Fork: a tag's run started by hand (workflow_dispatch) uploads too.
+        if: github.event_name == 'push' || startsWith(github.ref, 'refs/tags/')
         # Keep main builds green if artifact storage is temporarily full, but
         # don't publish a tag release unless every platform package uploaded.
         continue-on-error: ${{ !startsWith(github.ref, 'refs/tags/') }}
