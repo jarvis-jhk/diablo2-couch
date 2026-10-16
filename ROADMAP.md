@@ -62,6 +62,10 @@ becomes a GitHub issue; Flatpak for Linux/Deck, Windows zip, assets checksum-ver
       guest walks to go into player 1's pack, quest objects a guest uses act for player 1,
       and Mephisto's kill reaches every guest's save.
       2026-10-16: quest objects/items to player 1, share_progression; v0.0.4 published, item closed.
+      Act IV (combined item diablo2-act-iv-couch), done when: a prerelease where the party
+      enters the Pandemonium Fortress with player 1 through the hellgate, plays Act IV through
+      Diablo together, and Diablo's kill and the Act IV waypoints reach every guest's save.
+      2026-10-16: blocked — upstream hasn't built Act IV (only branch act4-prep).
 - [ ] Online co-op through Warpzone (rooms/invites, hole-punch/relay, C API
       crates/capi/include/warpzone.h), after the couch milestones. No chat or free-text
       player content; warpzone.virtualtabletop.io is the only Jan domain allowed in the repo.

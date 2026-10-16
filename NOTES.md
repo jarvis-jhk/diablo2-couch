@@ -242,3 +242,14 @@
   Windows zip holds d2d.exe, d2d-launcher.exe, SDL3.dll. Combined item diablo2-act-iii-couch
   closed. Open for Jan's test: Meshif to Kurast with guests, a guest opening Khalim's chests /
   picking up a part (lands in player 1's pack), Mephisto's kill in a guest's save.
+
+## 2026-10-16 — Act IV couch blocked on upstream (combined item diablo2-act-iv-couch)
+- Upstream main 5005cf3 (8 commits ahead of ours: opt-in Sentry crash reporting, Act III
+  quest-state bounds fix) and branch act4-prep (3bfce4f, already contained in main): Act IV
+  is not built — `kBuiltLevels` lacks it, no layout, no town, quests or Diablo; the hellgate
+  says so. Per the brief we never claim an act upstream hasn't built, so the item is blocked
+  ("upstream Act IV unbuilt") with its done-when in ROADMAP M3. Resume when upstream lands
+  Act IV: merge, then the same road as Acts II/III (hellgate travel with guests, Hellforge
+  stays player 1's, Diablo's word and the progression via progress.hpp).
+- Before the next upstream merge: check upstream's Sentry reporting against our fault-relay
+  rules (anonymous, version/platform/category only); keep it off/unconfigured in our builds.
