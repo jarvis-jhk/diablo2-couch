@@ -14,6 +14,8 @@ upstream's plan in `docs/PLAN.md`; we merge it as it lands.
 - [ ] One shared camera following the group, with a leash keeping players on screen.
       Rules done and unit-tested (components/couch, 2026-10-14); wiring waits for two heroes.
 - [ ] Controller input per player (SDL3 gamepads), direct stick movement, skill buttons.
+      Seats (join on press, reconnect keeps the seat) and stick walk done and unit-tested
+      (components/couch/pads.hpp, 2026-10-16); SDL3 gamepad events and skill buttons not wired.
 - [ ] Per-player inventory/stash/merchant panels that do not pause the world.
 - [ ] Group rules for waypoints, town portals and area transitions.
 

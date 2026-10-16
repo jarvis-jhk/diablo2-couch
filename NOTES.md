@@ -59,3 +59,22 @@
   is still upstream's planned stage 1; the upstream contact issue is still unopened.
 - CI run 38506809924 on 3e6d394: Linux GCC, Windows MSVC, macOS Clang green (incl. clang-tidy
   and header checks); test_couch built and passed on all three, ctest 35/35.
+
+## 2026-10-16 — upstream merge, controller seats and stick walk
+- Merged upstream 6884077 (57 commits): Act III complete (all quests, Mephisto, hellgate),
+  Act IV prep, Flatpak packaging (x86_64/ARM64 CI bundles), Steam Deck preview install
+  steps. Only conflict README.md (ours kept, status table: Act III done, IV–V upstream);
+  docs/D2DECOMP-README.md refreshed verbatim from upstream.
+- ⚠️ Upstream's ci.yml now creates a GitHub release and uploads upstream-named packages
+  (`d2decomped-*`) for ANY pushed tag. Before our first v0.x tag, gate or rename that job
+  so a tag never publishes an untested or upstream-branded release on its own.
+- Upstream's packaging plan (docs/design/linux-packaging-plan.md) names the SDL3 gamepad
+  API and Steam Input for Deck controllers, but no gamepad code exists upstream yet.
+- M1 slice: `components/couch/pads.hpp` + `test_couch_pads`: four seats (join on press,
+  reconnect by identity keeps the seat, leave frees exactly one, no renumbering) and the
+  stick walk (radial dead zone, fresh Move then re-aim at 160 px on screen, one stop Move
+  on release). Local g++ 12 -Wpedantic -Werror and clang-tidy 23 (repo config) clean.
+  Negative controls: reconnect without the identity check hands a waiting seat to a new
+  pad (fails); release without the stop Move fails. Restored byte-exact.
+- Not wired: needs SDL_INIT_GAMEPAD and event routing in window.cpp, and real use needs
+  several heroes (seat 3). Virtual tests don't certify physical pads or the Deck.
