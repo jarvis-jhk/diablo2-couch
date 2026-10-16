@@ -253,3 +253,28 @@
   stays player 1's, Diablo's word and the progression via progress.hpp).
 - Before the next upstream merge: check upstream's Sentry reporting against our fault-relay
   rules (anonymous, version/platform/category only); keep it off/unconfigured in our builds.
+
+## 2026-10-17 — Linux tarball for every current distro (Jan: "linux support")
+- The release tarball came from ubuntu-26.04 and needed glibc 2.43: it started on no Mint,
+  Ubuntu LTS, Debian or SteamOS. New `.github/workflows/linux-portable.yml` (called by
+  ci.yml, and dispatchable alone) builds in quay.io/pypa/manylinux_2_28 (AlmaLinux 8,
+  glibc 2.28) with gcc-toolset-14, whose libstdc++ links the newer parts statically:
+  highest needs are GLIBC_2.28 / GLIBCXX_3.4.22 (a CI step fails on GLIBC ≥ 2.29). SDL3 3.4.16
+  and OpenAL Soft 1.25.2 from source (they dlopen X11/Wayland/PipeWire/Pulse/ALSA/udev),
+  Qt 6.8.3 from aqtinstall (the Qt Company's RHEL 8 build, GTK theme plugin removed). The
+  build job of ci.yml no longer uploads its Linux tarball; the release takes this one.
+- A smoke job unpacks it in ubuntu:24.04, debian:12, fedora:latest and archlinux:latest:
+  ldd of every binary/library/plugin (LD_LIBRARY_PATH=lib standing in for the rpath),
+  `d2d --help`, the launcher alive after 5 s on Xvfb. All four green on run 38982029235.
+  Locally (Debian 12, Xvfb) the launcher drew its window. No game data: gameplay unchanged.
+- Things that bit, for next time: glibc < 2.34 needs Threads::Threads (game now links
+  it); Qt's deploy resolves via rpath + ldconfig, not LD_LIBRARY_PATH (CI registers the
+  deps with ldconfig); with the Qt Company's Qt, plugins are deployed only for a finalized
+  target whose plugin targets exist in the deploying directory (apps/ now finds Widgets/
+  Network and calls qt_finalize_target); StormLib's install rules need STORM_SKIP_INSTALL.
+- Deploy excludes now also cover libstdc++/libgcc_s/libz/GLib/pcre2/zstd: through DT_RPATH
+  an older bundled copy would win over the system's for the GL driver too. libOpenGL
+  (Ubuntu's libopengl0 isn't always installed), libselinux (Arch has none) and krb5 with
+  its libcrypto.so.1.1 ship. Tarball 39 MB.
+- Not verified: a real desktop session, Wayland-only sessions (Qt falls back to XWayland;
+  only the xcb platform plugin ships), physical pads, the Deck.

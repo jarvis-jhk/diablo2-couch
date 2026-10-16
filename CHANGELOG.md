@@ -3,6 +3,12 @@
 Diablo 2 Couch releases (prereleases while the couch co-op is a preview). The launcher
 shows a version's section once, on the first start after an update.
 
+## v0.0.5 (2026-10-17)
+
+- Linux: the tarball now runs on any Linux from the last years (glibc 2.28 or newer:
+  Linux Mint, Ubuntu, Debian, Fedora, Arch, SteamOS) instead of only on the newest
+  distributions. Unpack it and start `d2d-launcher`.
+
 ## v0.0.4 (2026-10-16)
 
 - Act III together: quest items a guest picks up (Khalim's eye, heart and brain, the jade

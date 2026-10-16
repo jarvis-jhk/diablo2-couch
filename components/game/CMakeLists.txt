@@ -5,6 +5,10 @@
 add_library(game STATIC ai.cpp fight.cpp gamedata.cpp gamedata_load.cpp objgroups.cpp world.cpp
                         world_quests_act1.cpp world_quests_act2.cpp world_quests_act3.cpp)
 target_include_directories(game PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(game PUBLIC log mpq d2s rules drlg txt userdir install_detect cof compcode ds1 dt1 tbl)
+# std::thread (gamedata.cpp, d2d's main.cpp): before glibc 2.34 that needs
+# libpthread (fork: the Linux package builds on glibc 2.28).
+find_package(Threads REQUIRED)
+target_link_libraries(game PUBLIC log mpq d2s rules drlg txt userdir install_detect cof compcode ds1 dt1 tbl
+                                  Threads::Threads)
 target_compile_features(game PUBLIC cxx_std_${CMAKE_CXX_STANDARD})
 d2d_check_headers(game_headers LINK game)

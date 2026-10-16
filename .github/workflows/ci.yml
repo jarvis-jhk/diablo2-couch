@@ -251,7 +251,9 @@ jobs:
       # themselves.
       - name: Upload package
         # Fork: a tag's run started by hand (workflow_dispatch) uploads too.
-        if: github.event_name == 'push' || startsWith(github.ref, 'refs/tags/')
+        # Not Linux: this package needs glibc 2.43; linux-portable.yml makes
+        # the one users get.
+        if: runner.os != 'Linux' && (github.event_name == 'push' || startsWith(github.ref, 'refs/tags/'))
         # Keep main builds green if artifact storage is temporarily full, but
         # don't publish a tag release unless every platform package uploaded.
         continue-on-error: ${{ !startsWith(github.ref, 'refs/tags/') }}
@@ -300,11 +302,17 @@ jobs:
           artifact-name: diablo2-couch-${{ matrix.arch }}
           arch: ${{ matrix.arch }}
 
+  # Fork: the Linux tarball, built on glibc 2.28 and started on Ubuntu 24.04,
+  # Debian 12, Fedora and Arch (linux-portable.yml).
+  linux-portable:
+    uses: ./.github/workflows/linux-portable.yml
+
   release:
     name: Publish release assets
     if: startsWith(github.ref, 'refs/tags/')
     needs:
       - build
+      - linux-portable
       - flatpak
     runs-on: ubuntu-latest
     permissions:

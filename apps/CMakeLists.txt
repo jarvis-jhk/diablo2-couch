@@ -44,7 +44,9 @@ endif()
 # The dev tools (d2proxy, mpq-cat, drlg-dump) ride along beside d2d, on the
 # same bundled libraries.
 # d2d alone in a Diablo II folder (as game.exe) works too, but isn't this.
-find_package(Qt6 6.5 COMPONENTS Core REQUIRED)
+# Fork: Widgets/Network too, so their plugin targets (xcb, TLS...) exist in
+# this directory, where the deploy script below collects them.
+find_package(Qt6 6.5 COMPONENTS Core Widgets Network REQUIRED)
 string(REGEX REPLACE "^v" "" D2D_VERSION "${D2D_VERSION}")   # tag v0.1.0 -> 0.1.0
 set(tools d2proxy)
 foreach(tool mpq-cat drlg-dump)
@@ -104,15 +106,26 @@ else()
     install(TARGETS ${beside_d2d} RUNTIME DESTINATION .)
     # Qt's default skips everything in the system lib dirs, i.e. all of it on
     # a distro. Ship all but what every desktop has and must match the
-    # system: glibc, GL, X11 / Wayland, the sound servers.
+    # system: glibc, GL, X11 / Wayland, the sound servers. Fork: and the C++
+    # runtime, zlib, GLib: through DT_RPATH an older bundled copy would win
+    # over the system's for the GL driver too (linux-portable.yml).
+    # libOpenGL (glvnd's front, which Qt Gui links) ships: not every desktop
+    # has it installed (Ubuntu's libopengl0), and it only forwards to the
+    # system's libGLdispatch.
+    # pcre2/zstd (GLib's, Mesa's) stay the system's: no symbol versions, so an
+    # older bundled copy breaks them. libselinux ships (Arch has none, krb5
+    # needs it) and is symbol-versioned.
     set(deploy_args "EXECUTABLE \"$<TARGET_FILE_NAME:d2d-launcher>\"
         ADDITIONAL_EXECUTABLES ${beside_d2d_files}
         POST_EXCLUDE_REGEXES
             \"/ld-linux\" \"/lib(c|m|dl|rt|pthread|resolv|util)[.]so\"
-            \"/lib(GL|GLX|GLdispatch|EGL|OpenGL|drm|gbm|vulkan)[.]so\"
+            \"/lib(GL|GLX|GLdispatch|EGL|drm|gbm|vulkan)[.]so\"
             \"/lib(X11|X11-xcb|xcb|wayland-[a-z]+)[.]so\"
             \"/lib(asound|pulse|pulse-simple|jack|pipewire-[0-9.]+)[.]so\"
-            \"/lib(dbus-1|udev|systemd|fontconfig|freetype|expat)[.]so\"")
+            \"/lib(dbus-1|udev|systemd|fontconfig|freetype|expat)[.]so\"
+            \"/lib(stdc[+][+]|gcc_s|z)[.]so\"
+            \"/lib(glib|gobject|gthread|gmodule|gio)-2[.]0[.]so\"
+            \"/lib(pcre2-8|zstd)[.]so\"")
 endif()
 
 # Qt's deploy tool: macdeployqt (also d2d's dylibs), windeployqt, or
@@ -122,6 +135,10 @@ qt_deploy_runtime_dependencies(${deploy_args}
     LIB_DIR lib PLUGINS_DIR plugins
     GENERATE_QT_CONF NO_TRANSLATIONS NO_COMPILER_RUNTIME)")
 install(SCRIPT "${deploy_script}")
+# Fork: which plugins to deploy is written when Qt finalizes the target, and
+# Qt finalizes only qt_add_executable targets by itself. A distro Qt found
+# them anyway; the Qt Company's build (linux-portable.yml) shipped none.
+qt_finalize_target(d2d-launcher)
 
 if(APPLE)
     # macdeployqt copies every plugin Homebrew has; the launcher needs only

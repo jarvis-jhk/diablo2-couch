@@ -16,11 +16,13 @@ Diablo II engine that runs natively on Linux, Windows and macOS.
 > controller and their own hero. It is a prototype: see [Couch preview](#couch-preview)
 > for what works and what doesn't yet.
 
-**Download** from [Releases](../../releases): the Flatpak (`diablo2-couch-x86_64.flatpak`)
-for Steam Deck and Linux, the zip for Windows. The launcher tells you when a newer release
-is out and shows what changed after an update ([CHANGELOG.md](CHANGELOG.md)). The Linux
-`.tar.gz` is built on Ubuntu 26.04 and needs a distribution that new (glibc 2.43): use the
-Flatpak on anything older, including SteamOS and Linux Mint 22.
+**Download** from [Releases](../../releases): for Linux and the Steam Deck the
+`d2d-<version>-Linux-x86_64.tar.gz` (unpack it anywhere and start `d2d-launcher`) or the
+Flatpak (`diablo2-couch-x86_64.flatpak`), the zip for Windows. The launcher tells you when
+a newer release is out and shows what changed after an update ([CHANGELOG.md](CHANGELOG.md)).
+The Linux tarball brings its own libraries and needs glibc 2.28 or newer (any Linux of the
+last years); every build is started on Ubuntu 24.04 (Linux Mint 22's base), Debian 12,
+Fedora and Arch (SteamOS's base) before it is released.
 
 ## What it will be
 
