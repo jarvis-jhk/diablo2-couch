@@ -1,0 +1,85 @@
+# Collects the anonymous fault reports that release builds post to a public
+# ntfy.sh topic (see components/couch/fault_report.hpp) and turns them into GitHub issues.
+# A new issue is also forwarded to the maintainer's queue through the
+# JARVIS_REPORT_URL secret. The same title while its issue is open only adds a
+# comment, so a crash loop on one machine stays one issue. ntfy.sh keeps
+# messages for 12 h; this runs every 30 minutes.
+name: Fault reports
+
+on:
+  schedule:
+    - cron: '19,49 * * * *'
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+concurrency: fault-reports
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Restore the last processed message id
+        uses: actions/cache/restore@v4
+        with:
+          path: .ntfy-since
+          key: ntfy-since-${{ github.run_id }}
+          restore-keys: ntfy-since-
+
+      - name: Turn new reports into issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          JARVIS_REPORT_URL: ${{ secrets.JARVIS_REPORT_URL }}
+          TOPIC: diablo2-couch-faults-ae4dac602ec557e8
+          MAX_NEW_ISSUES: 10
+        run: |
+          set -euo pipefail
+          since=$(cat .ntfy-since 2>/dev/null || echo 12h)
+          curl -fsS --max-time 30 "https://ntfy.sh/$TOPIC/json?poll=1&since=$since" |
+            jq -c 'select(.event == "message")' | head -n 50 > new.jsonl || true
+          echo "$(wc -l < new.jsonl) new report(s) since $since"
+          [ -s new.jsonl ] || exit 0
+
+          gh label create fault-report --color B60205 --description "Sent automatically by Diablo 2 Couch" --force >/dev/null
+          gh issue list --label fault-report --state open --limit 300 --json number,title > open.json
+          created=0
+          while IFS= read -r m <&3; do
+            id=$(jq -r .id <<<"$m")
+            body=$(jq -r .message <<<"$m" | head -c 300)
+            # Only our own lines ("Diablo 2 Couch v0.0.2 Linux crash"): the topic is public.
+            case "$body" in "Diablo 2 Couch v"*) ;; *) echo "skip foreign post $id"; echo "$id" > .ntfy-since; touch .changed; continue;; esac
+            title="[report] $(head -n1 <<<"$body" | cut -c1-120)"
+            when=$(date -u -d "@$(jq -r .time <<<"$m")" '+%Y-%m-%d %H:%M UTC')
+            text=$(printf '%s, ntfy id `%s`\n\n~~~\n%s\n~~~\n' "$when" "$id" "${body//~~~/---}")
+            num=$(jq -r --arg t "$title" 'map(select(.title == $t)) | .[0].number // empty' open.json)
+            if [ -n "$num" ]; then
+              gh issue comment "$num" --body "Again: $text" >/dev/null
+              echo "#$num again"
+            elif [ "$created" -lt "$MAX_NEW_ISSUES" ]; then
+              url=$(gh issue create --label fault-report --title "$title" --body "$text")
+              created=$((created + 1))
+              num=${url##*/}
+              jq --arg t "$title" --argjson n "$num" '. + [{number: $n, title: $t}]' open.json > o && mv o open.json
+              echo "created $url"
+              if [ -n "$JARVIS_REPORT_URL" ]; then
+                jq -n --arg t "${title#\[report\] }" --arg d "$url"$'\n\n'"$body" \
+                  '{lane: "diablo2", kind: "bug", title: $t, detail: $d, source: "Diablo 2 Couch fault report (GitHub Action)"}' |
+                  curl -fsS --max-time 20 -o /dev/null -X POST -H 'content-type: application/json' --data-binary @- "$JARVIS_REPORT_URL" ||
+                  echo "::warning::forwarding #$num failed; the issue is there"
+              fi
+            else
+              echo "more than $MAX_NEW_ISSUES new issues in one run, the rest waits for the next run"
+              break
+            fi
+            echo "$id" > .ntfy-since
+            touch .changed
+          done 3< new.jsonl
+
+      - name: Remember the last processed message id
+        if: always() && hashFiles('.changed') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: .ntfy-since
+          key: ntfy-since-${{ github.run_id }}

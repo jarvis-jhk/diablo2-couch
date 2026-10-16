@@ -97,9 +97,12 @@ file(CONFIGURE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/d2d_icon.hpp" CONTENT
 
 add_executable(d2d
     main.cpp common.cpp cursor.cpp frontend.cpp gamemenu.cpp ingame.cpp items.cpp load.cpp panels.cpp
-    netgame.cpp scene.cpp skilltree.cpp store.cpp town.cpp ui.cpp window.cpp world_view.cpp couch.cpp
+    netgame.cpp scene.cpp skilltree.cpp store.cpp town.cpp ui.cpp window.cpp world_view.cpp couch.cpp fault_send.cpp
     $<$<PLATFORM_ID:Windows>:${PROJECT_SOURCE_DIR}/apps/icon/d2d.rc>)
 target_include_directories(d2d PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
+# Fork: the version a fault report names (the launcher's git describe stamp;
+# only a tag's own build reports, couch/fault_report.hpp).
+target_compile_definitions(d2d PRIVATE D2COUCH_VERSION="${D2D_VERSION}")
 target_link_libraries(d2d PRIVATE
     ${ffmpeg_target}   # first: its headers before a system FFmpeg's in /opt/homebrew/include
     game couch_party net mpq d2s rules drlg txt userdir cof compcode dc6 dcc ds1 dt1 font palette tbl devctl screenshot

@@ -2,6 +2,7 @@
 // D2Decomp launcher — see docs/PLAN.md.
 
 #include "config.hpp"
+#include <fault_report.hpp>
 #include <install.hpp>
 #include <iso9660.hpp>
 #include <mpq.hpp>
@@ -13,9 +14,11 @@
 #include <QDesktopServices>
 #include <QDir>
 #include <QFileDialog>
+#include <QFile>
 #include <QFileInfo>
 #include <QFrame>
 #include <QHBoxLayout>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLabel>
@@ -33,6 +36,7 @@
 #include <QPixmap>
 #include <QPushButton>
 #include <QSettings>
+#include <QStringList>
 #include <QStyle>
 #include <QStandardPaths>
 #include <QThreadPool>
@@ -42,6 +46,7 @@
 #include <QWizardPage>
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cctype>
 #include <cstddef>
@@ -889,9 +894,33 @@ private:
         return {};
     }
 
+    // Fork: an install a launcher such as Warpzone manages updates itself
+    // (`.warpzone-managed` in the install dir or the one above it).
+    static bool managedInstall() {
+        const QDir dir(QCoreApplication::applicationDirPath());
+        for (const auto* relative : {".", ".."})
+            if (QFileInfo::exists(dir.filePath(QString(relative) + "/.warpzone-managed"))) return true;
+        return false;
+    }
+
+    // vX.Y.Z as three numbers (a dev stamp's -g... suffix ignored).
+    static std::optional<std::array<int, 3>> versionNumbers(QString text) {
+        if (text.startsWith('v')) text.remove(0, 1);
+        const QString core = text.section('-', 0, 0);
+        const QStringList parts = core.split('.');
+        if (parts.size() != 3) return std::nullopt;
+        std::array<int, 3> out{};
+        for (int i = 0; i < 3; ++i) {
+            bool ok = false;
+            out[std::size_t(i)] = parts[i].toInt(&ok);
+            if (!ok) return std::nullopt;
+        }
+        return out;
+    }
+
     void startUpdateCheck() {
         const QString url = QString::fromUtf8(d2::kUpdateApiUrl);
-        if (url.isEmpty()) return;
+        if (url.isEmpty() || managedInstall()) return;
         auto* mgr = new QNetworkAccessManager(this);
         connect(mgr, &QNetworkAccessManager::finished,
                 this, &MainWindow::onUpdateReply);
@@ -901,17 +930,71 @@ private:
         mgr->get(req);
     }
 
+    // A release object, or (fork: our releases are prereleases, which
+    // /releases/latest leaves out) the newest of a release list.
     void onUpdateReply(QNetworkReply* reply) {
         reply->deleteLater();
         if (reply->error() != QNetworkReply::NoError) return;
-        const auto object = QJsonDocument::fromJson(reply->readAll()).object();
+        const auto document = QJsonDocument::fromJson(reply->readAll());
+        QJsonObject object = document.object();
+        if (document.isArray())
+            for (const auto& entry : document.array())
+                if (!entry.toObject().value("draft").toBool()) { object = entry.toObject(); break; }
         const QString tag = object.value("tag_name").toString();
-        latest_url_ = object.value("html_url").toString();
         if (tag.isEmpty()) return;
         const QString local = QString::fromUtf8(d2::kAppVersion);
-        if (tag == local || local.startsWith(tag)) return;
+        const auto remote = versionNumbers(tag), mine = versionNumbers(local);
+        if (remote && mine ? !(*remote > *mine) : (tag == local || local.startsWith(tag))) return;
+        latest_url_ = object.value("html_url").toString();
         upgrade_->setText(tr("Update available: %1").arg(tag));
         upgrade_->setHidden(false);
+    }
+
+public:
+    // After the window shows: what's new since the version last started
+    // (CHANGELOG.md, built in), and a fault report d2d could not send.
+    void afterShow() {
+        const QString version = QString::fromUtf8(d2::kAppVersion);
+        QSettings settings;
+        const QString seen = settings.value("changelog/seen").toString();
+        if (seen != version) {
+            settings.setValue("changelog/seen", version);
+            if (!seen.isEmpty()) showChangelog(version);   // a fresh install has nothing to compare
+        }
+        sendPendingFault();
+    }
+
+private:
+    void showChangelog(const QString& version) {
+        QFile file(":/CHANGELOG.md");
+        if (!file.open(QIODevice::ReadOnly)) return;
+        const QString text = QString::fromUtf8(file.readAll());
+        // The section for this version: from "## <tag> (<date>)" to the next "## ".
+        const QString tag = version.section('-', 0, 0);
+        const qsizetype start = text.indexOf("\n## " + tag + " ");
+        if (start < 0) return;
+        qsizetype end = text.indexOf("\n## ", start + 1);
+        if (end < 0) end = text.size();
+        QMessageBox box(this);
+        box.setWindowTitle(tr("What's new in %1").arg(tag));
+        box.setTextFormat(Qt::MarkdownText);
+        box.setText(text.mid(start + 1, end - start - 1).trimmed());
+        box.exec();
+    }
+
+    void sendPendingFault() {
+        const auto user_dir = d2d::userdir::user_dir("d2d");
+        d2d::userdir::Config cfg;
+        d2d::userdir::load_cfg(user_dir / "d2d.cfg", cfg);
+        if (!d2d::couch::fault::enabled(d2::kAppVersion, cfg["fault_reports"])) return;
+        const auto line = d2d::couch::fault::take_pending(user_dir);
+        if (!line) return;
+        auto* mgr = new QNetworkAccessManager(this);
+        QNetworkRequest req{QUrl(QString::fromUtf8(d2d::couch::fault::kTopicUrl.data(), qsizetype(d2d::couch::fault::kTopicUrl.size())))};
+        req.setRawHeader("User-Agent", "d2d-launcher");
+        req.setTransferTimeout(8000);
+        auto* reply = mgr->post(req, QByteArray::fromStdString(*line));
+        connect(reply, &QNetworkReply::finished, reply, &QObject::deleteLater);   // fire and forget
     }
 
     QString path_;   // the chosen game data dir
@@ -942,6 +1025,7 @@ int main(int argc, char** argv) {
 
     MainWindow window;
     window.show();
+    window.afterShow();
     return app.exec();
 }
 

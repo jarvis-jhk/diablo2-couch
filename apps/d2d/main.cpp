@@ -20,6 +20,7 @@
 #include "couch.hpp"
 #include "cursor.hpp"
 #include "devctl_verbs.hpp"
+#include "fault_send.hpp"
 #include "frontend.hpp"
 #include "load.hpp"
 #include "platform.hpp"
@@ -34,6 +35,7 @@
 #include <d2s.hpp>
 #include <d2s_items.hpp>
 #include <devctl.hpp>
+#include <fault_report.hpp>
 #include <install.hpp>
 #include <join.hpp>
 #include <log.hpp>
@@ -983,6 +985,21 @@ int main(int argc, char** argv) {
     }
     if (const auto level = d2d::log::parse_level(log_level)) d2d::log::set_level(*level);
     else { d2d::log::error("--log-level {}: one of error, warning, info, debug, trace", log_level); return 2; }
+    // Fork: a released build's session is marked running; one that never
+    // ended is reported at this start (couch/fault_report.hpp). Not for
+    // scripted runs.
+    struct SessionMark {
+        fs::path dir;
+        ~SessionMark() { if (!dir.empty()) d2d::couch::fault::end(dir); }
+    } session_mark;
+    if (!headless && !no_save && d2d::couch::fault::enabled(D2COUCH_VERSION, cfg["fault_reports"])) {
+        session_mark.dir = user_dir;
+        std::optional<std::string> line = d2d::couch::fault::take_pending(user_dir);
+        if (const auto crashed = d2d::couch::fault::begin(user_dir, D2COUCH_VERSION))
+            line = d2d::couch::fault::message(*crashed, d2d::couch::fault::platform(), "crash");
+        if (line && !send_fault_report(*line)) d2d::couch::fault::leave_pending(user_dir, *line);   // the launcher sends it
+        if (line) d2d::log::info("  Fault report: {}", *line);
+    }
     g_seed_fixed = app.count("--seed") > 0;
     g_map_seed = map_seed;
     // The MPQs: first hit wins, each a hard stop (install-detect.md,
@@ -999,6 +1016,16 @@ int main(int argc, char** argv) {
         }
         data_dir = found.dir;
         d2d::log::info("  Data dir: {} ({})", data_dir.string(), found.from);
+        // Fork: a --data that worked is remembered as `data =`, so the next
+        // start without it finds the MPQs too (a launcher such as Warpzone
+        // hands the dir over once). Not for scripted runs.
+        if (found.from == "--data" && !headless && !no_save) {
+            std::error_code abs_ec;
+            const auto absolute = fs::absolute(data_dir, abs_ec).u8string();
+            const std::string utf8(absolute.begin(), absolute.end());
+            if (!abs_ec && utf8 != cfg["data"] && !d2d::userdir::save_cfg(user_dir / "d2d.cfg", { { "data", utf8 } }))
+                d2d::log::warn("could not remember --data in {}", (user_dir / "d2d.cfg").string());
+        }
     }
     // An explicit patch layer wins over the install's own patch_d2.mpq:
     // $D2_PATCH_INSTALLER (the tests' convention), else `patch =`.

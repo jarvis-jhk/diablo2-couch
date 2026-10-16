@@ -31,9 +31,9 @@ if(NOT EXISTS "${CMAKE_SOURCE_DIR}/.git" AND EXISTS "${CMAKE_SOURCE_DIR}/VERSION
     file(STRINGS "${CMAKE_SOURCE_DIR}/VERSION" D2LAUNCHER_VERSION LIMIT_COUNT 1)
 endif()
 
-# Point at a GitHub Releases API URL (or similar) when we ship releases;
-# empty = launcher does no update check.
-set(D2LAUNCHER_UPDATE_URL "" CACHE STRING
+# A GitHub Releases API URL (or similar); empty = launcher does no update
+# check. Fork: our releases, a list since they are prereleases (main.cpp).
+set(D2LAUNCHER_UPDATE_URL "https://api.github.com/repos/jarvis-jhk/diablo2-couch/releases?per_page=5" CACHE STRING
     "Optional URL returning JSON with 'tag_name' for update check")
 set(D2_PATCH_URL "" CACHE STRING
     "Optional URL to fetch a Blizzard patch installer from")
@@ -49,6 +49,8 @@ add_executable(d2d-launcher WIN32 MACOSX_BUNDLE
 )
 set_target_properties(d2d-launcher PROPERTIES MACOSX_BUNDLE_ICON_FILE d2d.icns)
 qt_add_resources(d2d-launcher icon PREFIX "/" BASE "${icon_dir}" FILES "${icon_dir}/d2d.png" "${icon_dir}/hero.png")
+# Fork: what's new, shown once after an update.
+qt_add_resources(d2d-launcher changelog PREFIX "/" BASE "${PROJECT_SOURCE_DIR}" FILES "${PROJECT_SOURCE_DIR}/CHANGELOG.md")
 
 target_include_directories(d2d-launcher PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 
@@ -59,6 +61,7 @@ target_link_libraries(d2d-launcher PRIVATE
     mpq
     install_detect
     userdir
+    couch
 )
 
 # The package name (apps/CMakeLists.txt) carries the same version.
