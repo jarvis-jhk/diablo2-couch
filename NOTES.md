@@ -116,3 +116,20 @@
   Open: everything with real data, real pads and the Deck is Jan's first test.
 - Known gaps (README "Couch preview"): guests have no panels, own waypoints or portals;
   guest missiles credit the host; the wall see-through follows the camera, not each hero.
+
+## 2026-10-16 — v0.0.1 prerelease (first couch co-op preview)
+- https://github.com/jarvis-jhk/diablo2-couch/releases/tag/v0.0.1 from a727d16, CI run
+  38902698855: Linux GCC / Windows MSVC / macOS Clang / both Flatpaks green, tests 39/39
+  (MPQ tests SKIP), source SHA checked in the job logs. All five release assets downloaded,
+  SHA-256 equal to GitHub's digests and to the run's own artifacts; the Windows zip holds
+  d2d.exe, d2d-launcher.exe and SDL3.dll; the Flatpak's metadata has our id and
+  devices=all. Hashes are in the release notes.
+- ⚠️ The Linux tarball is built on ubuntu-latest and needs glibc 2.43 (it would not even
+  start here on Debian 12): too new for Linux Mint 22 or SteamOS. The Flatpak is the Linux
+  and Deck download now (own app id io.github.jarvis_jhk.diablo2couch, --device=all for
+  pads, version from a VERSION file). M2: build the tarball on an older base, or drop it.
+- The release job makes drafts; I published this one after the checks. A tag pushed with a
+  [skip ci] commit starts no run: dispatch the workflow on the tag (uploads now happen for
+  tag refs too) or tag a commit without it.
+- Combined roadmap item diablo2-two-players-act-i closed with this prerelease. Open, for
+  Jan's test: real game data, real pads, the Deck (nobody here has played this build).

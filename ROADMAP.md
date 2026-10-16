@@ -30,6 +30,8 @@ camera, with keyboard+pad or two pads.
 ## M2 — Four players, packaging
 - [ ] Four players; UI layout scaling for 1280×800 (Deck).
 - [ ] Linux/Windows/Deck builds, installer, safe auto-update, first-start changelog.
+      v0.0.1 ships a Flatpak (our id) for Linux/Deck and the Windows zip; the Linux tarball
+      needs glibc 2.43 (built on ubuntu-latest): build it on an older base or drop it.
 - [ ] Anonymous fault relay (ntfy → GitHub issue).
 - [ ] Warpzone tier 0 (launcher install/update/data hand-over): `d2d --data <dir>` persists
       `data =` into d2d.cfg (the hand-over passes it only once); any own updater stays silent

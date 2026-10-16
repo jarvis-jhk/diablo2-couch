@@ -11,9 +11,13 @@ following the group. This project brings that to Diablo II, built on
 [D2Decomp](https://github.com/psi29a/d2decomped), an open reimplementation of the
 Diablo II engine that runs natively on Linux, Windows and macOS.
 
-> ⚠️ **Early work in progress.** The first preview of couch co-op is out: a second (third,
-> fourth) player joins with a controller and their own hero. It is a prototype: see
-> [Couch preview](#couch-preview) for what works and what doesn't yet.
+> ⚠️ **Early work in progress.** The first preview of couch co-op is out —
+> [v0.0.1](../../releases/tag/v0.0.1): a second (third, fourth) player joins with a
+> controller and their own hero. It is a prototype: see [Couch preview](#couch-preview)
+> for what works and what doesn't yet.
+
+**Download** from [Releases](../../releases): the Flatpak (`diablo2-couch-x86_64.flatpak`)
+for Steam Deck and Linux, the zip for Windows.
 
 ## What it will be
 
