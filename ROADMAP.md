@@ -56,7 +56,7 @@ becomes a GitHub issue; Flatpak for Linux/Deck, Windows zip, assets checksum-ver
       party travels with the host into and through Act II, the Arcane Sanctuary's teleport
       pads take the party along, and each guest's save gets the party's progress (Acts
       II/III opened, Andariel/Duriel done, waypoints reached, the act it is in).
-      2026-10-16: couch/progress.hpp + pads pull, see NOTES.
+      2026-10-16: couch/progress.hpp + pads pull; v0.0.3 published, Act II item closed.
 - [ ] Online co-op through Warpzone (rooms/invites, hole-punch/relay, C API
       crates/capi/include/warpzone.h), after the couch milestones. No chat or free-text
       player content; warpzone.virtualtabletop.io is the only Jan domain allowed in the repo.

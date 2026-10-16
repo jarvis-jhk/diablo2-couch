@@ -205,3 +205,10 @@
   nobody here has played them (no MPQs), Jan's test.
 - Known: a guest on another difficulty than the host gets the bits in its own active
   difficulty's words.
+- v0.0.3 published: https://github.com/jarvis-jhk/diablo2-couch/releases/tag/v0.0.3 from 2316619.
+  Push run 38917360988 and tag run 38918736788 green (Linux/Windows/macOS/both Flatpaks, 41/41,
+  test_couch_progress passed; source SHA checked in the job logs). All five assets downloaded,
+  SHA-256 equal to GitHub's digests (hashes in the release notes); the Windows zip holds d2d.exe,
+  d2d-launcher.exe, SDL3.dll. Combined item diablo2-act-ii-couch closed with it.
+  Open for Jan's test: crossing to Lut Gholein with guests, the Arcane pads, a guest's save
+  starting in Act II with the shared waypoints.
