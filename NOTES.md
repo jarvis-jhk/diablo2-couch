@@ -78,3 +78,5 @@
   pad (fails); release without the stop Move fails. Restored byte-exact.
 - Not wired: needs SDL_INIT_GAMEPAD and event routing in window.cpp, and real use needs
   several heroes (seat 3). Virtual tests don't certify physical pads or the Deck.
+- CI run 38872356099 on dbf5db0: Linux GCC, Windows MSVC, macOS Clang and both Flatpak
+  bundles green; source SHA checked in the job logs, test_couch_pads passed, ctest 38/38.
