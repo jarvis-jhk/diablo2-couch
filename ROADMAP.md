@@ -61,6 +61,7 @@ becomes a GitHub issue; Flatpak for Linux/Deck, Windows zip, assets checksum-ver
       party sails to Kurast with player 1 and plays Act III through Mephisto; quest items a
       guest walks to go into player 1's pack, quest objects a guest uses act for player 1,
       and Mephisto's kill reaches every guest's save.
+      2026-10-16: quest objects/items to player 1, share_progression; v0.0.4 published, item closed.
 - [ ] Online co-op through Warpzone (rooms/invites, hole-punch/relay, C API
       crates/capi/include/warpzone.h), after the couch milestones. No chat or free-text
       player content; warpzone.virtualtabletop.io is the only Jan domain allowed in the repo.

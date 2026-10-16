@@ -235,3 +235,10 @@
   case. Known: each player in Durance 3 gets a soulstone in game.exe; a guest gets bit 0xb
   without a stone (only the host's drops, and goes to the host): Act IV's Hellforge is
   player 1's, like the other NPC rewards. The hellgate is upstream's "Act 4 isn't built".
+- v0.0.4 published: https://github.com/jarvis-jhk/diablo2-couch/releases/tag/v0.0.4 from c5de58b.
+  Push run 38921815044 and tag run 38924043732 green (Linux/Windows/macOS/both Flatpaks, 41/41,
+  test_couch_progress passed; source SHA checked in the Linux and Windows job logs). All five
+  assets downloaded, SHA-256 equal to GitHub's digests (hashes in the release notes); the
+  Windows zip holds d2d.exe, d2d-launcher.exe, SDL3.dll. Combined item diablo2-act-iii-couch
+  closed. Open for Jan's test: Meshif to Kurast with guests, a guest opening Khalim's chests /
+  picking up a part (lands in player 1's pack), Mephisto's kill in a guest's save.
