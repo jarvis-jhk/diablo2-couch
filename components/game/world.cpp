@@ -362,6 +362,7 @@ auto World::operate(int npc_index, std::uint32_t now_ms, int force ) -> void {  
             player.path.clear(); player.walking = false;
             player.goal_x = spot_x; player.goal_y = spot_y;
             interact_npc = -1;
+            ++couch_pads;                                // Diablo 2 Couch: the others come along (couch/party.hpp)
             d2d::log::info("teleport pad {} -> {}", npc_index, target);
             return;
         }

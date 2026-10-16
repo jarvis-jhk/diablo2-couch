@@ -182,3 +182,26 @@
   path (does its runtime have curl, else the launcher sends). Open work (ROADMAP M2):
   self-installing updates, an older-glibc Linux tarball (Warpzone Linux/Deck needs it;
   warpzone PR #2 still open), personal panels (M1).
+
+## 2026-10-16 — Act II couch (combined item diablo2-act-ii-couch)
+- Upstream main unchanged since af67c23 (nothing to merge). Read the act boundary as a guest:
+  (1) the host's teleport pad (Arcane Sanctuary, OperateFn 27) moved the host across the level
+  in one tick and the leash undid it — the pads were unusable with guests; (2) the quest records
+  run in the host's World only and upstream marks "no party credit", so a guest crossing with
+  Warriv went home with Andariel alive, Act II closed and none of the waypoints.
+- Fix: World::couch_pads counts pads taken (one line in the pad branch, one field); a pad taken
+  by the host brings every guest beside it, a pad taken by a guest brings the host and the other
+  guests (Party::follow is now hero → leader), and no leash runs in that tick.
+  components/couch/progress.hpp: after each party tick the bits the HOST GAINED in the tick for
+  quest words 6/7/14/15/22/23 (act bosses, act travel) go to each guest unless its own quest is
+  done (bit 0) or closed (bit 15); the waypoints the host gained likewise. A guest joining a host
+  already in a later act gets the travel words up to it and set_act there.
+  Not shared on purpose: quests a hero claims at an NPC (Den skill point, Radament's book,
+  imbue, Akara's respec) — guests can't talk yet, so those stay player 1's.
+- Test: test_couch_progress (MPQ-free). Negative controls: dropping the done/closed guard fails
+  the "Duriel already beaten" case; copying `after` instead of the gain fails the "host's past
+  stays the host's" case. Restored. Local clang 23 build of game/couch_party/tests -Werror clean,
+  clang-tidy clean on our files. The pad pull and the shares are only exercised with real data:
+  nobody here has played them (no MPQs), Jan's test.
+- Known: a guest on another difficulty than the host gets the bits in its own active
+  difficulty's words.

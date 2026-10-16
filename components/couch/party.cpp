@@ -2,6 +2,7 @@
 #include "party.hpp"
 
 #include "group_camera.hpp"
+#include "progress.hpp"
 
 #include <character.hpp>
 #include <character_store.hpp>
@@ -11,6 +12,7 @@
 #include <protocol.hpp>
 #include <world.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -133,6 +135,10 @@ std::size_t Party::join(const game::Character& character, const game::CharacterS
     hero.set_waypoint(0);
     hero.item_ids();
     lend(host, hero);
+    if (const int act = host.act(); act > 0) {                   // the party is further on: the save starts there
+        open_acts(act, hero.quests());
+        hero.set_act(act);
+    }
     d2d::log::info("couch: {} joins {}'s game", hero.character.name, host.character.name);
     guests_.push_back(std::move(guest));
     return guests_.size() - 1;
@@ -146,26 +152,25 @@ std::string Party::leave(std::size_t guest) {
     return err;
 }
 
-void Party::follow(World& guest) {
-    const World& host = *host_;
-    const game::Level* from = guest.level;
-    const int from_act = guest.act();
-    const auto [to_x, to_y] = host.level->nearest_free(host.player.x + 1, host.player.y);
-    guest.fight.pets_cross(from, host.level, guest.player.x - to_x, guest.player.y - to_y);
-    guest.level = host.level;
-    guest.player.x = to_x; guest.player.y = to_y;
-    guest.player.walking = false; guest.player.path.clear();
-    guest.target_x = to_x; guest.target_y = to_y;
-    if (guest.merc) {
-        guest.merc->unit.path.clear();
-        std::tie(guest.merc->unit.x, guest.merc->unit.y) = host.level->nearest_free(to_x + 1, to_y + 1);
+void Party::follow(World& hero, const World& leader) {
+    const game::Level* from = hero.level;
+    const int from_act = hero.act();
+    const auto [to_x, to_y] = leader.level->nearest_free(leader.player.x + 1, leader.player.y);
+    hero.fight.pets_cross(from, leader.level, hero.player.x - to_x, hero.player.y - to_y);
+    hero.level = leader.level;
+    hero.player.x = to_x; hero.player.y = to_y;
+    hero.player.walking = false; hero.player.path.clear();
+    hero.target_x = to_x; hero.target_y = to_y;
+    if (hero.merc) {
+        hero.merc->unit.path.clear();
+        std::tie(hero.merc->unit.x, hero.merc->unit.y) = leader.level->nearest_free(to_x + 1, to_y + 1);
     }
-    guest.fight.attack_mon = guest.fight.merc_target = -1;      // monster indices are the new level's
-    for (auto& pet : guest.fight.pets) pet.target = -1;
-    guest.fight.footstep(int(std::floor(to_x * 5)), int(std::floor(to_y * 5)), host.now);
-    guest.interact_npc = guest.pick_item = guest.take_warp = guest.take_portal = guest.take_corpse = -1;
-    guest.arrived_at = host.now;
-    if (guest.act() != from_act) guest.set_act(guest.act());   // the save starts in the act the party is in
+    hero.fight.attack_mon = hero.fight.merc_target = -1;      // monster indices are the new level's
+    for (auto& pet : hero.fight.pets) pet.target = -1;
+    hero.fight.footstep(int(std::floor(to_x * 5)), int(std::floor(to_y * 5)), leader.now);
+    hero.interact_npc = hero.pick_item = hero.take_warp = hero.take_portal = hero.take_corpse = -1;
+    hero.arrived_at = leader.now;
+    if (hero.act() != from_act) hero.set_act(hero.act());   // the save starts in the act the party is in
 }
 
 std::vector<Point> Party::heroes() const {
@@ -186,6 +191,9 @@ void Party::tick(const std::vector<game::Command>& host_cmds, std::span<const st
     std::vector<Point> before{ { host.player.x, host.player.y } };
     for (const auto& guest : guests_) before.push_back({ guest->player.x, guest->player.y });
     const game::Level* level_before = host.level;
+    const int pads_before = host.couch_pads;
+    const auto quests_before = host.quests();
+    const auto waypoints_before = host.character.header.waypoints[std::size_t(std::clamp(host.character.header.active_difficulty(), 0, 2))];
     // 1. The guests' sides for the monsters; everyone in everyone's way.
     sides_.resize(guests_.size());
     host.couch_crowd.clear();
@@ -202,6 +210,9 @@ void Party::tick(const std::vector<game::Command>& host_cmds, std::span<const st
     host.tick(host_cmds, now_ms, last_ms);
     host.fight.couch_sides = nullptr;
     const bool same_level = host.level == level_before;
+    // A teleport pad (the Arcane Sanctuary's) is a way on, not a step off
+    // the screen: whoever takes one, the others come along.
+    bool pulled = host.couch_pads != pads_before;
     auto leash = [&](std::size_t mover, game::UnitState& unit, game::World& world) {
         std::vector<Point> now_at;
         now_at.push_back({ host.player.x, host.player.y });
@@ -212,12 +223,13 @@ void Party::tick(const std::vector<game::Command>& host_cmds, std::span<const st
         unit.walking = false; unit.path.clear();
         world.target_x = unit.x; world.target_y = unit.y;
     };
-    if (same_level) leash(0, host.player, host);
+    if (same_level && !pulled) leash(0, host.player, host);
     // 3. Each guest, with the game lent to it.
     for (std::size_t i = 0; i < guests_.size(); ++i) {
         World& guest = *guests_[i];
-        const bool moved = guest.level != host.level;
-        if (moved) follow(guest);
+        const bool moved = guest.level != host.level || host.couch_pads != pads_before;
+        if (moved) follow(guest, host);
+        const int guest_pads = guest.couch_pads;
         guest.couch_guest = true;
         guest.couch_crowd.clear();
         guest.couch_crowd.push_back(&host.player);
@@ -234,8 +246,20 @@ void Party::tick(const std::vector<game::Command>& host_cmds, std::span<const st
         lend(host, guest);
         guest.fight.couch_taken = nullptr;
         guest.events.clear();                                     // a guest has no panels for them yet
-        if (guest.level != host.level) follow(guest);            // can't happen (a guest's tick moves no level); the rule holds anyway
-        else if (same_level && !moved) leash(i + 1, guest.player, guest);
+        if (guest.level != host.level) follow(guest, host);      // can't happen (a guest's tick moves no level); the rule holds anyway
+        else if (guest.couch_pads != guest_pads) {                // the guest took a pad: the host and the others to it
+            follow(host, guest);
+            for (const auto& other : guests_)
+                if (other.get() != &guest) follow(*other, guest);
+            pulled = true;
+        } else if (same_level && !moved && !pulled) leash(i + 1, guest.player, guest);
+    }
+    // 4. What the party earned this tick, in each guest's own save.
+    const auto& host_waypoints_now = host.character.header.waypoints[std::size_t(std::clamp(host.character.header.active_difficulty(), 0, 2))];
+    for (const auto& guest : guests_) {
+        share_quests(quests_before, host.quests(), guest->quests());
+        share_waypoints(waypoints_before, host_waypoints_now,
+                        guest->character.header.waypoints[std::size_t(std::clamp(guest->character.header.active_difficulty(), 0, 2))]);
     }
 }
 

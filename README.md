@@ -91,7 +91,12 @@ On a Steam Deck the first controller plays player 1 instead (`pad_player1 = 1` i
 
 How it plays: one camera follows the whole party and nobody can walk off the screen.
 Player 1 leads — when they take a waypoint, portal, cave entrance or walk into the next
-area, everyone comes along. The game no longer pauses under the Esc menu while guests
+area, everyone comes along; a teleport pad (the Arcane Sanctuary's) takes everyone to
+whoever stepped on it. What the party achieves counts for every hero's own save: Andariel
+and Duriel beaten, the next act opened, the waypoints found on the way, the act you are
+in — so a guest's hero later starts in Lut Gholein with those waypoints, alone or as
+player 1. Quest rewards fetched from an NPC (Den of Evil's skill point, Radament's book,
+Charsi's imbue) are still player 1's only. The game no longer pauses under the Esc menu while guests
 play. Each guest is saved when player 1 saves and leaves.
 
 Not there yet: guests have no inventory, stash, merchant or skill-tree screens, can't

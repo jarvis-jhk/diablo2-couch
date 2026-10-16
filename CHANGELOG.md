@@ -3,6 +3,14 @@
 Diablo 2 Couch releases (prereleases while the couch co-op is a preview). The launcher
 shows a version's section once, on the first start after an update.
 
+## v0.0.3 (2026-10-16)
+
+- Act II together: the Arcane Sanctuary's teleport pads take the whole party along
+  instead of the camera pulling the player back.
+- Guests keep what the party achieved in their own saves: Andariel and Duriel beaten,
+  Acts II and III opened, the waypoints found together, and the act the party is in —
+  so next time their hero starts in Lut Gholein, alone or as player 1.
+
 ## v0.0.2 (2026-10-16)
 
 - Up to four heroes on one screen: the keyboard player and three gamepads, or four

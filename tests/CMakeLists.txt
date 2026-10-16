@@ -35,6 +35,7 @@ d2d_add_test(test_net net)
 d2d_add_test(test_couch couch)   # fork: couch co-op
 d2d_add_test(test_couch_pads couch)   # fork: couch controllers
 d2d_add_test(test_couch_fault couch)   # fork: anonymous fault reports
+d2d_add_test(test_couch_progress couch)   # fork: party progress in the guests' saves
 d2d_add_test(test_couch_party couch_party)   # fork: two local heroes in one game (needs MPQs)
 
 d2d_add_test(test_userdir userdir)

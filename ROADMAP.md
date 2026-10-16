@@ -51,7 +51,12 @@ becomes a GitHub issue; Flatpak for Linux/Deck, Windows zip, assets checksum-ver
       and our tags must never collide with them.
 
 ## M3 — Full game
-- [ ] Follow upstream Acts II–V; each act tested in couch co-op as it arrives.
+- [~] Follow upstream Acts II–V; each act tested in couch co-op as it arrives.
+      Act II (combined item diablo2-act-ii-couch), done when: prerelease v0.0.3 where the
+      party travels with the host into and through Act II, the Arcane Sanctuary's teleport
+      pads take the party along, and each guest's save gets the party's progress (Acts
+      II/III opened, Andariel/Duriel done, waypoints reached, the act it is in).
+      2026-10-16: couch/progress.hpp + pads pull, see NOTES.
 - [ ] Online co-op through Warpzone (rooms/invites, hole-punch/relay, C API
       crates/capi/include/warpzone.h), after the couch milestones. No chat or free-text
       player content; warpzone.virtualtabletop.io is the only Jan domain allowed in the repo.

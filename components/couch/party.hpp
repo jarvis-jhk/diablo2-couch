@@ -20,8 +20,11 @@
 // 3. each guest ticks with the game lent to it, taking what its side was
 //    dealt in step 2 (Fight::couch_taken);
 // 4. the group rules: a guest who isn't on the host's level comes to the
-//    host (the host leads through warps, portals, waypoints and edges), and
-//    the leash undoes a step that would pull the party off the screen.
+//    host (the host leads through warps, portals, waypoints and edges), a
+//    teleport pad brings the others to whoever took it, and the leash undoes
+//    a step that would pull the party off the screen;
+// 5. what the host earned in the tick (the act bosses, the acts opened, the
+//    waypoints) is the guests' too, in their own saves (progress.hpp).
 //
 // ponytail: a guest's missiles are resolved in the host's pass, so their
 // kills and leech count as the host's; a guest's town portal is the game's
@@ -77,8 +80,10 @@ public:
     Frame frame{};   // the leash's frame (group_camera.hpp)
 
 private:
-    // A guest not on the host's level comes to the host's side.
-    void follow(game::World& guest);
+    // A hero not where the leader is comes to the leader's side: a guest to
+    // the host after a level change or the host's teleport pad, everyone to
+    // a guest who took a pad.
+    static void follow(game::World& hero, const game::World& leader);
     game::World* host_;
     std::vector<std::unique_ptr<game::World>> guests_;
     std::vector<game::Fight::CouchSide> sides_;

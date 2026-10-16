@@ -551,9 +551,11 @@ struct World {
     // that tick move only its own hero (no monsters, NPCs, quests' timers,
     // level changes). `couch_crowd`: the other heroes and theirs, in the way.
     // `couch_frames`: the 40 ms frames the host's tick ran (a guest's stamina).
+    // `couch_pads`: teleport pads taken (the party comes along, not the leash).
     bool couch_guest = false;
     std::vector<UnitState*> couch_crowd;
     int couch_frames = 0;
+    int couch_pads = 0;
 
 };
 
