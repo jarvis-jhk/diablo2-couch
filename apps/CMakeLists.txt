@@ -17,7 +17,7 @@ if(D2D_FLATPAK)
     # Flatpak supplies Qt and the desktop integration through its runtime.
     # Install the app entry point and engine side by side so the launcher can
     # continue resolving d2d from its own executable directory.
-    set(D2D_FLATPAK_APP_ID "io.github.psi29a.d2decomped" CACHE STRING
+    set(D2D_FLATPAK_APP_ID "io.github.jarvis_jhk.diablo2couch" CACHE STRING   # fork: ours, beside upstream's io.github.psi29a.d2decomped
         "Flatpak application ID (provisional until confirmed for Flathub)")
     set(_flatpak_desktop "${CMAKE_CURRENT_BINARY_DIR}/${D2D_FLATPAK_APP_ID}.desktop")
     set(_flatpak_metainfo "${CMAKE_CURRENT_BINARY_DIR}/${D2D_FLATPAK_APP_ID}.metainfo.xml")

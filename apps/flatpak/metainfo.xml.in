@@ -3,11 +3,11 @@
   <id>@D2D_FLATPAK_APP_ID@</id>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
-  <name>D2Decomp</name>
-  <summary>Open source engine for Diablo II</summary>
+  <name>Diablo 2 Couch</name>
+  <summary>Diablo II couch co-op: up to four players on one screen</summary>
   <description>
-    <p>D2Decomp is an open source engine project for playing Diablo II. The game data is provided separately by the player.</p>
+    <p>Diablo 2 Couch is a modified version of D2Decomp, an open source engine for playing Diablo II, that adds local co-op with controllers on one shared screen. The game data is provided separately by the player.</p>
   </description>
   <launchable type="desktop-id">@D2D_FLATPAK_APP_ID@.desktop</launchable>
-  <url type="homepage">https://github.com/psi29a/d2decomped</url>
+  <url type="homepage">https://github.com/jarvis-jhk/diablo2-couch</url>
 </component>

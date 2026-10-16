@@ -289,13 +289,15 @@ jobs:
         run: |
           mkdir -p build/flatpak-source
           git -c safe.directory="$GITHUB_WORKSPACE" archive HEAD | tar -x -C build/flatpak-source
+          # Fork: the version the launcher shows (no .git in the archive).
+          git -c safe.directory="$GITHUB_WORKSPACE" describe --tags --always > build/flatpak-source/VERSION
 
       - name: Build Flatpak
         uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
           manifest-path: .github/flatpak/ci-manifest.yml
-          bundle: d2decomped-${{ matrix.arch }}.flatpak
-          artifact-name: d2decomped-${{ matrix.arch }}
+          bundle: diablo2-couch-${{ matrix.arch }}.flatpak   # fork: our app id and name
+          artifact-name: diablo2-couch-${{ matrix.arch }}
           arch: ${{ matrix.arch }}
 
   release:
@@ -308,14 +310,20 @@ jobs:
     permissions:
       contents: write
     steps:
-      # Fork (diablo2-couch): only our d2d-* packages (the Flatpak bundles
-      # carry upstream's app id), and a tag makes a DRAFT prerelease under our
-      # name: it is published by hand once the assets are downloaded and
-      # checked (CLAUDE.md), never on its own.
+      # Fork (diablo2-couch): our packages and Flatpak bundles, and a tag makes
+      # a DRAFT prerelease under our name: it is published by hand once the
+      # assets are downloaded and checked (CLAUDE.md), never on its own.
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
           pattern: 'd2d-*'
+          path: release-assets
+          merge-multiple: true
+
+      - name: Download Flatpak bundles
+        uses: actions/download-artifact@v4
+        with:
+          pattern: 'diablo2-couch-*'
           path: release-assets
           merge-multiple: true
 

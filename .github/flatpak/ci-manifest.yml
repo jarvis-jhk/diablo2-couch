@@ -1,6 +1,6 @@
 # CI-only build recipe. This AI-assisted manifest is not suitable for Flathub;
 # Flathub requires manifests to be human-authored without AI assistance.
-app-id: io.github.psi29a.d2decomped
+app-id: io.github.jarvis_jhk.diablo2couch   # fork: our own id (D2D_FLATPAK_APP_ID)
 runtime: org.kde.Platform
 runtime-version: '6.11'
 sdk: org.kde.Sdk
@@ -11,6 +11,8 @@ finish-args:
   - --socket=wayland
   - --socket=fallback-x11
   - --device=dri
+  # Fork: controllers (/dev/input, Steam Input's virtual pads); --device=input needs Flatpak 1.15.6+.
+  - --device=all
   - --socket=pulseaudio
 modules:
   - name: d2decomped

@@ -25,6 +25,11 @@ if(GIT_FOUND)
         set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/.git/logs/HEAD")
     endif()
 endif()
+# Fork: a source tree without .git (the Flatpak build's `git archive`)
+# carries the version CI wrote beside it.
+if(NOT EXISTS "${CMAKE_SOURCE_DIR}/.git" AND EXISTS "${CMAKE_SOURCE_DIR}/VERSION")
+    file(STRINGS "${CMAKE_SOURCE_DIR}/VERSION" D2LAUNCHER_VERSION LIMIT_COUNT 1)
+endif()
 
 # Point at a GitHub Releases API URL (or similar) when we ship releases;
 # empty = launcher does no update check.
