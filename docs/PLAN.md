@@ -806,8 +806,106 @@ the quests, the thinks.
    spawnCol 1 types spawn on water (FUN_005b2700), a tentacle head
    spreads its tentacles (FUN_005b2570), the Dark Wanderer's marker
    (a3q7) makes him (monsters.md "Act 3's jungle").
-4. Kurast (79–83).
-5. The dungeons, sewers, temples and the Durance (84–102).
+4. Kurast (79–83). *Done (2026-10-13):* drlg.md "Kurast and Travincal"
+   (FUN_0067f190 walls, inner presets and scatter; FUN_0067f3b0);
+   `diff_drlg.py 79..83 tiles` 20/20 each, units 5/5, monsters 5/5.
+   Travincal's compelling orb (InitFn 60) made as game.exe's (monsters.md
+   "Kurast and Travincal"); all five build in play. The whole act as one
+   game: `LEVELS=75,..,83 diff_drlg.py 1-20 75 game` 20/20 (floor lists and
+   areas follow the rooms' order; water packs search the room they stand
+   in; tiles shared with the level next door). Spawn area ids as game.exe's,
+   merged across rooms (`area_ids.py` every tile 5/5 on 79-81, 3, 6); mode
+   5's search and the pet / merc thinks compare them (FUN_0061b130).
+5. The dungeons, sewers, temples and the Durance (84–102). *Done
+   (2026-10-13):* drlg.md "Act 3's mazes" (LevelTypes 22–25: the ring,
+   the spider caves' def table, the sewers' ring of 5, the specials);
+   the presets matched already. `diff_drlg.py 84..102`: rooms 20/20,
+   tiles, units, monsters 5/5. All build in play.
+6. The Dark Wanderer's walk and afterglow. *Done (2026-10-13):* MonAI
+   91 walks him off; FUN_005bd390 leaves object 131 round where he went
+   (monsters.md "Act 3's jungle"). Step 1 done; a store now opens on its
+   first full tab in the app too (it showed tab 0).
+
+**Step 2 — the act's monsters (2026-10-13):** 14 of 15 Act 3 MonAI thinks
+as game.exe's (monster-ai.md "Act 3's thinks"; `mon_ais.py`, 5000 runs
+each): Mosquito, ThornHulk, FrogDemon, the tentacles, FetishShaman,
+FetishBlowgun, the zealots and priests, the Council, Mephisto, his hydras;
+in play through `ai.cpp`, Submerge / Emerge as the maggots' burrow. Later
+the same day: WillOWisp, the plain S1 casts (ZakarumHeal / Lightning,
+MonTeleport, Hydra), MonFrenzy's state and Inferno's breath.
+
+**Step 3 — Mephisto (2026-10-13):** a3q6's death hook (quests-act3.md):
+word 0x16, progression to Act 4, the soulstone, the hellgate open (its DC6
+parts drawn) and the bridge up. Left: Act 4 itself (the hellgate says so),
+Act 3's other quests.
+
+**Step 4 — the quests (2026-10-13):** all of a3q0..a3q6 as game.exe's
+(quests-act3.md, `rules/quests_act3.hpp`; message tables by
+`tools/emu/quest_msgs.py`): Hratli's greeting, Lam Esen's Tome, the Golden
+Bird, the Blade of the Old Religion, Khalim's Will (chests, the sewers'
+lever, the Cube), the Blackened Temple (the Council, the orb) and the
+Guardian's report. `tests/quests_d2d.py` plays them all. The plain casts
+(S1 / A1 / A2: heals, lightning, teleport, Hydra) and the will-o-wisps'
+dance are in too (monster-ai.md). Act 3 is done; next: Act 4.
+
+## Checkpoint 2026-10-14 (later): housekeeping, fast act checks
+
+Fast checks, one act at a time or all three side by side:
+
+- `ctest --test-dir build -R quests_act -j3`: `tests/quests_d2d.py <d2d>
+  <act>` plays each act's quests from a new character (Act 2's six are new:
+  Jerhyn to Meshif's boat, ~70 s; all three acts ~1:45).
+- `ACT=2 tools/emu/sweep.sh <seeds> <kinds>` (ACT is 1, 2 or 3): every
+  level of the act against game.exe (tiles, units, monsters: ~15 s for 2
+  seeds).
+
+Planned: a play bot (`tests/play_d2d.py`), a headless player that plays
+by clicks alone (`cmd move` / `cmd skill` / `cmd interact`, routes on
+`debug grid 5`, no `debug goto` / `kill`): spends stat and skill points,
+buys potions, goes back to town to heal, and plays an act's quests in
+order. First a gap finder (what breaks in real play), later speed runs
+(how fast an act goes, run against run). A scratch probe (2026-10-14) got
+from the camp through the Blood Moor and over the whole Den of Evil, then
+died at level 3 to Corpsefire with no points spent: no d2d bug on the way.
+
+What they found, all fixed on the same branch:
+
+- Act 2's monster population had never been diffed (only rooms, tiles,
+  units). The Canyon of the Magi (46): a Position level's entrances take
+  its own type 0xb tile, not its waypoint's too. Maggot Lair 3 (64):
+  Coldworm, a superunique and an act boss, was counted as two uniques.
+  Duriel's Lair (73): the oracle left out Flavie only, d2d every MonStats
+  npc (Tyrael); now both do.
+- The whole-game diff (`diff_drlg.py game`) on every level: the tombs
+  (55–60, 66–72) took their doors from the first list-order build;
+  `relevel` makes the units again in the rooms' order. The Arcane
+  Sanctuary's six tomb symbols (DS1 582, FUN_0059d720) all came out 307;
+  now the six that aren't the true tomb's. The Jail's bookshelves: the
+  oracle read the book's code off its own stand-in, not the unit.
+- Coldworm the Burrower (SandMaggotQueen, MonAI 66, search type 0) is
+  traced: S1 where she stands, a sand maggot rising 8 subtiles east, a
+  rest, up to aip1 (`mon_ais.py`, 50 000 runs). Every acts 1–3 MonStats
+  AI is now game.exe's.
+- Missiles of Size 2 and 3 strike by FUN_00641cb0's full table (the
+  unravelers', Sand Leapers', Zakarum priests', the wisps'); a blank Size
+  strikes no unit.
+- Travincal's `objgroups` diff crashed in the emulator (a quest flag
+  read); now quest-stubbed as `monsters` was.
+
+## Checkpoint 2026-10-14: Act 3 done, what's still open
+
+PR #23 (`act3-kurast`): Kurast, Travincal and the mazes down to the
+Durance (75–102) are game.exe's (`diff_drlg.py` rooms, tiles, units,
+monsters; the whole act as one game), all six quests play
+(`tests/quests_d2d.py`), and Act 3's MonAI thinks match `mon_ais.py`.
+Known gaps, none blocking:
+
+- Act 4: the hellgate opens and says it isn't built.
+- The Council's S1 shot fires MissS1 with S1's damage and to-hit; the
+  mode's event isn't traced in game.exe (the A1 / A2 shots' pattern).
+- Waiting on a live host: the joined game's checklist, now Act 3 too.
+
+Next: Act 4, the same road (levels diffed, the town, the quests, the thinks).
 
 ## Checkpoint 2026-10-13: Act 3's docks and jungle done
 
@@ -886,3 +984,35 @@ Then:
 Town leftovers (Warriv's "go east", waypoint travel, merc resurrect, the
 hire list widget, Cain's spot, trade leftovers, charge recharging) are
 in the checkpoint above.
+
+## Act 4 prep (2026-10-14, branch `act4-prep`)
+
+Preparation only: Act 4 isn't built or playable. The act boundaries now
+come from one table, `level_ids::kActTowns` (the five towns; each act's
+levels follow its town's Id). `act_of`, `is_town`, `GameData::town_of`,
+`layout_of`, the save's start town (`World`), the act in objgroups
+(FUN_006427f0) and its town-room flag (FUN_006426a0) read it. Before, the
+last two chains and `town_of` gave Kurast for any level past 74.
+
+Already generic, nothing to do: DS1 units map through MonPreset.txt for
+all five acts (`drlg::ds1_units`, Act 5's monster objects too); monster
+stats and level monster pools come from the tables. Still gated:
+`kBuiltLevels` (Act 4 isn't in it), `layout_of` (no Act 4 layout), the
+outdoor dispatch in `build_outdoor` (Act 3's jungle its own generator).
+Act 4 work: its layout (not traced yet), its levels in `kBuiltLevels`, the town,
+its quests and Diablo.
+
+Each act's quests now sit in their own file, `world_quests_actN.cpp`, at
+ten World hooks (`actN_log`, `_join`, `_enter`, `_talk`, `_talk_closed`,
+`_said`, `_tick`, `_alert`, `_kill`, `_update`; world.hpp lists them). An
+act needs only the hooks it uses; Act 4 adds `world_quests_act4.cpp` and a
+call at each. Within an act the order is as before; across acts it now
+runs act by act (each quest reads and writes its own records). Still in
+world.cpp: the quest objects' operate hooks (the `operate_fn` cases) and
+a few level-arrival bits (Tyrael gone, camp Cain, the cairn stones).
+The tools take every act too: `ACT=1..5 tools/emu/sweep.sh` (ranges
+from `drlg.TOWNS`).
+A new act's monster AIs: append them to `AIS` in `tools/emu/mon_ais.py`
+and re-run its `--dump`; it writes the cases and `tests/mon_ais_names.inc`
+(the table test_monsters reads). Its quest playthrough: the act's number
+in `tests/CMakeLists.txt` and an `actN()` in `tests/quests_d2d.py`.

@@ -36,6 +36,7 @@
 #include <exception>
 #include <format>
 #include <functional>
+#include <iterator>
 #include <future>
 #include <map>
 #include <memory>
@@ -546,6 +547,29 @@ void populate(const GameData& game_data, Spawning& spawning, const Level& level,
 
 int room_of(const Level& level, float x, float y) { return room_holding(room_rects(level), level, x, y); }
 
+std::uint32_t area_id_at(const GameData& game_data, const Level& level, float from_x, float from_y, float x, float y) {
+    const float act_x = x + float(level.world_x), act_y = y + float(level.world_y);
+    auto id_in = [&](const Level& holder, int room, const RoomRect& rect) -> std::uint32_t {   // FUN_0066ce30 on that room
+        if (act_x < float(rect.x) || act_y < float(rect.y) || act_x >= float(rect.x + rect.width) || act_y >= float(rect.y + rect.height)) return 0;
+        if (std::size_t(room) >= holder.room_areas.size() || holder.room_areas[std::size_t(room)].empty()) return 1;   // a whole room (the camp's too)
+        const int at_x = int(act_x) - holder.world_x, at_y = int(act_y) - holder.world_y;
+        for (const auto& area : holder.room_areas[std::size_t(room)])
+            if (at_x >= area.left && at_y >= area.top && at_x < area.right && at_y < area.bottom) return area.id;
+        return 0xffffffffu;
+    };
+    const Level* from_level = &level;
+    int from_room = room_of(level, from_x, from_y);
+    for (std::size_t k = 0; from_room < 0 && k < level.nearby.size(); ++k) {             // the unit stands next door
+        from_level = level.nearby[k].level;
+        from_room = room_of(*from_level, from_x - float(level.nearby[k].dx), from_y - float(level.nearby[k].dy));
+    }
+    if (from_room < 0) return 0;
+    if (const auto id = id_in(*from_level, from_room, room_rects(*from_level)[std::size_t(from_room)])) return id;
+    for (const auto& near_room : near_list(game_data, *from_level, from_room))
+        if (const auto id = id_in(*near_room.level, near_room.room, near_room.rect)) return id;
+    return 0;
+}
+
 std::vector<std::pair<const Level*, int>> near_rooms(const GameData& game_data, const Level& level, float x, float y) {
     std::vector<std::pair<const Level*, int>> rooms;
     const int room = room_holding(room_rects(level), level, x, y);
@@ -728,7 +752,8 @@ void add_object(const GameData& game_data, const d2d::txt::Table& objects, const
                  && npc.operate_fn != d2d::rules::operate_fn::kSunAltar   // the Tainted Sun's altar: its quest's mode, 0 till used (InitFn 20)
                  && npc.operate_fn != d2d::rules::operate_fn::kCubeChest && npc.operate_fn != d2d::rules::operate_fn::kScrollChest
                  && npc.operate_fn != d2d::rules::operate_fn::kShaftChest   // the Horadric Staff's chests: shut till opened (InitFns 31..33 do nothing)
-                 && (npc.operate_fn != d2d::rules::operate_fn::kWaypoint || d2d::rules::level_ids::is_town(into.id)));   // waypoints: on in towns (InitFn 17)
+                 && (npc.operate_fn != d2d::rules::operate_fn::kWaypoint || d2d::rules::level_ids::is_town(into.id))   // waypoints: on in towns (InitFn 17)
+                 && oid != d2d::rules::object_ids::kHellgate);   // the hellgate: a3q6's mode, 0 till Mephisto's dead (InitFn 44)
     npc.mode   = lit_mode ? "ON" : "NU";
     // Hover name when selectable in its start mode (Selectable0 = NU,
     // 2 = ON): objects.txt Name through the string tables.
@@ -875,11 +900,36 @@ namespace {
 // ponytail: no DT1s or tile seeds, so no picks: which tiles the level
 // finds is all its seeds and picks take; a cell it finds draws a stand-in
 // (lay_tiles). The camp's tiles don't take the level's shares back.
+// Any other level next door (act 3's Travincal on the Causeway): its rooms
+// up, laid as it laid them (its seeds, its order), in `level`'s tiles.
+// ponytail: a room here re-picking a shared tile of theirs would roll
+// nothing (game.exe: that room's DT1 list and seed); never seen (0 in Act 3
+// x 10 seeds and Act 1 x 3, whole-game order). Their own neighbours aren't
+// laid with them: only their far side's tiles, which aren't ours.
 std::vector<d2d::drlg::BuiltRoom> camp_rooms(const GameData& game_data, const Spawning& spawning, const Level& level) {
+    std::vector<d2d::drlg::BuiltRoom> rooms;
+    for (const auto& beside : level.nearby) {
+        const auto state = spawning.levels.find(beside.level);
+        if (beside.level == &game_data.town || !beside.level->assets || state == spawning.levels.end() || state->second.order.empty()) continue;
+        const Level& other = *beside.level;
+        std::vector<std::size_t> came_up;
+        for (const auto room : state->second.order) if (room < other.rooms.size() && !std::ranges::contains(came_up, room)) came_up.push_back(room);
+        std::vector<d2d::drlg::Outdoor::RoomSeed> made;   // those, in list order
+        for (std::size_t i = 0; i < other.rooms.size(); ++i) if (std::ranges::contains(came_up, i)) made.push_back(other.rooms[i]);
+        std::vector<std::size_t> order;                   // list indices: the list is newest first
+        for (const auto room : came_up) order.push_back(made.size() - 1 - std::size_t(std::ranges::count_if(came_up, [&](std::size_t earlier) { return earlier < room; })));
+        std::vector<std::string> notes;
+        for (auto& room : d2d::drlg::level_room_tiles(made, other.plain, other.assets->data, other.tile_dt1s.heads, other.id, d2d::drlg::warp_slots(*other.assets, other.id), notes, order)) {
+            room.x += beside.dx, room.y += beside.dy;
+            for (auto& tile : room.tiles) tile.x += beside.dx, tile.y += beside.dy;
+            room.seed = nullptr;                          // `made` goes
+            rooms.push_back(std::move(room));
+        }
+    }
     const auto& town = game_data.town;
     const auto next_door = std::ranges::find(level.nearby, &town, &Level::Near::level);
     const auto state = spawning.levels.find(&town);
-    if (!level.assets || next_door == level.nearby.end() || state == spawning.levels.end() || state->second.order.empty()) return {};
+    if (!level.assets || next_door == level.nearby.end() || state == spawning.levels.end() || state->second.order.empty()) return rooms;
     const auto rects = room_rects(town);
     std::vector<std::size_t> came_up;                         // room indices, as they came up
     for (const auto room : state->second.order) if (room < rects.size() && !std::ranges::contains(came_up, room)) came_up.push_back(room);
@@ -893,12 +943,13 @@ std::vector<d2d::drlg::BuiltRoom> camp_rooms(const GameData& game_data, const Sp
     std::vector<std::size_t> order;                      // list indices: the list is newest first
     for (const auto room : came_up) order.push_back(made.size() - 1 - std::size_t(std::ranges::count_if(came_up, [&](std::size_t other) { return other < room; })));
     std::vector<std::string> notes;
-    auto rooms = d2d::drlg::level_room_tiles(made, {}, level.assets->data, {}, town.id, d2d::drlg::warp_slots(*level.assets, town.id), notes, order);
-    for (auto& room : rooms) {
+    auto camp = d2d::drlg::level_room_tiles(made, {}, level.assets->data, {}, town.id, d2d::drlg::warp_slots(*level.assets, town.id), notes, order);
+    for (auto& room : camp) {
         room.x += next_door->dx, room.y += next_door->dy;
         for (auto& tile : room.tiles) tile.x += next_door->dx, tile.y += next_door->dy;
         room.seed = nullptr;                             // `made` goes
     }
+    std::ranges::move(camp, std::back_inserter(rooms));
     return rooms;
 }
 
@@ -913,11 +964,11 @@ std::vector<d2d::drlg::BuiltRoom> camp_rooms(const GameData& game_data, const Sp
 // `outside`: the up rooms next door (camp_rooms), after the level's in the result.
 std::vector<d2d::drlg::BuiltRoom> lay_tiles(Level& level, const std::vector<d2d::drlg::Outdoor::RoomSeed>& made,
                                             const std::vector<std::size_t>& order, std::vector<std::string>& notes,
-                                            std::vector<d2d::drlg::BuiltRoom> outside = {}) {
+                                            std::vector<d2d::drlg::BuiltRoom> outside = {}, std::size_t up_count = SIZE_MAX) {
     const auto& assets = *level.assets;
     const auto& dt1s = level.tile_dt1s;
     const auto own = made.size();
-    auto built = d2d::drlg::level_room_tiles(made, level.plain, assets.data, dt1s.heads, level.id, d2d::drlg::warp_slots(assets, level.id), notes, order, std::move(outside));
+    auto built = d2d::drlg::level_room_tiles(made, level.plain, assets.data, dt1s.heads, level.id, d2d::drlg::warp_slots(assets, level.id), notes, order, std::move(outside), up_count);
     const int width = level.ds1.width(), height = level.ds1.height();
     level.picks.assign(std::size_t(width) * std::size_t(height), {});
     auto step_of = [&](int room) { return int(built[std::size_t(room)].step); };
@@ -971,6 +1022,21 @@ std::vector<d2d::drlg::BuiltRoom> lay_tiles(Level& level, const std::vector<d2d:
     return built;
 }
 
+// A room's floor tiles in its list's order (room1 +8), the edge tiles it
+// shares only when it came up before the room next to it.
+std::vector<Level::Floor> floors_of(const d2d::drlg::BuiltRoom& room) {
+    std::vector<Level::Floor> floors;
+    for (const auto& tile : room.tiles)
+        if (tile.layer == 1 && tile.file && tile.index >= 0 && std::size_t(tile.index) < tile.file->tiles.size())
+            floors.push_back({ tile.x, tile.y, std::uint16_t(tile.file->tiles[std::size_t(tile.index)].material) });
+    return floors;
+}
+
+// Its spawn areas (FUN_0061ad50's list): a Logicals room's, else the whole room.
+std::vector<d2d::drlg::Area> areas_of(const d2d::drlg::BuiltRoom& room) {
+    return room.areas.empty() ? std::vector<d2d::drlg::Area>{ { room.x, room.y, room.x + room.width, room.y + room.height, 1, false } } : room.areas;
+}
+
 }  // namespace
 
 // Its rooms brought up again, `came_up` (Level::rooms indices) first in that
@@ -991,14 +1057,30 @@ void relevel(Level& level, const std::vector<std::size_t>& came_up, const GameDa
     std::vector<std::size_t> order;                      // list indices: the list is newest first
     std::vector<bool> taken(count);
     for (const auto room : came_up) if (room < count && !taken[count - 1 - room]) { order.push_back(count - 1 - room); taken[count - 1 - room] = true; }
+    const std::size_t up_count = order.size();                 // the rest are laid for their tiles; they merge no areas (merge_areas)
     for (std::size_t i = 0; i < count; ++i) if (!taken[i]) order.push_back(i);
-    if (outside.empty() && (order == level.laid || (level.laid.empty() && std::ranges::is_sorted(order) && order.size() == count))) return;
+    if (outside.empty() && up_count == level.laid_up && (order == level.laid || (level.laid.empty() && std::ranges::is_sorted(order) && order.size() == count))) return;
     const auto start_ms = d2d::log::ms();
     std::vector<std::string> notes;
-    for (const auto& room : lay_tiles(level, level.rooms, order, notes, std::move(outside)))
-        if (room.seed) level.room1_seeds[std::size_t(room.seed - level.rooms.data())] = room.room1_seed;
+    const auto built = lay_tiles(level, level.rooms, order, notes, std::move(outside), up_count);
+    for (const auto& room : built)
+        if (room.seed) {
+            level.room1_seeds[std::size_t(room.seed - level.rooms.data())] = room.room1_seed;
+            level.room_floors[std::size_t(room.seed - level.rooms.data())] = floors_of(room);   // FUN_005b2700's water spots
+            level.room_areas[std::size_t(room.seed - level.rooms.data())] = areas_of(room);     // a Logicals room's walls take the near rooms up
+        }
+    // The units again: a door on a shared edge (FUN_0066d9e0) is the room's
+    // that came up to it first, and its rand(3) that room's seed.
+    level.units.clear();
+    level.unit_rooms.clear();
+    for (const auto& room : built)
+        for (const auto& unit : room.units) {
+            level.units.push_back({ unit.type, unit.id, unit.mode, unit.x + room.x * 5, unit.y + room.y * 5, unit.flags, unit.path, unit.actions });
+            level.unit_rooms.push_back(room.seed ? int(room.seed - level.rooms.data()) : -1);
+        }
     finish_level(level);
     level.laid = std::move(order);
+    level.laid_up = up_count;
     stamp_footprints(level);
     d2d::log::info("  {}: rooms laid again ({} ms)", level.name, d2d::log::ms() - start_ms);
 }
@@ -1021,11 +1103,9 @@ std::size_t set_level_tiles(Level& level, const d2d::drlg::OutdoorAssets& assets
     level.room_floors.assign(made.size(), {});
     for (const auto& room : built)
         if (room.seed) {
-            for (const auto& tile : room.tiles)
-                if (tile.layer == 1 && tile.file && tile.index >= 0 && std::size_t(tile.index) < tile.file->tiles.size())
-                    level.room_floors[std::size_t(room.seed - made.data())].push_back({ tile.x, tile.y, std::uint16_t(tile.file->tiles[std::size_t(tile.index)].material) });
+            level.room_floors[std::size_t(room.seed - made.data())] = floors_of(room);
             level.room1_seeds[std::size_t(room.seed - made.data())] = room.room1_seed;
-            level.room_areas[std::size_t(room.seed - made.data())] = room.areas.empty() ? std::vector<d2d::drlg::Area>{ { room.x, room.y, room.x + room.width, room.y + room.height, 1, false } } : room.areas;
+            level.room_areas[std::size_t(room.seed - made.data())] = areas_of(room);
             const auto preset = room.seed->kind == 2 ? assets.data.presets.find(room.seed->def) : assets.data.presets.end();
             level.nopop_rooms[std::size_t(room.seed - made.data())] = !room.warps.empty() || (preset != assets.data.presets.end() && !preset->second.populate);
         }
@@ -1055,20 +1135,14 @@ std::size_t set_level_tiles(Level& level, const d2d::drlg::OutdoorAssets& assets
         level.starts.insert(level.starts.end(), room.starts.begin(), room.starts.end());
     }
     // A warp wall alone (the Forgotten Tower's stairs: unflagged words,
-    // FUN_0066e260) leaves only its unit (type 5, the LvlWarp id): a warp
-    // at the unit's cell less the slot's offset.
+    // FUN_0066e260) leaves its unit; its slot is the wall's style
+    // (BuiltRoom::wall_warps), one warp a slot.
     std::vector<d2d::drlg::BuiltRoom::Warp> found;
     for (const auto& room : built)
         found.insert(found.end(), room.warps.begin(), room.warps.end());
     for (const auto& room : built)
-        for (const auto& unit : room.units) {
-            if (unit.type != d2d::rules::unit_type::kWarp) continue;
-            const auto slot = std::ranges::find(slots, unit.id, &d2d::drlg::WarpSlot::id);
-            if (slot == slots.end()) continue;
-            const int slot_index = int(slot - slots.begin());
-            if (std::ranges::any_of(found, [&](const auto& warp) { return warp.slot == slot_index; })) continue;
-            found.push_back({ room.x + (unit.x - slot->off_x) / 5, room.y + (unit.y - slot->off_y) / 5, slot_index });
-        }
+        for (const auto& wall : room.wall_warps)
+            if (!std::ranges::any_of(found, [&](const auto& warp) { return warp.slot == wall.slot; })) found.push_back(wall);
     if (const auto row = d2d::drlg::level_row(assets.levels, level.id))
         for (const auto& warp : found) {
             if (warp.slot < 0 || warp.slot > 7) continue;

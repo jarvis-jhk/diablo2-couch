@@ -202,10 +202,14 @@ struct Monster {
     // Terror's, Cloak of Shadows').
     struct SkillState { int skill = -1, level = 0; std::uint32_t until = 0; bool swaps = false; };
     SkillState curse, cry;
+    // MonFrenzy's state (FUN_005d8c70: "monfrenzy", its charges stat 0xa9
+    // as the level, up to the skill's own): its aurastats as curse's.
+    SkillState frenzy;
     // What they do to it, as of this frame (Fight::monster_states): its
     // damage % and speed %, the share of its melee damage it takes back
     // (Iron Maiden), Terror's state (0x38) on it.
     int dmg_pct = 0, speed_pct = 0, reflect_pct = 0;
+    int anim_pct = 0;                         // attackrate / other_animrate (stats 68 / 69): its modes play faster
     bool afraid = false;
     // Converted from a higher level (state 0x6d): its own level and life
     // (stats 0xb0 / 0xb1), put back as Conversion ends (FUN_005d01a0).
@@ -222,6 +226,7 @@ struct Monster {
     // when the spray began (subtiles), a random walk under way (to
     // unit.goal) rather than a chase.
     int skill = -1, skill_frame = 0, skill_x = 0, skill_y = 0;
+    bool at_point = false;                    // its mode's shot at (skill_x, skill_y), not its foe (FUN_005ddfc0: the wisps' dance)
     bool wandering = false;
     // The MonAI thinks: the last mode it left other than NU (monster data
     // +0x54, FUN_005a68e0; GH: it got hit), the AI's scratch words (+0x14,
@@ -249,8 +254,20 @@ struct Monster {
     // lifted, pattern 5, path mask 0): untargetable, it flies over
     // anything till it lands (FUN_005f2fc0).
     bool aloft = false;
+    // Gone from the game without dying (FUN_005ddfc0: the Dark Wanderer at
+    // his walk's end): no corpse, no kill, not drawn.
+    bool gone = false;
+    // MonStats killable (game.exe: unit flag 0x4 off, FUN_005dca70's test):
+    // the Dark Wanderer, the compelling orb. No one targets or hits it.
+    bool killable = true;
     float leap_from_x = 0, leap_from_y = 0, leap_to_x = 0, leap_to_y = 0;
     int move_pct = 0;
+    // A breath (srvdofunc 95, FUN_005cc4e0; the fetish shaman's Inferno):
+    // its srvmissilea every calc3 frames till calc2 frames on (FUN_005cc240's
+    // end, skill +0x18), the mode held; state 0xc on till its think clears it.
+    int breath = -1;
+    std::uint32_t breath_until = 0, breath_next = 0;
+    bool breath_state = false;
     std::uint32_t laid_until = 0;
     // Its unit seed (+0x20) as its look left it: what its thinks draw. A
     // special AI (AI control [0], FUN_005b0e00: the Countess's 0xd, Dim
@@ -262,8 +279,8 @@ struct Monster {
     bool other = false;
     std::vector<std::pair<int, int>> path;
     bool half_freeze = false;
-    [[nodiscard]] bool alive() const { return hit_points > 0; }
-    [[nodiscard]] bool targetable() const { return alive() && !buried && !aloft; }   // unit flags 0xe: not a buried maggot, a vulture aloft
+    [[nodiscard]] bool alive() const { return hit_points > 0 && !gone; }
+    [[nodiscard]] bool targetable() const { return alive() && killable && !buried && !aloft; }   // unit flags 0xe: not a buried maggot, a vulture aloft, an unkillable one
     // As a target for the player's (or the merc's) hits.
     [[nodiscard]] d2d::rules::Target target(const GameData& game_data) const {
         const auto& type_info = game_data.monsters.types[std::size_t(type)];
@@ -303,6 +320,8 @@ struct Foe {
     int threat = 14;                          // FUN_005dc920: a player's 14, a monster's MonStats threat
     int life_pct = 100;                       // FUN_00621f20 (a Fetish's think): life x 100 / max life
     const Monster* of = nullptr;              // a monster in the fight (Confuse, Attract: monsters fight monsters)
+    bool a3q5_done = false;                   // a player, or its pet, with quest 0x15 bit 0 (the zealots spare it)
+    int blessed = 0;                          // the wisps' dance's magic find (stat 0x50) put on it this frame
     void take(const d2d::rules::Taken& taken) {
         blocked = blocked || taken.blocked;
         hits += taken.hit ? 1 : 0;
@@ -423,7 +442,8 @@ bool missile_fly(const Level& level, Missile& missile, Reach&& reach) {
 // frame (FUN_005ae1f0 -> FUN_00641cb0).
 inline bool missile_struck(const Level& level, const Missile& missile, float x, float y, int size) {
     const int foe_x = level.world_x * 5 + int(std::floor(x * 5)), foe_y = level.world_y * 5 + int(std::floor(y * 5));
-    return std::ranges::any_of(missile.flight.crossed, [&](const auto& spot) { return d2d::rules::missile_touches(spot.first, spot.second, foe_x, foe_y, size); });
+    const int missile_size = missile.info ? missile.info->size : 1;
+    return std::ranges::any_of(missile.flight.crossed, [&](const auto& spot) { return d2d::rules::missile_touches(spot.first, spot.second, foe_x, foe_y, size, missile_size); });
 }
 
 // Direction 0..31 in D2's DCC order for a world step, like direction16:
@@ -553,7 +573,7 @@ bool monster_step(const Level& level, Monster& monster, float target_x, float ta
 // aidel ticks between attacks;
 // otherwise wander near home (Levels.txt MonWndr): stand 2-5 s, walk to a
 // random spot within 3 cells.
-// ponytail: later acts only (every Act 1 MonStats AI is traced): an AI
+// ponytail: acts 4-5 and Coldworm (SandMaggotQueen) only, every other acts 1-3 MonStats AI is traced: an AI
 // whose think isn't traced (rules::traced_ai) gets one melee think (MonStats aip1..8 unread); distances and timings by eye;
 // chasing goes straight at the player, sliding to a stop at walls.
 // A unique's attack starting (the mode-change hook, event 0): Spectral Hit

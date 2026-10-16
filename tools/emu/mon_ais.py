@@ -24,6 +24,7 @@ unit it's at, wait, event), the pace, the effects, the AI control and seed
 after. --dump writes them as tests/mon_ais_cases.inc lines for
 tests/test_monsters.cpp, which runs rules::mon_think on each. Prints `ok`.
 """
+import os
 import random
 import struct
 import sys
@@ -44,14 +45,32 @@ AIS = {
     # The curse thinks (special AI table 0x73d358, row + 8: 10 Dim Vision /
     # Cloak, 11 Terror / Howl) and the MonAI rows' other thinks (row + 12).
     "DimVision": 0x5e8020, "Terror": 0x5e8140, "BatDemonOther": 0x5f4fd0, "SandMaggotOther": 0x5f1750,
+    # Act 3's (monster-ai.md "Act 3's thinks").
+    "Mosquito": 0x5f3730, "ThornHulk": 0x5f4850, "WillOWisp": 0x5f39b0, "ZakarumZealot": 0x5f6e60, "ZakarumPriest": 0x5f72d0,
+    "FrogDemon": 0x5f8260, "Tentacle": 0x5f8f80, "TentacleHead": 0x5f9270, "FetishShaman": 0x5f9a80, "HighPriest": 0x5e0490,
+    "Hydra": 0x5e9e60, "FetishBlowgun": 0x5e1250, "Mephisto": 0x5f78b0,
+    "FrogDemonOther": 0x5f81d0, "FetishShamanOther": 0x5f9950,
+    # Coldworm's (MonAI 66), last: the Act 3 scene's fields it ignores.
+    "SandMaggotQueen": 0x5f9cf0,
 }
 CURSE_AIS = ("DimVision", "Terror", "BatDemonOther", "SandMaggotOther")
+ACT3_AIS = tuple(list(AIS)[list(AIS).index("Mosquito"):])
 ORDER = list(AIS)
+
+
+def write_names(path):
+    """tests/mon_ais_names.inc: the AIs a case line's first number indexes (ORDER),
+    each with whether it's an other think and whether its scene has Act 3's fields."""
+    with open(path, "w") as f:
+        f.write("// tools/emu/mon_ais.py --dump (write_names): the AIs the cases number, ORDER.\n")
+        for ai in ORDER:
+            other = ai.endswith("Other")
+            f.write(f'{{ "{ai.removesuffix("Other")}", {str(other).lower()}, {str(ai in ACT3_AIS).lower()} }},\n')
 # Think acts (rules::MonAct) by name; units (rules::ThinkUnit).
 ACTS = ["idle", "a1", "a2", "s2", "skill", "walk", "run", "approach", "keep", "circle", "wander", "none", "die", "around",
-        "home", "point", "untraced", "s3", "s4", "seq", "fly"]
+        "home", "point", "untraced", "s3", "s4", "seq", "fly", "gone", "s1", "sc", "mode_at", "move_to", "spawn"]
 UNIT = {"foe": 0, None: 1, "foe2": 2, "kin": 3, "aid": 4, "mon": 5}
-MODE_ACT = {4: "a1", 5: "a2", 9: "s2", 10: "s3", 11: "s4"}
+MODE_ACT = {4: "a1", 5: "a2", 7: "sc", 8: "s1", 9: "s2", 10: "s3", 11: "s4"}
 
 
 def setup(rng, ai):
@@ -100,6 +119,53 @@ def setup(rng, ai):
     if ai in CURSE_AIS:
         s["a1"], s["rn"], s["interact"] = rng.random() < 0.8, rng.random() < 0.6, rng.random() < 0.15
         s["afraid"], s["in_s4"], s["cast_word"] = rng.random() < 0.8, rng.random() < 0.3, rng.choice((0, 1, 1, 2))
+    # Act 3's: its next think event's frame (FUN_005415a0 type 1, 0 none),
+    # its group leader's mode (+0x10: the tentacles' head, 12 DD / 14 S4),
+    # its command's unit found (FUN_00552f60), a circle that can set off.
+    if ai in ("FrogDemon", "Tentacle", "TentacleHead", "Hydra"):        # search types 2 / 5: a think with none found
+        s["target"] = rng.random() < 0.85
+    if ai in ACT3_AIS:
+        s["skills"] = [k if k >= 0 else -1 - n for n, k in enumerate(s["skills"])]   # unset ones distinct: a cast of one names its slot
+        s["next_event"] = rng.choice((0, s["frame"] + rng.randint(-30, 60)))
+        s["leader_mode"] = rng.choice((1, 2, 4, 12, 12, 14, 14, rng.randint(0, 15)))
+        s["cmd_unit"] = rng.random() < 0.7
+        s["command"] = rng.choice((None, 1, 2, 14))
+        s["sk_level"] = rng.choice((0, 1, rng.randint(-2, 40)))           # FUN_006442a0: Skill1's level
+        s["state_c"] = rng.random() < 0.4                                  # state 0xc (the shaman's Inferno) on
+        s["spot_coll"] = rng.choice((0, 0, 1, 0x400, 0xc01))                # FUN_0064cb30: its own spot's collision (mask 0xc01)
+        # The zealots' spare test: the target a player (type 0), or a pet
+        # (FUN_0058f090) whose owner's found (FUN_00552f60 type 0); in act 3
+        # (the level FUN_0061a1b0 names); its quest 0x15 bit 0 (FUN_0065c310).
+        s["foe_kind"] = rng.choice(("player", "pet", "monster"))
+        s["owner"] = rng.random() < 0.7
+        s["act3"] = rng.random() < 0.7
+        s["quest21"] = rng.random() < 0.5
+        s["los"] = rng.random() < 0.6                                      # FUN_005dd290: the line to the target clear (mask 4)
+        s["miss_range"] = rng.choice((-1, rng.randint(0, 30)))             # MonStats MissS1 (+0x3e)'s Missiles.txt Range (+0x96), -1 none
+        # Mephisto's: Skill6..8 (+0x17a), his chooser's search (FUN_005f7700:
+        # the weakest unit within 32, a player nearest).
+        ids = rng.sample(range(400, 500), 3)
+        s["skills68"] = [rng.choice((-6 - k, ids[k])) for k in range(3)]
+        s["weak"], s["near5"] = rng.random() < 0.6, rng.random() < 0.5
+        # The wisps': how many its search finds (FUN_0065a950), its target a
+        # player (unit type 0) not out of reach (FUN_005541b0).
+        s["wisps"] = rng.choice((0, 1, 3, 4, 4, 5, 5, 6))
+        s["busy"] = rng.random() < 0.3
+        if ai == "WillOWisp":
+            s["foe_kind"] = rng.choice(("player", "monster"))
+            s["frame"] = rng.choice((s["frame"], s["frame"] - s["frame"] % 67, s["frame"] - s["frame"] % 337))   # its 67th / 337th frames
+            s["ctrl"][0] = rng.choice((0, 1, 2, 3, 4, 5, 6, rng.randint(0, 12)))   # its states (0..12)
+            s["ctrl"][2] = rng.randint(0, 6) if s["ctrl"][0] >= 5 else rng.choice((s["ctrl"][2], rng.randint(0, 6)))
+            if s["ctrl"][0] >= 5 and rng.random() < 0.5:               # at its step's point on a 67th frame: the casts, the next step, the blessing
+                steps6 = [(0, 0), (-10, -3), (1, -5), (6, 0), (4, 10), (-9, -2), (-6, -11), (-2, -5), (6, 1), (0, 13), (-12, 0), (7, 5), (-3, -11), (-15, -3),
+                          (-6, -3), (-4, -5), (-6, -13), (-12, -2), (-6, 2), (-5, 5), (1, 11), (-13, -6), (-8, -11), (-7, 0), (1, 8), (-5, -8), (-8, 1), (1, -6), (6, 9)]
+                steps5 = [(-5, 0), (-5, -5), (3, -5), (6, 3), (3, 6), (-5, 3)]
+                state, word3 = s["ctrl"][0], s["ctrl"][2]
+                step = steps5[word3] if state == 5 and word3 <= 5 else steps6[word3 + state * 4 - 24] if state >= 6 and word3 <= 4 else (0, 0)
+                fx, fy = s["spots"]["foe"]
+                s["spots"]["mon"] = (fx + step[0] + rng.randint(-1, 1), fy + step[1] + rng.randint(-1, 1))
+                s["frame"] -= s["frame"] % 67
+                s["ctrl"][1] = rng.choice((0, 1, 2, 3, 3))
     if ai == "Vulture":
         for k in range(2):                                                 # its spot words: a point, or unset
             if rng.random() < 0.5: s["ctrl"][1 + k] = s["spots"]["foe"][k] + rng.randint(-12, 12)
@@ -143,8 +209,9 @@ def install(e):
     e.hook(0x5defe0, away, 3)
     def circle(e):                                                     # FUN_005df7d0: a step, then at the target
         sd = seed(); v = sd.step(); put(sd)
-        out("circle", name(e.arg(0)), S32(e.arg(1)), e.arg(2), int((v & 0xff) >= 0x80))
-        return 1
+        ok = moved() if cur["s"]["ai"] in ACT3_AIS else 1                   # Act 3's read whether it set off
+        out("circle", name(e.arg(0)), S32(e.arg(1)), e.arg(2), int((v & 0xff) >= 0x80), ok)
+        return ok
     e.hook(0x5df7d0, circle, 3)
     def wander_draws(n):                                               # FUN_005de200 / FUN_005df530's three draws
         sd = seed()
@@ -178,7 +245,7 @@ def install(e):
         out("stat", e.arg(1), S32(e.arg(2)))
         return 0
     e.hook(0x627260, setstat, 4)
-    e.hook(0x58f730, lambda e: out("rally"), 1)
+    e.hook(0x58f730, lambda e: out("rally", e.r32(e.arg(0) + 8)) if cur["s"]["ai"] in ACT3_AIS else out("rally"), 1)   # Act 3's: the command's kind
     e.hook(0x58ef40, lambda e: 0, 1)
     e.hook(0x58ed10, lambda e: out("command_done"), 0)
     e.hook(0x59c330, lambda e: out("summoner_open"), 0)
@@ -200,6 +267,16 @@ def install(e):
         s, ctx, cb = cur["s"], e.arg(0), e.arg(1)
         if cb in (0x5b0d00, 0x5f06b0):                                     # the nearest kin / other monster
             if s["kin"] and S32(s["kin_d"]) < S32(e.r32(ctx + 4)):
+                e.w32(ctx, cur["units"]["kin"]); e.w32(ctx + 4, s["kin_d"])
+        elif cb == 0x5f7700:                                               # Mephisto's chooser: [3] the weakest, [5] a player nearest
+            if s["weak"]: e.w32(ctx + 12, cur["units"]["foe2"])
+            if s["near5"]: e.w32(ctx + 20, cur["units"]["kin"])
+        elif cb == 0x5e0430:                                               # the weakest ally under 76 % within 50 (squared): the council's
+            if s["aid"] and S32(s["kin_d"]) <= S32(e.r32(ctx + 8)): e.w32(ctx, cur["units"]["aid"])
+        elif cb == 0x5f7240:                                               # a hurt zakarum within aip6 (squared): the priest's
+            if s["aid"] and S32(s["kin_d"]) <= S32(e.r32(ctx + 12)): e.w32(ctx, cur["units"]["aid"])
+        elif cb == 0x5f99a0:                                               # a dead fetish within aip5 (squared): the shaman's
+            if s["corpse"] and S32(s["kin_d"]) <= S32(e.r32(ctx + 8)):
                 e.w32(ctx, cur["units"]["kin"]); e.w32(ctx + 4, s["kin_d"])
         elif cb == 0x5f30f0:                                               # a weak one within 11 (the Vulture's)
             if s["victim"]: e.w32(ctx, cur["units"]["foe2"])
@@ -251,20 +328,76 @@ def install(e):
     from unicorn.x86_const import UC_X86_REG_EDX as EDX
     e.hook(0x46c140, lambda e: int(cur["s"]["a1"] if e.mu.reg_read(EDX) == 4 else cur["s"]["rn"] if e.mu.reg_read(EDX) == 15 else 0), 0)
     e.hook(0x457490, lambda e: int(cur["s"]["interact"] and e.mu.reg_read(EDX) == 9), 0)
-    e.hook(0x639df0, lambda e: int(cur["s"].get("afraid", False) and e.arg(1) == 0x38), 2)
+    e.hook(0x639df0, lambda e: int(cur["s"].get("afraid", False) and e.arg(1) == 0x38 or cur["s"].get("state_c", False) and e.arg(1) == 0xc), 2)
     def toggle(e):                                                     # FUN_005b0e00 back to the MonAI row's think: the reset branch
         out("toggle", e.arg(1))
         for k in range(3): e.w32(e.arg(0) + 0x14 + 4 * k, 0)
         return 0
     e.hook(0x5b0e00, toggle, 2)
     e.hook(0x540e60, lambda e: 0, 2)                                   # its pending think events dropped
-    e.hook(0x5417d0, lambda e: out("event", S32(e.arg(1)) - cur["s"]["frame"]), 4)   # a think event at frame + n
+    e.hook(0x5417d0, lambda e: out("event", S32(e.arg(1)) - cur["s"]["frame"]) if e.arg(0) != 0xc else 0, 4)   # a think event at frame + n (0xc: the wisps' blessing's end)
     e.hook(0x573120, lambda e: out("unset"), 0)
     e.hook(0x5df140, away, 3)
     def command14(e):
         e.w32(cur["cmd"] + 0x18, cur["s"]["cast_word"])
         return cur["cmd"]
-    e.hook(0x58efa0, command14, 2)                          # it dies (the egg hatched)                                   # Radament's: FUN_00599420 (the quest's)
+    e.hook(0x58efa0, command14, 2)
+    # Act 3's.
+    e.hook(0x5415a0, lambda e: cur["s"].get("next_event", 0) & MASK, 1)
+    e.hook(0x5ddfc0, lambda e: out("gone", S32(e.arg(0)), S32(e.arg(1)), S32(e.arg(2))), 3)   # a mode at a point (0: it leaves the game)
+    def wisps(e):                                                      # FUN_0065a950(.., &ctx, ..): the finds' list (+4) and count (+0x18)
+        found = [cur["units"][n] for n in ("kin", "aid", "foe2", "foe", "mon", "kin")][:cur["s"]["wisps"]]
+        lst = e.alloc(4 * 8)
+        for k, u in enumerate(found): e.w32(lst + 4 * k, u)
+        e.w32(e.arg(1) + 4, lst); e.w32(e.arg(1) + 0x18, len(found))
+        return 0
+    e.hook(0x65a950, wisps, 8)
+    e.hook(0x65ac70, lambda e: 0, 1)
+    e.hook(0x65aa00, lambda e: 0, 1)
+    from unicorn.x86_const import UC_X86_REG_ECX as ECX
+    e.hook(0x58ec00, lambda e: out("word", cur["word_index"].setdefault(e.mu.reg_read(ECX), len(cur["word_index"])), e.mu.reg_read(EDX), S32(e.arg(0))), 1)
+    e.hook(0x5de490, lambda e: out("move_to", S32(e.arg(0)), S32(e.arg(1)), S32(e.arg(2))) or 1, 3)
+    e.hook(0x5541b0, lambda e: int(cur["s"].get("busy", False)), 0)
+    e.hook(0x6251f0, lambda e: cur["pcdata"], 5)
+    e.hook(0x627150, lambda e: out("bless", e.arg(1), S32(e.arg(2))), 4)
+    e.hook(0x6260b0, lambda e: 0, 2)
+    e.hook(0x626e10, lambda e: 0, 3)
+    e.hook(0x6439b0, lambda e: 1, 1)                                   # its Skill1 record (FUN_006442a0 reads none of it here)
+    e.hook(0x6442a0, lambda e: cur["s"].get("sk_level", 0) & MASK, 3)
+    e.hook(0x64cb30, lambda e: cur["s"].get("spot_coll", 0), 4)
+    e.hook(0x5ded20, lambda e: out("run", name(e.arg(0)), 0) or 1, 1)   # a move in mode 15 (RN)
+    e.hook(0x5dd290, lambda e: int(cur["s"].get("los", True)), 0)
+    e.hook(0x622aa0, lambda e: int(not cur["s"].get("los", True)), 3)     # the line blocked (mask 4)
+    def missile_row(e):                                                # FUN_0046ace0(ECX id): its Missiles.txt row
+        if cur["s"].get("miss_range", -1) < 0: return 0
+        e.mu.mem_write(cur["missile"] + 0x96, struct.pack("<h", cur["s"]["miss_range"]))
+        return cur["missile"]
+    e.hook(0x46ace0, missile_row, 0)
+    def owner(e):                                                      # FUN_0058f090(ECX unit, EDX &id, &type)
+        from unicorn.x86_const import UC_X86_REG_EDX
+        pet = cur["s"].get("foe_kind") == "pet"
+        e.w32(e.mu.reg_read(UC_X86_REG_EDX), 7 if pet else MASK)
+        if pet: e.w32(e.arg(0), 0)
+        return 0
+    e.hook(0x58f090, owner, 1)
+    e.hook(0x61a1b0, lambda e: 80 if cur["s"].get("act3") else 40, 1)
+    e.hook(0x6221a0, lambda e: cur["pcdata"], 1)
+    e.hook(0x65c310, lambda e: int(cur["s"].get("quest21", False) and e.arg(1) == 0x15 and e.arg(2) == 0), 3)                         # it leaves the game (mode 0)
+    def by_id(e):                                                      # FUN_00552f60(ECX game, EDX type, id)
+        from unicorn.x86_const import UC_X86_REG_EDX
+        if cur["s"]["ai"] == "ZakarumZealot" and e.mu.reg_read(UC_X86_REG_EDX) == 0:
+            return cur["units"]["foe2"] if cur["s"]["foe_kind"] == "pet" and cur["s"]["owner"] else 0   # id -1 (no owner) finds none
+        return cur["units"]["kin"] if cur["s"].get("cmd_unit") else 0
+    e.hook(0x552f60, by_id, 1)
+    # Coldworm's young (FUN_005f9cf0): FUN_0063efa0(unit, &class, &x, &y, &mode, 0, fn) its spawn's
+    # class, spot and mode; FUN_00463740 a room there; FUN_005b2f20 makes it (here: not made,
+    # so the count the made one adds, ai.cpp's, stays out of the comparison).
+    def spawn_spot(e):
+        for k, v in enumerate((68, 108, 100, 8)): e.w32(e.arg(1 + k), v)
+        return 0
+    e.hook(0x63efa0, spawn_spot, 7)
+    e.hook(0x463740, lambda e: 1, 0)
+    e.hook(0x5b2f20, lambda e: out("spawn"), 6)                          # it dies (the egg hatched)                                   # Radament's: FUN_00599420 (the quest's)
 
 
 def run_game(e, s, addr, rng_moves):
@@ -284,16 +417,24 @@ def run_game(e, s, addr, rng_moves):
     e.mu.mem_write(row + 0x170, struct.pack("<5h", *s["skills"]))
     e.mu.mem_write(row + 0x180, bytes(s["modes"]))
     e.mu.mem_write(row + 0x4f + s["diff"], bytes([s["aidel"]]))
+    if s["ai"] in ACT3_AIS:
+        e.mu.mem_write(row + 0x3e, struct.pack("<h", 1))
+        e.mu.mem_write(row + 0x17a, struct.pack("<3h", *s["skills68"]))   # MissS1: a missile (FUN_0046ace0 answers by miss_range)
     for k, v in enumerate(s["ctrl"]): e.w32(ctrl + 0x14 + 4 * k, v & MASK)
     e.w32(params, ctrl); e.w32(params + 7 * 4, row)
     if s["target"]: e.w32(params + 8, units["foe"])
     e.w32(params + 20, s["dist"]); e.w32(params + 24, int(s["melee"]))
+    if s["ai"] in ("ZakarumZealot", "WillOWisp"):
+        e.w32(units["foe"], 0 if s["foe_kind"] == "player" else 1)
+        e.w32(units["foe2"], 0)                                          # the owner, a player
+    if s["ai"] in ACT3_AIS:
+        e.w32(units["kin"] + 0x10, s["leader_mode"]); e.w32(mon + 0x10, s["leader_mode"])
     if s["ai"] in CURSE_AIS:
         e.w32(mon + 0x10, 11 if s["in_s4"] else 1)
         data, rows = alloc(0x1000), alloc(0x1a8 * 0x106)                 # MonStats: the unit's row's flag byte +0xd (bit 1: interact)
         e.w32(0x744304, data); e.w32(data + 0xa80, 0x106); e.w32(data + 0xa78, rows)
         e.mu.mem_write(rows + 0x1a8 * 0x100 + 0xd, bytes([2 if s["interact"] else 0]))
-    CUR.update(s=s, out=[], units=units, names=names, paths=paths, moves=rng_moves, cmd=cmd, frees=0)
+    CUR.update(s=s, out=[], units=units, names=names, paths=paths, moves=rng_moves, cmd=cmd, frees=0, pcdata=alloc(0x40), missile=alloc(0x1a4), word_index={})
     e.call(addr, params, ecx=game, edx=mon)
     word = [e.r32(cmd + 0x18)] if s["ai"] == "SandMaggotOther" else []
     return CUR["out"], [S32(e.r32(ctrl + 0x14 + 4 * k)) for k in range(3)] + word, (e.r32(mon + 0x20), e.r32(mon + 0x24))
@@ -312,7 +453,7 @@ def outcome(s, out):
         elif k == "wait": act[5] = item[1]
         elif k == "event": act[6] = item[1]
         elif k == "skill":
-            slot = s["skills"].index(item[2])
+            slot = (s["skills"] + s.get("skills68", [])).index(item[2])
             spot = (item[4], item[5]) == s["spot"]                         # at the target's spot (the Summoner's)
             to("skill", slot, 0 if spot else item[4], 1 if spot else item[5], item[3])
         elif k == "seq": to("seq", s["skills"].index(item[1]), unit=item[2])
@@ -321,19 +462,33 @@ def outcome(s, out):
             asks.append((item[2], item[4]))
             if item[4]: to("none")
             elif not item[3] and s["ai"] == "Terror": to("idle", s["aidel"])   # flags 0: FUN_005a73e0's think aidel on
-        elif k == "circle": to("circle", item[2], item[4], item[3], item[1])
+        elif k == "circle":
+            if s["ai"] in ACT3_AIS: asks.append((item[2], item[5]))
+            to("circle", item[2], item[4], item[3], item[1])
         elif k == "wander": to("wander", item[1], item[2], item[3])
         elif k == "around": to("around", item[2], item[3], item[4], item[1])
         elif k == "pace":
             if item[1]: pace[0] = item[1]
             if item[2]: pace[1] = item[2]
         elif k == "die": to("die")
+        elif k == "gone": to("gone") if item[1] == 0 else to("mode_at", item[1], item[2], item[3], None)
+        elif k == "move_to": to("move_to", item[3], item[1], item[2], None)
+        elif k == "word": effects.append(("set_word", item[1] * 4 + item[2], item[3]))
         elif k == "keep": to("keep", item[3], item[4], item[2], item[1])
+        elif k == "fly" and s["ai"] == "SandMaggotQueen": to("spawn", 0)   # mode 8 where she stands
         elif k == "fly": to("fly", item[3], item[1], item[2], None)
+        elif k == "spawn": to("spawn", 1)
         elif k == "aura": effects.append(("aura", s["skills"].index(item[1])))
         else: effects.append(item)
     if any(item[0] == "die" for item in out): act[:] = ["die", 0, 0, 0, 0, 0, 0]   # dead: the stand after it is moot
     return act, pace, effects, asks
+
+
+def spared(s):
+    """The zealot's spare test, as its code reaches it."""
+    if s["ai"] != "ZakarumZealot": return False
+    player = s["foe_kind"] == "player" or (s["foe_kind"] == "pet" and s["owner"])
+    return player and s["act3"] and s["quest21"]
 
 
 def dump_case(s, act, pace, effects, asks, ctrl, seed):
@@ -350,9 +505,11 @@ def dump_case(s, act, pace, effects, asks, ctrl, seed):
         nums += [int(s["a1"] and not s["interact"]), int(s["rn"]), int(s["afraid"]), int(s["in_s4"]), s["cast_word"]]
     else:
         nums += [1, 0, 1, 0, 0]
+    if s["ai"] in ACT3_AIS:
+        nums += [s["next_event"], s["leader_mode"], int(s["cmd_unit"]), s["sk_level"], int(s["state_c"]), int(s["spot_coll"] == 0), int(spared(s)), int(s["los"]), s["miss_range"]] + [int(k >= 0) for k in s["skills68"]] + [int(s["weak"]), int(s["near5"]), s["wisps"], int(s["foe_kind"] == "player" and not s["busy"])]
     nums += list(s["seed"])
     kinds = {"state": 0, "overlay": 1, "stat": 2, "rally": 3, "command_done": 4, "summoner_open": 5, "aura": 6, "land": 7, "takeoff": 8,
-             "toggle": 9, "unset": 10}
+             "toggle": 9, "unset": 10, "set_word": 11, "bless": 12}
     keep = lambda x: int(x[0] == "toggle" and s["ai"] == "SandMaggotOther")          # it puts the third word back after
     eff = [f"{kinds[x[0]]} {x[1] if len(x) > 1 else 0} {x[2] if len(x) > 2 else keep(x)}" for x in effects]
     tail = [ACTS.index(act[0])] + act[1:] + pace + ctrl[:3] + list(seed) + ctrl[3:4]   # the SandMaggot's command word after, last
@@ -388,6 +545,7 @@ def main():
             f.write("// tools/emu/mon_ais.py --dump: game.exe's own monster thinks (see the script), a line each.\n")
             for rows in dumped.values():
                 for lines in rows.values(): f.write("".join(f'"{line}",\n' for line in lines[:6]))
+        write_names(os.path.join(os.path.dirname(sys.argv[sys.argv.index("--dump") + 1]), "mon_ais_names.inc"))
     return 0
 
 

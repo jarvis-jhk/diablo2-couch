@@ -151,7 +151,12 @@ once (FUN_00555230 → FUN_00552df0): the loop's start moves with them.
 4. FUN_0054df80 → FUN_0054dc40: up to 20 random spots in the room rect
    shrunk one subtile at the top left (room seed), skipping any within
    WarpDist² (Levels.txt, 2025) of the level's entrances (FUN_0054db50),
-   testing placement (FUN_005b2a00 with flag 1 = test only).
+   testing placement (FUN_005b2a00 with flag 1 = test only). The entrances
+   (FUN_00642480): rooms with flags & 0x30000 or a warp slot that placed a
+   warp, then the level's type 0xb tile: the waypoint's, or a Levels
+   Position level's own tile (the Canyon of the Magi, WarpDist 3800; not
+   its waypoint's too). d2d stands the waypoint's room in for the 0x30000
+   rooms; every acts 1–3 level matches (`sweep.sh ... monsters`).
 5. The leader at that spot; FUN_005b2830 adds PartyMin..PartyMax minions
    (minion1/minion2 alternating, radius 4) — how Fallen come in packs;
    then `rand(max-min+1) + min - 1` more of the type (radius 3).
@@ -175,6 +180,8 @@ spawnCol → mask 0x3c01 / 0x1c0 / 0x3f11 / 0) is clear.
   type picked again (FUN_005bde80 unique flag: nightmare / hell from the
   region's rarity list; normal from Levels.txt umon1..), placed like a
   group's leader (FUN_005a09e0 → FUN_0054dc40), counted (FUN_005a0320).
+  FUN_005a0320 counts a unit as it first sets flag 8, so a superunique that
+  is also an act boss (FUN_005b1cf0: the Smith, Coldworm) counts once.
 - **Champion or unique** (FUN_005a0760, the monster's own seed at unit
   +0x20): `rand(100) <` MonUMod row 0's `constants` (20) → champion (flags
   |= 4) with one champion mod (FUN_005a0500: MonUMod rows with `champion`
@@ -503,7 +510,107 @@ diff_drlg.py game`.
   nothing there.
 - **The Dark Wanderer** (object 368, InitFn 43, FUN_005bd1f0, a3q7):
   MonStats 0x170 at the marker's x + 7, its spot only, once a game
-  (a3q7's init, FUN_005bd300, sets the record's "due" byte).
+  (a3q7's init, FUN_005bd300, sets the record's "due" byte; record 0x1c,
+  word 0x20: data +1 due, +4 / +8 the spot). His think is MonAI 91,
+  DarkWanderer (FUN_005ea130, search type 1). His spot (FUN_005bd0d0,
+  worked out once, +2): 20 subtiles north, else 11 north, 2 east or west
+  of that, else 8 north, else 3 north, the first clear of 0x3c01
+  (FUN_006229f0). AI control +0x14 0 -> 1. A foe 20 or more off (the
+  think's AI distance): stand 40. Under 20, state 1: walk there
+  (FUN_005ded90), state 2. State 2: within 2 of the spot (FUN_005dc5c0),
+  or after 3 more walks (+0x18, FUN_005de190(0, 0) first), unit flag
+  0x20000, gone (FUN_005ddfc0), and the record (FUN_005bd4a0: +0xd, +0x10
+  his id) two ticks on (FUN_005bd390) gives every player in act 3 word
+  0x20 bit 0 (FUN_005bd260) and leaves 7 or 8 objects 0x83 ("vile dog
+  afterglow", InitFn 59: lit, mode 1, gone 27 frames on) round his spot
+  at (±3, ±3) (0x741538), from offset `seed & 1` on, each at a free spot
+  near it (FUN_00545340, 0x3f11). The spot is where he went (his unit,
+  FUN_00552f60 by the record's +0x10 id); the offsets (0x741538, index 7
+  repeats index 2: bugs.md #20) start at the quest seed's next step & 1.
+  d2d: ai.cpp's DarkWanderer, `gone`; world.cpp's afterglow (`fires`,
+  object 131 in OP, 27 ticks). `tests/quests_d2d.py` walks him off (map seed 3).
+- **Unkillable monsters** (MonStats killable 0: the Dark Wanderer, the
+  compelling orb, chickens, bats, the camp's cow, traps) are made without
+  unit flag 0x4 (game.exe's Dark Wanderer: +0xc4 0x8200a, a plain monster
+  0x8200e), so FUN_005dca70 and the merc's search pass them over and no
+  hit lands. d2d: `Monster::killable` in `targetable()`.
 - The collision grid (FUN_0064c900) takes the shadow layer's DT1
   subtile flags too (act 2's desert's prickly shadows; Act 1's shadows
   carry none).
+
+## Kurast and Travincal (2026-10-13)
+
+Checked: `diff_drlg.py 79..83 monsters` 5/5 (446 + 97 rooms), `LEVELS=75,..,83
+diff_drlg.py game`. Kurast needed nothing new. Travincal:
+
+- **The compelling orb** (object 404, InitFn 60, FUN_005bbba0, quest
+  0x13's record): unless the record's +0x28 says it's made, MonStats
+  0x16e on the object's spot (FUN_005b3090 → FUN_005b2a00, radius −1:
+  the spot only, mask by spawnCol); then +0x28 = 1, +0x2c its id; with
+  +0xc set the object goes to mode 2. The InitFn (FUN_00555230 at
+  0x5553fe) runs before the object's mode and footprint (0x55545d), so
+  the object doesn't block its own orb.
+- **The orb broken**: record 0x13's join (FUN_005bb480) sets data +0xc
+  when a player's word 0x12 (Khalim's Will) has bit 0; striking the orb
+  with the Flail (FUN_005bb980) sets it too. InitFn 60 then puts object
+  404 in mode 2 (one frame, no light, no collision, not selectable) and
+  still makes the orb monster (+0x28 is per game; checked in the
+  emulator: mode 2, then 0x16e made). The records' "made" bytes (the
+  orb's +0x28, Hratli's 0xe +0 / +1, Natalya's 0x14 +0x20) only stop a
+  second unit when a room comes up again; d2d populates each room once.
+- **FUN_005b1cf0** for base 0x16e: FUN_005436b0(0x13), unit flag
+  0x20000, MonUMod 22. The whole switch, by BaseId (an uber by its own
+  row): Andariel 22 + quest 6, uber (0x2c3) 23, 6, 29; Duriel quests 0xd,
+  9, uber (0x2c4) 6, 18; Radament (0xe5) quest 8; Mephisto 22 + quest
+  0x14, uber (0x2c0) 22, 30, 17, 8, 6; Diablo 22 + quest 0x17, uber
+  (0x2c1) 22, 8, 6; the Summoner (0xfa) quest 0xc, flag 0x800,
+  FUN_00573570; Izual 22 + quest 0x16, uber (0x2c2) 6, 18; Blood Raven 12,
+  22, quest 2, stat 0x76; the Maggot Queen 23, 22; the Fire Golem
+  FUN_005a4850(0x1f, 0); the bone prisons (0x154..0x157) flag 0x20000;
+  the Smith 22; fetish11 (0x197) quest 0x11; Hephasto (0x199) quest 0x18;
+  the prison door (0x1b2) quest 0x20; Nihlathak (0x20e) 22 + quest 0x22;
+  the ancients (0x21c) FUN_005b1c50; Baal (0x220) 22 + quest 0x24, uber
+  (0x2c5) 22, 18, 8, 6. d2d `rules::act_boss` has every mod list (read
+  from the code; only Act 1's, the Maggot Queen's and the orb's diffed),
+  not the ancients' or the Fire Golem's.
+- The oracle needs `objgroups.QUEST_STUBS` here: the council's
+  superunique specials read quest flags (FUN_00544760).
+
+**The act in one game** (`LEVELS=75,..,83 diff_drlg.py game`, rooms up in
+a shuffled order) needed three things the one-level diffs never hit:
+
+- A room's floor list (FUN_00619660: room1 +8 → +8 entries, +0xc count)
+  and its Logicals areas (FUN_0066d110, from the near rooms up as it comes
+  up) depend on the order rooms come up, so both follow each relevel, as
+  the tiles and room1 seeds did.
+- FUN_005b2700 searches the room1 it's handed, on that room1's seed
+  (+0x6c). Round a point (a pack's or a party's spot) that's the room
+  holding the point, and a water spot can be on a room's shared edge row,
+  the next room's: its floors, its seed stepped, even before it populates.
+- Tiles shared across a level's edge (Travincal's bottom row on the
+  Causeway's top) come up with the other level's rooms already up, as the
+  camp's did for the Blood Moor.
+
+**Area ids** (+0x28) carry across rooms. A room without Logicals
+(FUN_0066ccb0) is one area of id 1 and sets the level's counter (+0x1dc)
+to 1. A Logicals room (FUN_0066d110) labels from the counter (0 taken as
+1; the first label one past it; after, one past the last), then
+FUN_0066d040 joins it to each near room of its level that's up and
+touches it (FUN_0066b860 gap 1): along its border, top and bottom rows
+then left and right columns, edges included (FUN_0066cf60), a cell on
+the other room too with both ids set, different and alike in +0x20 gives
+this room's id the other's (FUN_0066c770: every area of the room with
+that id, and, if any changed, the same in its near rooms of the level,
+whole rooms aside). Lookups read the room's grid of records over its
+(w+1)x(h+1) cells, the rects unclipped (+0x00), not the clipped +0x10.
+So most open floor is id 1, level-wide.
+
+FUN_0061b130(room1, x, y) is the id at a point: the room holding it, the
+given one or one of its near list, any level (FUN_00463740); 0 when none.
+Population compares it inside one room; mode 5's search (FUN_005dca70)
+and the pet and merc thinks (FUN_005e45d0, FUN_005e52d0, the follow's
+candidate spots) compare two points, so two outdoor levels' whole rooms
+(both 1) count as one area, and a Logicals room's walled-off part as
+another. d2d: room_tiles.hpp `logic_areas` / `merge_areas`,
+`game::area_id_at`; `tools/emu/area_ids.py` calls FUN_0061b130 at every
+tile as each room populates.

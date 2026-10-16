@@ -249,6 +249,12 @@ try:
         assert state()["held"] == "-", "didn't put the item down"
         cmd("key i"); frames()
 
+        # Akara's store opens on her first full tab (staves: page 2, tab 1), not an empty first.
+        near("Akara")
+        pick("trade")
+        assert state()["store_tab"] == "1", "Akara's store didn't open on her staves (tab 1)"
+        cmd("key Escape"); frames()
+
         # Hire at Kashya: the list, then a rogue follows.
         near("Kashya")
         pick("hire")

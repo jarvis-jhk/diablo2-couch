@@ -69,7 +69,9 @@ always takes `FUN_005e4830`.
 - A foe and not in town: over 0x50 off mode 3, else 0 (fight).
 - Else mode 2; 0 when the owner walks, runs or walks in town (2, 3, 6),
   or its path's +0x10 differs from its end (+0x18) on both axes; 1 on
-  another level (`FUN_0061b130`) or over reach; 3 over 50.
+  another spawn area (`FUN_0061b130`: the area id at a point, which carries
+  across rooms and levels; monsters.md "The act in one game") or over
+  reach; 3 over 50.
 - Within 0x1c (`FUN_005dc5c0`, no size) of where the owner last arrived
   through a warp (player data +0x148 / +0x14c, written by `FUN_00554ea0`):
   1 under 30 off, and 2, become 4.

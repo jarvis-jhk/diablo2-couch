@@ -315,6 +315,7 @@ struct Level {
     LevelDt1s tile_dt1s;
     const d2d::drlg::OutdoorAssets* assets = nullptr;
     std::vector<std::size_t> laid;                     // the order (list indices) relevel last laid its rooms in, empty: list order
+    std::size_t laid_up = 0;                           // and how many of them were up (their spawn areas merged)
     // The walk grid as the tiles alone make it (finish_level, before any
     // footprint): what room_objects' collision starts from.
     std::vector<std::uint16_t> tile_walk;
@@ -534,11 +535,9 @@ struct GameData {
     // builds and links outdoor neighbours (Level::nearby). load.hpp.
     mutable std::map<int, std::unique_ptr<Level>> levels;
     const Level* level(int id) const;
-    // The town of level `id`'s act: the camp, or Lut Gholein (built on
-    // demand like any level).
-    [[nodiscard]] const Level* town_of(int id) const {
-        return id < d2d::rules::level_ids::kLutGholein ? &town : level(id < d2d::rules::level_ids::kKurastDocks ? d2d::rules::level_ids::kLutGholein : d2d::rules::level_ids::kKurastDocks);
-    }
+    // The town of level `id`'s act: the camp, or a later act's town (built
+    // on demand like any level; null while its act isn't built).
+    [[nodiscard]] const Level* town_of(int id) const { return level(d2d::rules::level_ids::kActTowns[std::size_t(d2d::rules::level_ids::act_of(id))]); }
     void want_level(int id) const;
     void poll_levels() const;
     // SuperUniques.txt (without its Expansion row): name, MonStats row of
@@ -564,8 +563,12 @@ struct GameData {
     // The layout level `id`'s act placed it in (empty for acts not laid out).
     [[nodiscard]] const std::vector<d2d::drlg::Placed>& layout_of(int id) const {
         static const std::vector<d2d::drlg::Placed> kNone;
-        return id < d2d::rules::level_ids::kLutGholein ? act1_layout : id < d2d::rules::level_ids::kKurastDocks ? act2_layout
-             : id < d2d::rules::level_ids::kPandemoniumFortress ? act3_layout.levels : kNone;
+        switch (d2d::rules::level_ids::act_of(id)) {
+            case 0: return act1_layout;
+            case 1: return act2_layout;
+            case 2: return act3_layout.levels;
+            default: return kNone;
+        }
     }
     // Mercenary units by hireling.txt Id (the save's merc type): the
     // monster, and the first name key (merc01, merca201, MercX101, ...).
@@ -625,10 +628,12 @@ struct GameData {
                          bool next_hit = false; int next_delay = 0;   // NextHit: it strikes a unit again NextDelay frames on
                          std::string sub, hit_sub;
                          int light = 0;   // Light: its light radius, subtiles
+                         int size = 0;    // Size: its unit collision shape (rules::missile_touches; 0 strikes none)
                          int trans = 0;   // Trans (record +0x18d): 1 additive, 2 multiply (FUN_004720xx: draw modes 3 / 4)
                        };
     std::unordered_map<std::string, MissileInfo> missiles;
     std::array<Npc, 2> trap_fires;                         // objects 162 / 160, ON (a chest's traps 5 and 7)
+    Npc afterglow;                                         // object 131 (9b), OP: the "vile dog afterglow" the Dark Wanderer leaves
     Npc town_portal;                                       // object 59 (TP): a town portal's look and light
     std::unordered_map<std::string, std::string> thrown;   // a throwing weapon's code: its Missiles.txt row (weapons.txt missiletype)
     std::vector<std::size_t> mon_bin;                  // game.exe's MonStats unit ids -> rows (no Expansion row)
@@ -770,10 +775,11 @@ struct GameData::LevelBuilder {
 // places it against the town, the generator fills it, its tiles come from
 // the Act 1 wilderness DT1s (LvlTypes).
 // The levels d2d builds so far: Act 1's (the town is GameData::town),
-// Act 2's, Kurast Docks (75: Meshif's boat lands there) and the jungle
-// (76-78; the rest of Act 3 isn't built).
+// Act 2's, Kurast Docks (75: Meshif's boat lands there), the jungle
+// (76-78), Kurast up to Travincal (79-83) and its dungeons (84-102).
 constexpr std::array kBuiltLevels{ 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55,
-                                    56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78 };
+                                    56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83,
+                                    84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102 };
 
 // A composite's COF and timing (the World's part of a composite).
 struct CofAnim { d2d::cof::Cof cof; GameData::AnimTiming timing; std::string path; bool ok = false; };
@@ -807,6 +813,9 @@ struct Spawning {
         std::shared_ptr<ObjectRooms> objects;
         std::vector<Level::GroupRoom> group_rooms;
         std::vector<d2d::rules::Rng> room_seeds;
+        // A room's room1 seed stepped before it populated: a water monster's
+        // party searching the room its leader stands in (FUN_005b2700).
+        std::vector<std::optional<d2d::rules::Rng>> early_seeds;
     };
     int difficulty = 0;
     d2d::rules::Rng game;
@@ -820,9 +829,13 @@ struct Spawning {
     std::vector<d2d::rules::Region> regions;               // by Levels.txt Id
     std::unordered_map<const Level*, LevelState> levels;
     std::bitset<128> superuniques;                         // spawned this game (game +0x1d30)
+    int tomb_symbols = 0;                                  // the Summoner's symbols handed out (FUN_0059d720: record 13 +0x3a)
     // The game's quest words (World::game_bits, a d2d::rules::QuestBits), as
     // the town markers' inits read them (FUN_00544760).
     std::array<std::uint8_t, 96> game_quests{};
+    // a3q5's record 0x13, its data +0xc: Khalim's Will done by a player at the
+    // join (word 0x12 bit 0, FUN_005bb480): the compelling orb comes up broken.
+    bool orb_smashed = false;
     const Level* room_level = nullptr;                     // the player's room
     int room = -1;
 };
@@ -918,6 +931,11 @@ void relevel(Level& level, const std::vector<std::size_t>& came_up, const GameDa
 std::vector<std::pair<const Level*, int>> near_rooms(const GameData& game_data, const Level& level, float x, float y);
 // The room holding (x, y) cells (its Level::rooms index), -1 none.
 int room_of(const Level& level, float x, float y);
+// FUN_0061b130(room, x, y): the spawn area id (record +0x28) at (x, y)
+// cells as seen from the room holding (from_x, from_y): that room if it
+// holds the point, else the first of its near list that does, any level
+// (FUN_00463740); its Logicals rect's id, a whole room's 1; 0 when none.
+std::uint32_t area_id_at(const GameData& game_data, const Level& level, float from_x, float from_y, float x, float y);
 bool build_outdoor(const GameData& game_data, d2d::mpq::Stack& mpqs, d2d::drlg::OutdoorAssets& assets, Level& level);
 bool build_maze(const GameData& game_data, d2d::mpq::Stack& mpqs, d2d::drlg::OutdoorAssets& assets, Level& level, std::size_t row);
 std::unique_ptr<Level> build_level(const GameData& game_data, GameData::LevelBuilder& builder, int id);

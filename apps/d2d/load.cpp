@@ -10,6 +10,7 @@
 #include <compcode.hpp>
 #include <d2s.hpp>
 #include <d2s_items.hpp>
+#include <dc6.hpp>
 #include <dcc.hpp>
 #include <gamedata.hpp>
 #include <gamedata_load.hpp>
@@ -26,6 +27,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <exception>
 #include <filesystem>
 #include <format>
@@ -101,7 +103,18 @@ Scene::PlayerAnim load_npc_composite(const d2d::mpq::Stack& mpqs, const Npc& npc
             std::snprintf(path, sizeof(path), R"(data\global\%s\%s\%s\%s%s%s%s%s.dcc)",
                           npc.root.c_str(), npc.code.c_str(), kLayerCode[layer.type], npc.code.c_str(),
                           kLayerCode[layer.type], comp.c_str(), mode.c_str(), weapon_class.c_str());
-            if (auto bytes = mpqs.try_read(path)) out.dcc[layer.type] = std::move(*bytes);
+            if (auto bytes = mpqs.try_read(path)) { out.dcc[layer.type] = std::move(*bytes); continue; }
+            // Some objects' parts are DC6 (the hellgate's): its frames as the DCC's, anchored at their offsets.
+            std::strcpy(path + std::strlen(path) - 3, "dc6");
+            if (auto bytes = mpqs.try_read(path)) {
+                const d2d::dc6::Sprite cels(*bytes);
+                std::vector<d2d::dcc::Frame> frames;
+                for (const auto& cel : cels.frames()) {
+                    const int width = int(cel.width), height = int(cel.height), top = cel.offset_y - height + 1;
+                    frames.push_back({ width, height, cel.offset_x, cel.offset_y, cel.offset_x, top, cel.offset_x + width, cel.offset_y + 1, cel.pixels });
+                }
+                out.decoded[layer.type] = d2d::dcc::Sprite::from_frames(std::uint8_t(cels.directions()), std::int32_t(cels.frames_per_direction()), std::move(frames));
+            }
         }
     } catch (const std::exception& error) {
         d2d::log::warn("{}: {}", path, error.what());
@@ -445,9 +458,10 @@ void finish_scene(Scene& scene, const fs::path& save_dir, std::uint32_t map_seed
             map_seed = save_seed(scene.saves.front());
             act = scene.saves.front().active_act();
         }
-        // ponytail: only Act 1 exists, so any act preloads Act 1; once
-        // load_game_world takes an act, pass `act` and drop this fallback.
-        if (act != 0) d2d::log::info("  Newest save is in act {}; only Act 1 is built, preloading it", act + 1);
+        // ponytail: Act 1 preloads whatever act the save was left in; that
+        // act's town builds as the game starts (GameData::level). Preloading
+        // it here instead would hide that wait.
+        if (act != 0) d2d::log::info("  Newest save is in act {}; its town builds as the game starts", act + 1);
         game::load_game_world(scene, mpqs, map_seed);
         load_ui_sprites(scene, mpqs);
         load_monster_sprites(scene, mpqs);

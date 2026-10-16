@@ -47,6 +47,13 @@ inline constexpr int kSanctuaryPortal = 34; // FUN_005846b0: Palace Cellar 3 <->
 inline constexpr int kJournal = 42;         // FUN_0059b970: Horazon's Journal
 inline constexpr int kOrifice = 25;         // FUN_0059dc70: where the Horadric Staff goes        // FUN_0059a7e0: the Tainted Sun's altar
 inline constexpr int kStash = 32;
+inline constexpr int kSewerStairs = 44;     // FUN_005b84e0: the sewers' way down, open (mode 2) by the lever (a3q2, object 366)
+inline constexpr int kSewerLever = 45;      // FUN_005b8530 (object 367)
+inline constexpr int kCompellingOrb = 53;   // FUN_005bb980: hit with Khalim's Will (a3q5, object 404)
+inline constexpr int kKhalimHeart = 57, kKhalimEye = 58, kKhalimBrain = 59;   // the Khalim chests (a3q2: FUN_005b8860 / 005b8940 / 005b8a20)
+inline constexpr int kGidbinnAltar = 31;    // FUN_005b9b40: the Gidbinn's altar (a3q3, object 252)
+inline constexpr int kLamTome = 28;         // FUN_005b7a60: Lam Esen's tome on its stand (a3q1)
+inline constexpr int kHellgate = 46;        // the red portal to the Pandemonium Fortress (a3q6)
 inline constexpr int kCubeChest = 39, kScrollChest = 40, kShaftChest = 41;   // the Horadric Staff's chests (FUN_00599df0 / FUN_00599c10 / FUN_00599cf0)
 }  // namespace operate_fn
 
@@ -55,6 +62,8 @@ namespace object_ids {
 inline constexpr int kExplodingBarrel = 11;   // Barrel (BarrelExploding)
 inline constexpr int kStoneAlpha = 17;        // the Cairn stone the portal opens by
 inline constexpr int kGibbet = 26;
+inline constexpr int kMephistoBridge = 341;   // InitFn 45: rises over the lava once he's dead (a3q6)
+inline constexpr int kHellgate = 342;         // InitFn 44: the red portal to Act 4 (a3q6)
 inline constexpr int kLargeChestR = 371;      // the Countess' treasure chests
 inline constexpr int kSparklyChest = 397;     // rolls its own table (open_container)
 inline constexpr int kSubclassWaypoint = 0x40;   // objects.txt SubClass bit: a waypoint

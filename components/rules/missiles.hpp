@@ -100,15 +100,23 @@ inline std::vector<std::pair<int, int>> wiggle_points(int x, int y, int to_x, in
     return points;
 }
 
-// A size-1 missile at subtile (x, y) strikes a unit of `size` at (unit_x,
-// unit_y) (FUN_00641cb0): its own subtile at size 1, the plus at 2, the
-// 3x3 at 3.
-// ponytail: missiles of Size 2 and 3 (none in Act 1) test wider shapes.
-inline bool missile_touches(int x, int y, int unit_x, int unit_y, int size) {
+// A missile of `missile_size` (Missiles.txt Size) at subtile (x, y)
+// strikes a unit of `size` at (unit_x, unit_y) (FUN_00641cb0, by unit size
+// - 1 + (missile size - 1) x 3): 1 / 1 the same subtile; 1 / 2 and 2 / 1 the
+// plus; 1 / 3 and 3 / 1 the 3x3; 2 / 2 two steps off; 2 / 3 and 3 / 2 a 5x3
+// or 3x5; 3 / 3 the 5x5. A missile sized outside 1..3 (a blank Size: the
+// explosions, trails) strikes none.
+inline bool missile_touches(int x, int y, int unit_x, int unit_y, int size, int missile_size = 1) {
+    if (missile_size < 1 || missile_size > 3 || size < 1) return false;
     const int across = std::abs(x - unit_x), down = std::abs(y - unit_y);
-    if (size <= 1) return across == 0 && down == 0;
-    if (size == 2) return across + down <= 1;
-    return across <= 1 && down <= 1;
+    switch (std::min(size, 3) - 1 + (missile_size - 1) * 3) {
+        case 0: return across == 0 && down == 0;
+        case 1: case 3: return across + down <= 1;
+        case 2: case 6: return across <= 1 && down <= 1;
+        case 4: return across + down <= 2;
+        case 5: case 7: return (across < 3 && down < 2) || (down < 3 && across <= 1);
+        default: return across <= 2 && down <= 2;
+    }
 }
 
 // A missile's dynamic path (unit +0x2c): 16.16 subtiles (+0 / +4), the unit

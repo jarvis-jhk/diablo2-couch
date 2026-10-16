@@ -258,7 +258,7 @@ class Objects:
                             (0x553380, 1, None), (0x5531c0, 1, None), (0x571740, 0, None), (0x620c10, 2, None)):
             e.hook(addr, fn or (lambda e: 0), n)
         e.hook(0x585970, lambda e: self.extra.append(struct.pack("<I", e.arg(0)).decode("latin-1").strip()) or 0, 2)
-        e.hook(0x559a30, lambda e: self.extra.append(e.read(self.obj + 0xb8, 4).decode("latin-1").strip()) or 0, 5)
+        e.hook(0x559a30, lambda e: self.extra.append(e.read(e.mu.reg_read(UC_X86_REG_EDX) + 0xb8, 4).decode("latin-1").strip()) or 0, 5)   # EDX the object (a real unit in objgroups.game_dump)
         e.hook(0x62a0f0, lambda e: int(4 <= self.made(*o.made[e.arg(0) - 1][:2]) <= 9), 1)
         self.base = None
         e.hook(0x558d90, lambda e: self.__setattr__("base", e.s32(e.mu.reg_read(UC_X86_REG_EDX) + 0x14)) or 0, 1)

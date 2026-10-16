@@ -251,7 +251,9 @@ jobs:
       # themselves.
       - name: Upload package
         if: github.event_name == 'push'
-        continue-on-error: true
+        # Keep main builds green if artifact storage is temporarily full, but
+        # don't publish a tag release unless every platform package uploaded.
+        continue-on-error: ${{ !startsWith(github.ref, 'refs/tags/') }}
         uses: actions/upload-artifact@v4
         with:
           name: d2d-${{ runner.os }}
@@ -261,3 +263,66 @@ jobs:
             build/d2d-*.tar.gz
             build/d2d-*.zip
           if-no-files-found: error
+
+  flatpak:
+    name: Flatpak (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:kde-6.11
+      options: --privileged
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Prepare clean Flatpak source tree
+        run: |
+          mkdir -p build/flatpak-source
+          git -c safe.directory="$GITHUB_WORKSPACE" archive HEAD | tar -x -C build/flatpak-source
+
+      - name: Build Flatpak
+        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          manifest-path: .github/flatpak/ci-manifest.yml
+          bundle: d2decomped-${{ matrix.arch }}.flatpak
+          artifact-name: d2decomped-${{ matrix.arch }}
+          arch: ${{ matrix.arch }}
+
+  release:
+    name: Publish release assets
+    if: startsWith(github.ref, 'refs/tags/')
+    needs:
+      - build
+      - flatpak
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: '*'
+          path: release-assets
+          merge-multiple: true
+
+      - name: Create release if needed and upload assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if ! gh release view "$TAG" --repo "$REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$TAG" --repo "$REPOSITORY" \
+              --title "D2: Decomped - $TAG" --generate-notes
+          fi
+          gh release upload "$TAG" --repo "$REPOSITORY" \
+            release-assets/* --clobber

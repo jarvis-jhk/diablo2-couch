@@ -66,6 +66,8 @@ struct Loot {
     }
 
     std::vector<bool> found_uniques;       // the game's one-per-game uniques (game +0x1b24)
+    int blessed_find = 0;                  // the wisps' blessing (stat 0x50) till blessed_until
+    std::uint32_t blessed_until = 0;
     // A kill's loot (MonStats TreasureClass1 for the difficulty) round
     // where it fell, rolled off the monster's unit seed (+0x20: nothing
     // draws on it between the death and FUN_0055a6d0; Find Item rolls on
@@ -97,6 +99,7 @@ struct Loot {
             if (prop.stat == d2d::d2s::kMagicFind) magic_find += prop.value;
             if (prop.stat == d2d::d2s::kGoldFind) gold_find += prop.value;
         }
+        if (now_ms < blessed_until) magic_find += blessed_find;   // the wisps' dance (Fight::wisp_blessing)
         constexpr int kMost = 6;
         std::vector<d2d::rules::Drop> drops;
         d2d::rules::roll_drops(game_data->rules, rolled, monster.stats.level, monster.seed, drops, 1, magic_find, kMost);

@@ -244,6 +244,7 @@ inline OutdoorLevel outdoor_level(const d2d::txt::Table& levels, const std::vect
 // An act 3 level's input: its layout's rects and, for the jungle, its cells.
 inline OutdoorLevel act3_outdoor_level(const d2d::txt::Table& levels, const Act3Layout& layout, int id) {
     auto level = outdoor_level(levels, layout.levels, id);
+    level.act_roll = layout.roll;
     if (id >= level_ids::kSpiderForest && id <= level_ids::kFlayerJungle) {
         const auto& cells = layout.jungle[std::size_t(id - level_ids::kSpiderForest)];
         level.jungle = cells.presets;

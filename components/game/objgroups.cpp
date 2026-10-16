@@ -8,7 +8,9 @@
 // against game.exe: tools/emu objgroups.py, drlg-dump <seed> <level>
 // objgroups; levels in turn in one game: drlg-dump ... game.
 #include "gamedata.hpp"
+#include <drlg.hpp>
 #include <level_ids.hpp>
+#include <outdoor_data.hpp>
 #include <quests.hpp>
 #include <units.hpp>
 #include <monsters.hpp>
@@ -61,7 +63,9 @@ struct ObjectRooms {
     d2d::rules::Rng seed;                               // the room's (room1 +0x6c)
     d2d::rules::Rng game;                               // the game seed (game +0xd0): a step per unit made
     std::array<std::uint8_t, 96> game_quests{};         // Spawning's
+    bool orb_smashed = false;                            // Spawning's
     std::bitset<128> superuniques;                      // made (game +0x1d30)
+    int tomb_symbols = 0;                               // Spawning's
     d2d::rules::Region region;                          // the level's monster region: their looks
     Level::GroupRoom* out = nullptr;
     // FUN_0054db50: where players come in (as populate()'s near_way), within Levels WarpDist.
@@ -128,8 +132,21 @@ struct ObjectRooms {
         const bool door = obj(id, "IsDoor"), missile = obj(id, "BlockMissile");
         const std::uint16_t bits = door ? obj(id, "BlocksVis") ? 0x806 : missile ? 0x808 : 0x400 : obj(id, "SubClass") & 4 ? 0x8000 : missile ? 0x404 : 0x400;
         const bool operated = level.npcs.size() > before && level.npcs.back().preoperated;
-        if (obj(id, operated ? "HasCollision2" : "HasCollision0")) stamp(x, y, obj(id, "SizeX"), obj(id, "SizeY"), bits);
         const auto unit = game.next();                                 // FUN_00552df0: its seed
+        // InitFn 60 (FUN_005bbba0, object 404 in Travincal), run before the
+        // object's footprint (FUN_00554850): with the orb smashed (record 0x13
+        // +0xc) the object goes to mode 2 (FUN_00624690: broken, no light, no
+        // collision, not selectable); then the compelling orb (0x16e) on its
+        // spot (FUN_005b3090: radius -1) unless the record has made it (+0x28).
+        // The made bit only matters when a room comes up again, which d2d's
+        // never do (populate once a game), so it isn't kept.
+        bool broken = false;
+        if (obj(id, "InitFn") == 60) {
+            if (orb_smashed && level.npcs.size() > before) { broken = true; level.npcs.back().mode = "ON"; level.npcs.back().name.clear(); }
+            if (spawns) leader = int(spawns->size());
+            monster(int(game_data.mon_bin[0x16e]), x, y, 0);
+        }
+        if (obj(id, operated || broken ? "HasCollision2" : "HasCollision0")) stamp(x, y, obj(id, "SizeX"), obj(id, "SizeY"), bits);
         if (level.npcs.size() > before) {
             auto& npc = level.npcs.back();
             if (obj(id, "InitFn") != 3 && obj(id, "InitFn") != 57) npc.seed = d2d::rules::Rng{ unit };
@@ -348,6 +365,7 @@ struct ObjectRooms {
     Box area{};
     std::size_t index = 0;
     std::vector<d2d::rules::Spawn>* spawns = nullptr;
+    Spawning::LevelState* level_state = nullptr;
     int leader = 0;
     d2d::rules::Population pop;
 
@@ -364,7 +382,6 @@ struct ObjectRooms {
     }
     // FUN_005b2a00's test (FUN_0064d9b0): the type's shape (MonStats2 SizeX:
     // 1 a subtile, 2 a plus, 3 a box, more never fits) against its spawnCol's mask.
-    // ponytail: spawnCol 1 takes FUN_005b2700 (no ring walk) in game.exe; act 1 has none.
     [[nodiscard]] bool fits(int type, int x, int y) const {
         static constexpr int kMask[4] = { 0x3c01, 0x1c0, 0x3f11, 0 };
         const auto* info = type_at(type);
@@ -389,11 +406,11 @@ struct ObjectRooms {
         const auto* info = type_at(type);
         return info && info->spawn_col == 1 && (type < 0x102 || type > 0x107) && type != 0x99;
     }
-    bool water_spot(int& out_x, int& out_y) {
-        if (index >= level.room_floors.size() || level.room_floors[index].empty()) return false;
-        const auto& floors = level.room_floors[index];
+    bool water_spot(std::size_t room_at, d2d::rules::Rng& rng, int& out_x, int& out_y) {
+        if (room_at >= level.room_floors.size() || level.room_floors[room_at].empty()) return false;
+        const auto& floors = level.room_floors[room_at];
         const int count = int(floors.size());
-        const int start = std::max(seed(count), 1), stop = start - 1;
+        const int start = std::max(rng(count), 1), stop = start - 1;
         static constexpr std::array<std::pair<int, int>, 4> kAround = { { { 0, -3 }, { 3, 0 }, { 0, 3 }, { -3, 0 } } };
         for (int at_index = start; at_index != stop; at_index = (at_index + 1) % count) {
             if (at_index >= count || !(floors[std::size_t(at_index)].material & 2)) continue;   // past the list (count 1): game.exe reads beyond it
@@ -406,8 +423,22 @@ struct ObjectRooms {
     }
     // FUN_005b2a00 round (x, y) out to radius (-1: the spot only), in the
     // area being populated when `bound` (its rect and its id), else the room.
+    // A water search round a point (a leader's party or pack, radius > 0)
+    // runs in the room holding that point (a water spot can be a room's
+    // shared edge row, the next room's), on that room's seed: stepped early
+    // when it hasn't populated yet; nothing when it isn't up.
     bool put(int type, int x, int y, int radius, bool bound, int& out_x, int& out_y) {
-        if (by_water(type)) return water_spot(out_x, out_y);
+        if (by_water(type)) {
+            std::size_t other = index;
+            for (std::size_t i = 0; radius > 0 && i < level.rooms.size(); ++i)
+                if (const auto& holder = level.rooms[i]; x >= holder.x * 5 && x < (holder.x + holder.width) * 5 && y >= holder.y * 5 && y < (holder.y + holder.height) * 5) other = i;
+            if (other == index || !level_state) return water_spot(index, seed, out_x, out_y);
+            if (other < level_state->up.size() && level_state->up[other]) return water_spot(other, level_state->room_seeds[other], out_x, out_y);
+            if (std::ranges::find(level_state->order, other) == level_state->order.end()) return false;
+            auto& early = level_state->early_seeds[other];
+            if (!early) early = d2d::rules::Rng{ other < level.room1_seeds.size() ? level.room1_seeds[other] : level.rooms[other].seed };
+            return water_spot(other, *early, out_x, out_y);
+        }
         const bool in_area = bound && area.w > 0;
         auto spawn_room = bounds(in_area);
         const bool ok = d2d::rules::monster_detail::place(spawn_room, x, y, radius, [&](int test_x, int test_y) { return (!in_area || area_id(test_x, test_y) == area.id) && fits(type, test_x, test_y); }, out_x, out_y);
@@ -427,7 +458,7 @@ struct ObjectRooms {
             for (int tries = 0; tries < 20; ++tries) {
                 const int x = seed(span_x) + left, y = seed(span_y) + top;
                 if (by_way(x, y) || (in_area && area_id(x, y) != area.id)) continue;
-                if (int water_x, water_y; water_spot(water_x, water_y)) { out_x = x; out_y = y; return true; }
+                if (int water_x, water_y; water_spot(index, seed, water_x, water_y)) { out_x = x; out_y = y; return true; }
             }
             return false;
         }
@@ -449,9 +480,9 @@ struct ObjectRooms {
         stamp_shape(at_x, at_y, shape, 0x100);
         stamp_shape(at_x, at_y, shape - 1, 0x1000);
         // FUN_005b1cf0: a boss's mods, each FUN_005a4850(mod, 1); FUN_005a0320
-        // counts a unique only as it first sets flag 8, so one a boss.
-        // ponytail: Act 1's bosses by BaseId (Andariel, Blood Raven, the Maggot Queen); later acts' aren't.
-        if (info) pop.uniques += info->base == 156 || info->base == 267 || info->base == 284 ? 1 : 0;
+        // counts a unique only as it first sets flag 8, so one a boss (a
+        // superunique one too: the Smith, Coldworm; monster() leaves those).
+        if (info) pop.uniques += d2d::rules::act_boss(type, info->base) ? 1 : 0;
         const auto value = game.next();
         d2d::rules::Rng own{ value };
         const std::vector<d2d::rules::Components>* sets = nullptr;
@@ -469,7 +500,7 @@ struct ObjectRooms {
         if (type_at(type)) (void)d2d::rules::monster_look(sets, types[std::size_t(type)].choices, own);
         own.next();
         // FUN_005d6b60: an oninit MonEquip row rolls its slot and makes its item (2 game steps).
-        // ponytail: act 1's only oninit row is Blood Raven's bow; read MonEquip.txt for more.
+        // ponytail: acts 1-3's only oninit row is Blood Raven's bow (MonEquip.txt's other, flyingscimitar, is later); read MonEquip.txt for more.
         if (type_at(type) && types[std::size_t(type)].id == "bloodraven") { own(1); game.next(); game.next(); }
         const bool npc = type_at(type) && std::size_t(type) < game_data.mon_is_npc.size() && game_data.mon_is_npc[std::size_t(type)];
         if (spawns && !npc) spawns->push_back({ type, at_x, at_y, leader, -1, d2d::rules::Boss::none, {}, 0, value });
@@ -546,7 +577,7 @@ struct ObjectRooms {
         auto own = made(row, spot_x, spot_y);
         if (sup) {
             superuniques.set(std::size_t(superunique));
-            ++pop.uniques;                                              // FUN_005a0320 as a boss
+            if (!d2d::rules::act_boss(row, types[std::size_t(row)].base)) ++pop.uniques;   // FUN_005a0320 as a boss, unless made() did
             std::vector<int> mods;
             for (const int id : sup->mods) if (id != 24) mods.push_back(id);
             mods.push_back(22);                                         // questcomplete
@@ -650,7 +681,7 @@ struct ObjectRooms {
     // FUN_0054ec40), sparsePopulate on the game seed, a random spot of the
     // area, the leader and its party, then rand(max - min + 1) + min - 1
     // more of its type at radius 3 in the area, each with its party.
-    // ponytail: the extra object for a leader of class 0x210 isn't made; act 1 has none.
+    // ponytail: the extra object for a leader of class 0x210 (evilhut, act 5) isn't made.
     void group(int row) {
         const auto* type = type_at(row);
         if (!type) return;
@@ -669,13 +700,23 @@ struct ObjectRooms {
 
     // A preset past objects.txt (FUN_0054f490's table at 0x731d28): 574-579 a
     // shrine (136), 580 / 581 a random chest (FUN_0054f370 a sparkling one,
-    // FUN_0054f180), 582 a quest's (FUN_0059d830).
+    // FUN_0054f180), 582 a quest's (FUN_0059d830): the Summoner's six tomb
+    // symbols (FUN_0059d720), the table at 0x738fac less the true tomb's, in
+    // turn, round again after six.
     // ponytail: 574-579's kind (their range, on the unit's own seed) and
     // 582's quest check aren't taken.
     int special(int id) {
         if (id < 580) return 136;
-        if (id == 582) return 0x133;
-        const int act = level.id < d2d::rules::level_ids::kLutGholein ? 0 : level.id < d2d::rules::level_ids::kKurastDocks ? 1 : level.id < d2d::rules::level_ids::kPandemoniumFortress ? 2 : 3;   // FUN_006427f0
+        if (id == 582) {
+            static constexpr std::array<int, 7> kSymbols{ 313, 312, 308, 310, 311, 309, 307 };   // 0x738fac, by tomb 66..72
+            auto act = d2d::drlg::act_seed(game_data.map_seed);                                // FUN_0061aeb0: act +0x94
+            const int true_tomb = d2d::drlg::roll_act2_tombs(act).boss - d2d::rules::level_ids::kFirstTalRashasTomb;
+            std::vector<int> shown;
+            for (int tomb = 0; tomb < 7; ++tomb) if (tomb != true_tomb) shown.push_back(kSymbols[std::size_t(tomb)]);
+            if (shown.size() != 6) return 0x133;                                                 // no true tomb: FUN_0059d720's fallback
+            return shown[std::size_t(tomb_symbols++ % 6)];
+        }
+        const int act = d2d::rules::level_ids::act_of(level.id);   // FUN_006427f0
         const auto low = rgn.next();
         int pick;
         if (act == 1) pick = level.id == d2d::rules::level_ids::kArcaneSanctuary ? std::array{ 0x183, 0x185, 0x186, 0x187 }[low & 3] : std::array{ 0x57, 0x58 }[low & 1];
@@ -729,7 +770,7 @@ struct ObjectRooms {
                 // InitFn 43 (FUN_005bd1f0, a3q7, object 368 by the jungle's head): the Dark
                 // Wanderer (0x170) 7 subtiles east of it, its spot only; a3q7's init (FUN_005bd300)
                 // leaves him due in every game.
-                // ponytail: his walk (a3q7's think) isn't ported; he stands.
+                // His walk: ai.cpp's DarkWanderer.
                 if (init == 43) { auto east = unit; east.x += 7; monster_or_npc(0x170, east, 0, false); }
             }
             else if (unit.type == d2d::rules::unit_type::kWarp) game.next();                                                          // a warp tile: a unit made
@@ -742,10 +783,9 @@ struct ObjectRooms {
             const auto listed = std::ranges::find_if(level.mon.mon, [&](int mon_row) { return mon_row >= 0 && std::size_t(mon_row) < types.size() && types[std::size_t(mon_row)].base == types[std::size_t(row)].base; });
             if (listed != level.mon.mon.end()) row = *listed;
             else if (std::ranges::any_of(level.mon.mon, [](int mon_row) { return mon_row >= 0; })) {
-                // FUN_0063ec70: else up its class while the next's Level is at most MonLvl1Ex + 1.
-                // ponytail: NextInClass as the rows of its base in order.
+                // FUN_0063ec70: else up its class (NextInClass) while the next's Level is at most MonLvl1Ex + 1.
                 const int top = std::size_t(level.id) < game_data.area_level.size() ? game_data.area_level[std::size_t(level.id)][0] + 1 : 0;
-                for (int next = types[std::size_t(row)].base + 1; std::size_t(next) < types.size() && types[std::size_t(next)].base == types[std::size_t(row)].base && types[std::size_t(next)].level[0] <= top; ++next) row = next;
+                for (int next = types[std::size_t(row)].next_in_class; next >= 0 && std::size_t(next) < types.size() && types[std::size_t(next)].level[0] <= top; next = types[std::size_t(next)].next_in_class) row = next;
             }
             const int base = types[std::size_t(row)].base, id = level.id;
             auto bin = [&](int bin_row) { return int(game_data.mon_bin[std::size_t(bin_row)]); };
@@ -768,8 +808,7 @@ struct ObjectRooms {
             else if (code == 10 || code == 11) {                                                       // a tentacle head (0x105, FUN_0054da60):
                 const int depth = level.id >= 0x4c && level.id <= 0x4e ? 1 : level.id >= 0x5c && level.id <= 0x5d ? 2 : 0;   // 0x54eb60 by level
                 int row = int(game_data.mon_bin[0x105]);
-                // ponytail: NextInClass as the next row of its base (tentaclehead1..3 are)
-                for (int step = 0; step < depth && std::size_t(row + 1) < types.size() && types[std::size_t(row + 1)].base == types[std::size_t(row)].base; ++step) ++row;
+                for (int step = 0; step < depth && types[std::size_t(row)].next_in_class >= 0; ++step) row = types[std::size_t(row)].next_in_class;   // NextInClass
                 tentacle_ns = code == 10;
                 monster(row, unit.x, unit.y, 0);                                                         // its spot only; NS (10) in mode 4
                 tentacle_ns = false;
@@ -847,6 +886,7 @@ ObjectRooms& rooms_of(const GameData& game_data, Spawning& spawning, const Level
     pop.stamps.assign(std::size_t(pop.width) * std::size_t(pop.height), 0);
     state.group_rooms.assign(level.rooms.size(), {});
     state.room_seeds.assign(level.rooms.size(), {});
+    state.early_seeds.assign(level.rooms.size(), std::nullopt);
     int position = 0;
     std::uint32_t slots = 0, shared = 0;                                                           // 0x10 << slot with a Warp (FUN_0066af30); its Vis another slot's too
     for (std::size_t row = 0; row < builder.levels.size(); ++row)
@@ -882,7 +922,7 @@ ObjectRooms& rooms_of(const GameData& game_data, Spawning& spawning, const Level
     for (const auto& unit : level.units)
         if (unit.type == d2d::rules::unit_type::kObject && (pop.obj(unit.id, "SubClass") & d2d::rules::object_ids::kSubclassWaypoint)) {                            // a waypoint: its room and its tile
             centre(unit.x / 5, unit.y / 5);
-            pop.ways.push_back({ unit.x / 5 * 5, unit.y / 5 * 5 });
+            if (!position) pop.ways.push_back({ unit.x / 5 * 5, unit.y / 5 * 5 });   // the type 0xb tile FUN_0054db50 tests: a Position level's is its own, below
         }
     // FUN_0066b2b0 (type 0xb): with neither a waypoint room nor a warp room,
     // the start spot is the centre of the room holding the level's middle less 2.
@@ -909,7 +949,9 @@ void ObjectRooms::load(Spawning& spawning, std::size_t room_index) {
     rgn = spawning.objects;
     game = spawning.game;
     superuniques = spawning.superuniques;
+    tomb_symbols = spawning.tomb_symbols;
     game_quests = spawning.game_quests;
+    orb_smashed = spawning.orb_smashed;
     region = std::size_t(level.id) < spawning.regions.size() ? spawning.regions[std::size_t(level.id)] : d2d::rules::Region{};
     auto& state = spawning.levels[&level];
     rooms_up(spawning);
@@ -924,6 +966,7 @@ void ObjectRooms::load(Spawning& spawning, std::size_t room_index) {
     room = { made.x * 5, made.y * 5, made.width * 5, made.height * 5 };
     out = &state.group_rooms[index];
     spawns = &state.spawns;
+    level_state = &state;
 }
 
 // in_room: the level's rooms up so far.
@@ -942,6 +985,7 @@ void ObjectRooms::save(Spawning& spawning) const {
     spawning.objects = rgn;
     spawning.game = game;
     spawning.superuniques = superuniques;
+    spawning.tomb_symbols = tomb_symbols;
     if (std::size_t(level.id) < spawning.regions.size()) spawning.regions[std::size_t(level.id)] = region;
 }
 
@@ -967,7 +1011,7 @@ void place_objects(const GameData& game_data, GameData::LevelBuilder& builder, L
             town = { game_data.town.world_x, game_data.town.world_y, game_data.town.ds1.width(), game_data.town.ds1.height() };
             has_town = true;
         }
-    } else if (const int town_id = level.id < d2d::rules::level_ids::kKurastDocks ? d2d::rules::level_ids::kLutGholein : d2d::rules::level_ids::kKurastDocks; level.id != town_id)
+    } else if (const int town_id = d2d::rules::level_ids::kActTowns[std::size_t(d2d::rules::level_ids::act_of(level.id))]; level.id != town_id)
         for (const auto& placed : game_data.layout_of(level.id))
             if (placed.level == town_id) { town = { placed.x, placed.y, placed.width, placed.height }; has_town = true; }
     if (has_town) {
@@ -985,7 +1029,8 @@ d2d::rules::Rng room_objects(const GameData& game_data, Spawning& spawning, cons
     if (index >= level.rooms.size() || !game_data.builder) return {};
     auto& pop = rooms_of(game_data, spawning, level);
     pop.load(spawning, index);
-    pop.seed = d2d::rules::Rng{ index < level.room1_seeds.size() ? level.room1_seeds[index] : level.rooms[index].seed };
+    auto& early = spawning.levels[&level].early_seeds;
+    pop.seed = index < early.size() && early[index] ? *early[index] : d2d::rules::Rng{ index < level.room1_seeds.size() ? level.room1_seeds[index] : level.rooms[index].seed };
     // FUN_0054f060; on a step with its low 15 bits clear, a MonWndr level
     // rolls a wanderer (FUN_0054eff0: under 3 in 100).
     // ponytail: the wanderer itself (FUN_0054ef50) isn't made; 3 in 3.3M rooms.

@@ -5,7 +5,12 @@
 # StormLib 9.22, Debian stable's. -DD2D_BUNDLED_STORMLIB=ON forces the
 # source build. The packages ship no CMake config or pkg-config file
 # (Debian: StormLib.h and libstorm.so only), so it's found by name.
-option(D2D_BUNDLED_STORMLIB "Build StormLib from source instead of using the system's" OFF)
+if(D2D_FLATPAK)
+    set(_d2d_stormlib_default ON)
+else()
+    set(_d2d_stormlib_default OFF)
+endif()
+option(D2D_BUNDLED_STORMLIB "Build StormLib from source instead of using the system's" ${_d2d_stormlib_default})
 set(STORMLIB_TAG "v9.30" CACHE STRING "StormLib git tag (source build)")
 
 if(NOT D2D_BUNDLED_STORMLIB)
@@ -26,6 +31,16 @@ if(STORMLIB_INCLUDE_DIR AND STORMLIB_LIBRARY)
     target_link_libraries(storm INTERFACE ZLIB::ZLIB $<$<TARGET_EXISTS:BZip2::BZip2>:BZip2::BZip2>)
 else()
     message(STATUS "StormLib: building ${STORMLIB_TAG} from source")
+    if(D2D_FLATPAK)
+        if(NOT FETCHCONTENT_SOURCE_DIR_STORMLIB OR
+           NOT EXISTS "${FETCHCONTENT_SOURCE_DIR_STORMLIB}/CMakeLists.txt")
+            message(FATAL_ERROR
+                "Flatpak builds must provide StormLib locally with -DFETCHCONTENT_SOURCE_DIR_STORMLIB=<source dir>")
+        endif()
+        # StormLib is linked statically; its upstream install rules would
+        # otherwise add development headers and libstorm.a to the app image.
+        set(STORM_SKIP_INSTALL ON CACHE BOOL "" FORCE)
+    endif()
     include(FetchContent)
     FetchContent_Declare(
         stormlib

@@ -33,8 +33,8 @@ or not a player: it stands 10.
    (`FUN_005de200`).
 6. Outside town (`FUN_0061ab00`), a target from `FUN_005ddc30` under 25 off:
    the attack think `FUN_005e5050`.
-7. On bit 0x40: wander 5. On another level than the owner (`FUN_0061b130`
-   at both spots): mode 0, pace 60.
+7. On bit 0x40: wander 5. In another spawn area than the owner (`FUN_0061b130`, area ids
+   at both spots, which carry across rooms and levels): mode 0, pace 60.
 8. Within 1 of the owner: path type 7 for the next move (`FUN_005de190`
    with EDX 7), to a spot 4 about the owner (`FUN_005df530`); else 4 away on
    each axis (`FUN_005defe0`); else steps 0x28 to the owner's path end

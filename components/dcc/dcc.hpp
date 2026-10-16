@@ -94,6 +94,12 @@ public:
         return frames_[std::size_t(dir) * frames_per_dir_ + idx];
     }
     [[nodiscard]] std::span<const Frame> frames() const noexcept { return frames_; }
+    // A sprite of ready frames (a composite layer kept as DC6: the hellgate's).
+    static Sprite from_frames(std::uint8_t dirs, std::int32_t per_dir, std::vector<Frame> frames) {
+        Sprite sprite;
+        sprite.dirs_ = dirs; sprite.frames_per_dir_ = per_dir; sprite.frames_ = std::move(frames);
+        return sprite;
+    }
     // Every pixel through a 256-entry map (an item colormap); 0 stays clear.
     void remap(const std::uint8_t* map) {
         for (auto& frame : frames_) for (auto& pixel : frame.pixels) if (pixel) pixel = map[pixel];

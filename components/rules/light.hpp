@@ -25,20 +25,21 @@ inline constexpr std::array<DayPhase, 6> kEclipse{ { { 300, 3 }, { 0, 0 }, { 60,
 // The eclipse (+0x30) as the client has it from S->C 0x53 (FUN_0061c240):
 // its own phases, no night's extra frame, and the light falling 8 a frame
 // to 32 (FUN_0061bb80), whatever the hour.
-// ponytail: Acts 1, 2 and 5; Act 3's faster nights and Act 4's clock
-// aren't here. The phases' colours aren't used: the software renderer
+// ponytail: Act 4's clock (15 more a frame, its eclipse phases 0x744438)
+// isn't here. The phases' colours aren't used: the software renderer
 // draws intensity only.
 struct Day {
     int phase = 2, time = 0;                   // time: frames into the day
     bool eclipse = false;
     int dimmed = 255;                          // the eclipse's intensity (+0xc), falling
-    // A client frame (FUN_0061bee0): one frame, two at night. Past the
-    // next phase's start the phase moves on and the clock snaps to that
-    // start. game.exe bug (bugs.md #9): phase 2 starts at 0°, so phase 1
-    // moves on at its first frame and the day is 340° long.
-    void step() {
+    // A client frame (FUN_0061bee0, `act` 0-based): one frame, two at
+    // night, ten at night in Act 3. Past the next phase's start the phase
+    // moves on and the clock snaps to that start. game.exe bug (bugs.md
+    // #9): phase 2 starts at 0°, so phase 1 moves on at its first frame and
+    // the day is 340° long.
+    void step(int act = 0) {
         const auto& phases = eclipse ? kEclipse : kDay;
-        time += !eclipse && phases[std::size_t(phase)].type == 2 ? 2 : 1;
+        time += eclipse || phases[std::size_t(phase)].type != 2 ? 1 : act == 2 ? 10 : 2;
         if (time >= 360 * kDayScale) time = 0;
         const auto& next = phases[std::size_t((phase + 1) % 6)];
         if (next.start * kDayScale < time) { phase = (phase + 1) % 6; time = next.start * kDayScale; }

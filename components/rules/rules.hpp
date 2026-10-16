@@ -242,6 +242,8 @@ struct Store {
     std::vector<std::string> perm;              // PermStoreItems: buying doesn't use them up
     bool gamble = false;                        // Gheed's gamble list: buying rolls a new item
     int reduced = 0;                            // the player's item_reducedprices (stat 87), 0..99: off buy, gamble and repair
+    // A store opens on its first tab with anything on it.
+    void first_tab() { tab = int(std::ranges::find_if(tabs, [](const auto& page) { return !page.empty(); }) - tabs.begin()) % 4; }
 };
 
 // What a vendor's fill asks the item maker for (FUN_00576980 -> FUN_00576330):
@@ -1416,7 +1418,7 @@ inline Store open_gamble(const Tables& tables, std::string npc_id, int clvl) {
         item.identified = true;
         store_place(tables, store, store_tab_for(tables, code), std::move(item));
     }
-    for (int i = 0; i < 4; ++i) if (!store.tabs[std::size_t(i)].empty()) { store.tab = i; break; }
+    store.first_tab();
     return store;
 }
 

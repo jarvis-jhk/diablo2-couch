@@ -28,6 +28,12 @@ int main() {
     // Each phase runs a frame past its end (the clock snaps back); the
     // 340° phase lasts one frame. About 24 minutes at 25 frames a second.
     assert(frames == 20481 + 2561 + 2561 + 7681 + 2561 + 1);
+    // Act 3's nights run ten frames a frame: game.exe's day there is 29702
+    // frames (FUN_0061bee0 in tools/emu, ESI 2), night 1537.
+    Day act3_day;
+    frames = 0;
+    do { act3_day.step(2); ++frames; } while (!(act3_day.phase == 2 && act3_day.time == 0));
+    assert(frames == 29702);
 
     // The player's light (radius 13 subtiles, 255) on a dark grid: full
     // where they stand, falling off linearly, nothing past the radius.

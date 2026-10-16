@@ -200,7 +200,7 @@ inline std::vector<std::uint8_t> encode_view(const GameData& game_data, const Vi
     {
         wire::Out chunk;
         chunk.u16(int(view.fires.size()));
-        for (const auto& fire : view.fires) chunk.f32(fire.x).f32(fire.y).u8(fire.npc == &game_data.trap_fires[1]);
+        for (const auto& fire : view.fires) chunk.f32(fire.x).f32(fire.y).u8(fire.npc == &game_data.afterglow ? 2 : fire.npc == &game_data.trap_fires[1]).u32(fire.born);
         chunk.u16(int(view.portals.size()));
         for (const auto& portal : view.portals) chunk.f32(portal.x).f32(portal.y).i32(portal.destination).u32(portal.born).u8(portal.which);
         chunk.u16(int(view.corpses.size()));
@@ -390,7 +390,8 @@ inline bool apply_view(const GameData& game_data, std::span<const std::uint8_t> 
         view.fires.clear();
         for (int count = u16(); count > 0 && input.ok; --count) {
             const float x = f32(), y = f32();
-            view.fires.push_back({ x, y, &game_data.trap_fires[byte() ? 1 : 0] });
+            const int which = byte();
+            view.fires.push_back({ x, y, which == 2 ? &game_data.afterglow : &game_data.trap_fires[which ? 1 : 0], u32() });
         }
         view.portals.clear();
         for (int count = u16(); count > 0 && input.ok; --count) {
@@ -454,6 +455,7 @@ inline bool apply_view(const GameData& game_data, std::span<const std::uint8_t> 
         auto& monster = mon(i32());
         wire::monster_look(input, monster);
         if (monster.type < 0 || std::size_t(monster.type) >= game_data.monsters.types.size()) return false;
+        monster.killable = game_data.monsters.types[std::size_t(monster.type)].killable;   // not sent: MonStats', as make_monster's
     }
     for (int count = u16(); count > 0 && input.ok; --count) wire::monster_state(input, mon(i32()));
     for (int count = u16(); count > 0 && input.ok; --count) {

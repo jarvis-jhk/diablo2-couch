@@ -55,8 +55,12 @@ minor axis, signs by the target's side. Length 4096.
    subtile the move entered (path +0x1d4 count, +0x1d8 list):
    FUN_0064d9b0 there; a unit by FUN_00641cb0 → FUN_005adf10(unit, 0)
    (the hit); else bit 4 → ends.
-5. FUN_00641cb0, missile size m, unit size u (FUN_00620510): same subtile
-   (1,1); |dx|+|dy| ≤ 1 (1,2 / 2,1); 3×3 (1,3 / 3,1); |dx|+|dy| ≤ 2 (2,2).
+5. FUN_00641cb0, missile size m (Missiles.txt Size), unit size u
+   (FUN_00620510, past 3 taken as 3, under 1 none), by u − 1 + (m − 1) × 3:
+   same subtile (1,1); |dx|+|dy| ≤ 1 (1,2 / 2,1); 3×3 (1,3 / 3,1);
+   |dx|+|dy| ≤ 2 (2,2); |dx| < 3 and |dy| < 2, or |dy| < 3 and |dx| ≤ 1
+   (2,3 / 3,2); 5×5 (3,3). A missile sized outside 1..3 (a blank Size: the
+   explosions, trails, lights) strikes no unit. `rules::missile_touches`.
 
 ### The move — FUN_00650840 → FUN_006502d0, FUN_00650660
 

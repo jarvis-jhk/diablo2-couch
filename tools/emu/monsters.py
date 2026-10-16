@@ -18,6 +18,7 @@ from unicorn.x86_const import UC_X86_REG_ECX, UC_X86_REG_EDI, UC_X86_REG_EDX, UC
 
 import drlg
 import emu
+import monstats
 
 emu.Emu.w_IsBadCodePtr = lambda self: (0, 1)      # quests' init tests its callbacks
 
@@ -53,9 +54,11 @@ def dump(e, seed, lid, difficulty=0):
     """One line per room with monsters, in population order: `mon <x>,<y>: <class>@<x>,<y>[m<mode>]/<leader> ...`,
     level-relative tiles for the room and subtiles for the monsters; <leader> is the index (in the line) of
     the first monster its placement made: a preset unit (FUN_00555910), a group (FUN_0054df80) or a boss
-    and its company (FUN_005a43e0 from FUN_0054ec90). Flavie (266) is left out: an NPC, not a spawn.
+    and its company (FUN_005a43e0 from FUN_0054ec90). NPCs (MonStats npc: Flavie, Tyrael ...) are left out, as d2d's
+    population leaves them to the level's NPCs.
     An act boss (FUN_005b1cf0 from FUN_005b2a00) adds `!<mods>` (the MonUMods it gave, `.`-joined) and `h`
     for its stat 0x76 (half freeze)."""
+    npcs = {int(r["hcidx"]) for r in monstats.table("monstats") if r.get("npc") == "1" and r.get("hcidx", "").isdigit()}
     g = new_game(e, seed, difficulty)
     act = act_of(e, g, lid, drlg.act_of(lid))
     lvl = drlg.find_level(e, e.r32(act + 0x48), lid)
@@ -76,7 +79,7 @@ def dump(e, seed, lid, difficulty=0):
         if e.r32(sp + 8) == 0x76 and unit in boss: boss[unit][1] = "h"
     def on_make(mu, addr, size, _):       # FUN_00555230(ECX type, EDX class; x, y, game, room1, 1, mode, flags)
         sp = mu.reg_read(UC_X86_REG_ESP)
-        if mu.reg_read(UC_X86_REG_ECX) == 1 and mu.reg_read(UC_X86_REG_EDX) != 266:
+        if mu.reg_read(UC_X86_REG_ECX) == 1 and mu.reg_read(UC_X86_REG_EDX) not in npcs:
             made.append((mu.reg_read(UC_X86_REG_EDX), e.s32(sp + 4) - x0, e.s32(sp + 8) - y0, e.s32(sp + 0x14), lead[0], ""))
     def on_group(mu, addr, size, _):
         ret = e.r32(mu.reg_read(UC_X86_REG_ESP))

@@ -63,7 +63,7 @@ def compare(e, first, last, lid, what, ours_dir, env):
     for seed in range(first, last + 1):
         if e.brk - emu.HEAP > emu.HEAP_SIZE * 7 // 10: e = drlg.boot(fresh=True)   # the bump heap never frees
         if what == "monsters":                          # monsters.py's population, room by room ($DIFFICULTY)
-            game = monsters.dump(e, seed, lid, int(os.environ.get("DIFFICULTY", 0))).splitlines()
+            game = objgroups.quest_stubbed(e, monsters.dump, seed, lid, int(os.environ.get("DIFFICULTY", 0))).splitlines()   # Travincal's council asks a quest
             g, o = ({l.split(":")[0]: l for l in lines} for lines in (game, Path(ours_dir, f"{seed}.txt").read_text().splitlines()))
             rooms[0] += sum(g[k] == o.get(k) for k in g)
             rooms[1] += len(g.keys() | o.keys())
@@ -76,7 +76,7 @@ def compare(e, first, last, lid, what, ours_dir, env):
         elif what == "game":
             game = objgroups.game_dump(e, seed, [int(v) for v in env.get("LEVELS", objgroups.LEVELS).split(",")], env["ORDER"]).splitlines()
         elif what in ("objgroups", "drops"):
-            game = objgroups.dump(e, seed, lid, what == "drops").splitlines()
+            game = objgroups.quest_stubbed(e, objgroups.dump, seed, lid, what == "drops").splitlines()   # Travincal reads a quest flag (FUN_00544760)
         else:
             game = drlg.level_dump(e, seed, lid).splitlines()
         if tiles and what not in ("monsters", "objgroups", "drops", "collision", "game", "npcs"):

@@ -1,0 +1,44 @@
+# CI-only build recipe. This AI-assisted manifest is not suitable for Flathub;
+# Flathub requires manifests to be human-authored without AI assistance.
+app-id: io.github.psi29a.d2decomped
+runtime: org.kde.Platform
+runtime-version: '6.11'
+sdk: org.kde.Sdk
+command: d2d-launcher
+finish-args:
+  - --share=ipc
+  - --share=network
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  - --socket=pulseaudio
+modules:
+  - name: d2decomped
+    buildsystem: simple
+    build-commands:
+      - >-
+        cmake -S project -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+        -DCMAKE_INSTALL_PREFIX=/app -DCMAKE_PREFIX_PATH=/app
+        -DD2D_FLATPAK=ON -DD2D_BUILD_TOOLS=OFF -DD2D_BUILD_TESTS=OFF
+        -DD2D_BUNDLED_STORMLIB=ON
+        -DFETCHCONTENT_SOURCE_DIR_CLI11=$PWD/project/third_party/cli11
+        -DFETCHCONTENT_SOURCE_DIR_STORMLIB=$PWD/project/third_party/stormlib
+        -DD2D_FFMPEG_SOURCE_DIR=$PWD/project/third_party/ffmpeg
+      - cmake --build build --parallel 4
+      - cmake --install build
+    sources:
+      - type: dir
+        path: ../../build/flatpak-source
+        dest: project
+      - type: archive
+        url: https://github.com/CLIUtils/CLI11/archive/refs/tags/v2.6.2.tar.gz
+        sha256: c6ea6b2e5608b3ea8617999bd5f47420c71b2ebdb8dc4767c1034d1da5785711
+        dest: project/third_party/cli11
+      - type: archive
+        url: https://github.com/ladislav-zezula/StormLib/archive/refs/tags/v9.30.tar.gz
+        sha256: a709a6b034d206404f5297d85e474371203ff5483639955195d99b737bbf7dfe
+        dest: project/third_party/stormlib
+      - type: archive
+        url: https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz
+        sha256: 8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e
+        dest: project/third_party/ffmpeg

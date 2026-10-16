@@ -58,13 +58,15 @@ struct PetAct {
 
 // How a pet follows its owner, on a PetView: FUN_005e3ea0 (`follow`) and
 // FUN_005e45d0 (`decide`, follow or fight). Both put what they did in
-// `act`; `level_at(x, y)` names the level under a subtile (FUN_0061b130);
+// `act`; `area_at(from_x, from_y, x, y)` is the spawn area id under a subtile
+// as seen from the room holding another (FUN_0061b130, game::area_id_at:
+// that room or its near list; ids carry across rooms and levels);
 // `try_move(move)` sets off, true when it finds a path.
-template <class LevelAt, class TryMove>
+template <class AreaAt, class TryMove>
 class PetFollow {
 public:
-    PetFollow(const PetView& view, Rng& seed, LevelAt& level_at, TryMove& try_move)
-        : view_(view), seed_(seed), level_at_(level_at), try_move_(try_move) {}
+    PetFollow(const PetView& view, Rng& seed, AreaAt& area_at, TryMove& try_move)
+        : view_(view), seed_(seed), area_at_(area_at), try_move_(try_move) {}
     PetAct act{ .kind = PetAct::Kind::failed };
     MercMove ctx;                                                 // FUN_005a6260: only what's not 0 is set
 
@@ -117,10 +119,10 @@ public:
         if (mode == 0) {
             static constexpr std::array<std::pair<int, int>, 8> kAhead{ { { 0, 1 }, { -1, 1 }, { -1, 0 }, { -1, -1 }, { 0, -1 }, { 1, -1 }, { 1, 0 }, { 1, 1 } } };
             int eighth = ((direction64(own_x, own_y, end_x, end_y) + 4) >> 3) & 7;
-            const int level = level_at_(own_x, own_y);
+            const int area = area_at_(own_x, own_y, own_x, own_y);
             for (int turn = 0; turn < 8; ++turn, eighth = (eighth + 1) & 7) {
                 const int x = end_x + kAhead[std::size_t(eighth)].first * 8, y = end_y + kAhead[std::size_t(eighth)].second * 8;
-                if (level_at_(x, y) != level) continue;
+                if (area_at_(own_x, own_y, x, y) != area) continue;   // seen from the owner's room
                 pace(0, pct, 0x28);
                 if (set_out(x, y, move_mode)) return true;
                 if (set_out(int(std::uint32_t(pet_x + x) >> 1), int(std::uint32_t(pet_y + y) >> 1), move_mode)) return true;
@@ -181,7 +183,7 @@ public:
         int mode = 2;
         if (view_.owner_mode == kPlayerWalk || view_.owner_mode == kPlayerTownWalk || view_.owner_mode == kPlayerRun) mode = 0;
         if (view_.cur_x != view_.end_x && view_.cur_y != view_.end_y) mode = 0;
-        if (level_at_(own_x, own_y) != level_at_(pet_x, pet_y)) mode = 1;
+        if (area_at_(own_x, own_y, own_x, own_y) != area_at_(pet_x, pet_y, pet_x, pet_y)) mode = 1;
         if (gap > reach) mode = 1;
         if (gap > 0x32) mode = 3;
         if (npc_distance(pet_x, pet_y, view_.arrive_x, view_.arrive_y) < 0x1c && ((mode == 1 && gap < 0x1e) || mode == 2)) mode = 4;
@@ -192,7 +194,7 @@ public:
 private:
     const PetView& view_;
     Rng& seed_;
-    LevelAt& level_at_;
+    AreaAt& area_at_;
     TryMove& try_move_;
 };
 
@@ -207,13 +209,13 @@ private:
 // if not: with a foe outside town, in melee 80 in 100 a swing (else stand
 // 10), out of melee a walk at it (pace 0xc steps, path type 0xd, 1 off) —
 // none found marks it unreachable and 70 in 100 wanders 4, else stands 10.
-// No foe: it wanders 4. `level_at(x, y)` names the level under a subtile
+// No foe: it wanders 4. `area_at(from_x, from_y, x, y)` as PetFollow's
 // (FUN_0061b130); `try_move(move)` sets off, true when it finds a path
 // (`move.foe`: at the foe).
-template <class LevelAt, class TryMove>
-PetAct necropet_think(const PetView& view, Rng& seed, LevelAt&& level_at, TryMove&& try_move) {
+template <class AreaAt, class TryMove>
+PetAct necropet_think(const PetView& view, Rng& seed, AreaAt&& area_at, TryMove&& try_move) {
     using Kind = PetAct::Kind;
-    PetFollow brain(view, seed, level_at, try_move);
+    PetFollow brain(view, seed, area_at, try_move);
     const int pet_x = view.x, pet_y = view.y;
     const int gap = merc_gap(pet_x, pet_y, view.size, view.owner_x, view.owner_y);
     if (gap > 0x32) { brain.follow(3, false, 0, 0); return brain.act; }

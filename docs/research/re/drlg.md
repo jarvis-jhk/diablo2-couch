@@ -687,6 +687,49 @@ FUN_0067d2d0): DT1 mask 2 → 0x44103; 16, 22, 27, 28 → 1; 21 → 4; 30, 31
 d2d: `Gen::lay_jungle`, `act3_outdoor_level`, `plain_dt1_mask`;
 `diff_drlg.py 1-10 76|77|78 tiles` 10/10, rooms 10/10, units 5/5.
 
+## Kurast and Travincal (FUN_0067f190 / FUN_0067f3b0, levels 79–83)
+
+After the jungle's pass, FUN_0067f190 lays Kurast's walls by level (cw, ch
+the level's cells; R = cw−1, B = ch−1; `roll` the act's +0x474 bit):
+
+| level | function | base | top gap | bottom gap |
+|---|---|---|---|---|
+| 79 Lower Kurast | FUN_0067ead0 | 0x25d | roll ? 1 : cw−2 | R/2, two cells wide |
+| 80 Bazaar | FUN_0067ec30 | 0x26b | roll ? cw−2 : 1 | roll ? 1 : cw−2 |
+| 81 Upper Kurast | FUN_0067ed70 | 0x27c | R/2, two cells wide | roll ? cw−2 : 1 |
+
+Each (FUN_006743c0, file −1): the top row x 1..R−1 base (+8 at the gap),
+the bottom row base+1 (+8 at its gap); the Bazaar lays both rows in one
+loop (top x, bottom x), the others row by row; a "two cells wide" gap
+skips the cell after it. Then each y 1..B−1 base+2 at (R, y) and base+3 at
+(0, y); corners base+5 (0,0), base+4 (R,0), base+7 (0,B), base+6 (R,B).
+
+Then the inner presets (EBX = cw−4, EDI = ch−4; FUN_00674730 is
+anywhere(def, file, 0, 0xf)):
+
+- 79: anywhere 0x277 file 0; scatter (0x26a, 0x26a, 4), (0x268, 0x269,
+  0), (0x267, 0x267, 0).
+- 80: place 0x275 file 0 at (3, 3), file 1 at (cw−4, 3); anywhere 0x276
+  file 0, 0x276 file 1, 0x277 file 0; scatter (0x27b, 0x27b, 4), (0x279,
+  0x27a, 0), (0x278, 0x278, 0).
+- 81: place 0x286 file 0 at (3, ch−4), file 1 at (cw−4, ch−4); anywhere
+  0x287 file 0, 0x287 file 1, 0x277 file 0; scatter (0x28b, 0x28b, 4),
+  (0x289, 0x28a, 0), (0x288, 0x288, 0).
+- 82 Causeway: 0x28c file 0 at (0, 0).
+
+Scatter (FUN_0067eed0, ECX rec, EDX low, stack high, most; OutJung.cpp):
+every cell of the level (cw·ch, not the inner ones; grid +0x5c / +0x60)
+listed (i % cw, i / cw) and shuffled as the inner shuffle; each in order
+rolls def = low + rand(high − low + 1) (stepping even for a range of 1),
+and where fits(def, 0, 0xf) places it (file −1); stop once `most` (> 0)
+are placed.
+
+FUN_0067f3b0, Travincal (83) only: 0x28d..0x28f at (0, 0), (2, 0),
+(6, 0), 0x290..0x292 at (0, 4), (2, 4), (6, 4), file −1.
+
+d2d: `Gen::lay_kurast`, `kurast_walls`, `scatter`; `diff_drlg.py 1-20
+79..83 tiles` 20/20 each.
+
 ## Maze levels (DrlgType 1) — FUN_00673b30
 
 The level's maze row (LvlMaze by level, FUN_0061f490: `{level,
@@ -749,6 +792,32 @@ the level seed, as outdoors).
 | 17 tombs | three arms off the first room (FUN_006718c0) | yes (×3 the boss tomb, ×2 the staff tomb) | FUN_00672be0 | both, base 0x19d |
 | 18 lair | ring | yes | FUN_00672dc0 | rotation only, base 0x1e1 |
 | 19 Arcane Sanctuary | FUN_006719f0 | — | FUN_00672e50 | neither |
+
+**Act 3's mazes** (2026-10-13):
+
+| type | levels | before the grow | grows | specials | defs by links / themes / rotation |
+|---|---|---|---|---|---|
+| 22 Durance | 100, 101 | ring 2 | yes | FUN_00672f60: 0x6f0238; 101 also 0x6f0278, 0x6f02b8; 100 0x6f02b8 | 0x2f1 + mask, themes, rotation |
+| 23 spider caves | 84, 85 | ring 2 | no | none (no roll) | table 0x6ef758 + 8 (12-byte rows: masks 5, 6, 9, 10 → 659..662); 84's 662 → 664, 85's 661 → 663 |
+| 24 Flayer Dungeon, Swampy Pits | 86..89 | ring 2 | yes | FUN_00672ea0: 0x6f0138, 0x6f0178 | 0x298 + mask, themes, rotation |
+| 25 sewers | 92 | ring 5, then four ring rooms made special (0x2c5 → 0x2df, 0x2c6 → 0x2e0, 0x2c9 → 0x2e1, 0x2ca → 0x2e2: the first non-special of each; asserts 0x849..0x84c when missing) | yes | FUN_00672f00: 0x6f01b8, 0x6f01f8 | 0x2c0 + mask, themes, rotation |
+
+The ring (FUN_00670f60(n)): n − 1 rooms up, n − 1 left, n − 1 down, n − 2
+right, each the usual step from the last room placed (one that won't fit
+is freed and the chain goes on from the last), then the last linked right
+to the first and both presets redone. The specials functions roll `next
+& 3` once and run FUN_006724e0 per table, the turn moving on after each.
+The treasure rooms (90, 91), the second sewer level (93), the six temples
+(94..99) and the Durance's third level (102) are DrlgType 2 presets.
+The Kurast Sewers' first level has five warp slots: Vis0 / Vis1 the
+Bazaar (80), Vis2 / Vis3 Upper Kurast (81), Vis4 the second level, and
+its four ways up are visible warp walls (FUN_0066e260: a unit, no
+0x800000) whose LvlWarp ids repeat (58, 59, 58, 59). A wall's slot is its
+style, not its unit's id; read off the id, the ways to 81 took 80's slots,
+WarpDist (2025) left their rooms out of the entrances and monsters spawned
+by them. d2d: `BuiltRoom::wall_warps`.
+d2d: maze.hpp (`kAct3Specials`, `kSpiderDefs`, `kSewer92Specials`, the
+ring); `diff_drlg.py 84..102`: rooms 20/20, tiles, units, monsters 5/5.
 
 - **The Arcane Sanctuary** (74, FUN_006719f0, 2026-10-11): a roll `& 3`
   (the rotation), then four arms off the first room (12×12 rooms), arm a
@@ -816,7 +885,8 @@ warp's seq, sequence < 4) on it; a visible warp wall (FUN_0066e260) puts
 itself on it. Either cuts the chain it was on, so a later room's
 FUN_0066e4c0 misses the tiles past it and adds its own copies (L23).
 
-**Doors** (FUN_0066d9e0): an orientation 8 / 9 wall makes a door unit —
+**Doors** (FUN_0066d9e0; d2d's `relevel` makes the units again in the
+rooms' order, so a shared edge's door is the first room's): an orientation 8 / 9 wall makes a door unit —
 hidden (FUN_0066e9b0, no tile), newly added (FUN_0066dc50 ->
 FUN_0066db20), or shared with a neighbour after the merge (FUN_0066e740,
 also when the neighbour's tile has flags & 1). FUN_0066d960 finds the
@@ -1021,13 +1091,14 @@ Conditions those results hold under, so they aren't overstated:
 | Act 2's desert (41–46): grids, tiles, units | diffed, 10/10 each |
 | Act 3's layout (rectangles 75–83, the jungle's cells) | diffed, 2000/2000 seeds |
 | Act 3's jungle (76–78): grids, rooms, tiles, units | diffed, 10/10 (units 5/5) |
+| Kurast and Travincal (79–83): grids, rooms, tiles, units | diffed, 20/20 (units 5/5) |
 | Act 3+ outdoors and mazes; the Barracks' cross-level link to 27 (FUN_0066b790) | not ported |
 | Preset units that roll to stay (FUN_00667620) | ported outdoors (`stays`, units.hpp); diffed on Cold Plains' Cottages 2, whose row has Pops: presets with Scan or Pops roll at generation on the level seed (FUN_00667970), the rest on the seed of the room that copies them (room +0x14, the whole {low, high} — a maze room's was stepped once, so its high word isn't 666; diffed on the Jail and Catacombs). In the preset record's order, one step each — monsters 0xcc, 0xcd, 0x173, 0x174 kept when `low % 3 == 0`; MonPlace 0x21 when `low & 3`, 0x22 when odd, 0x23 when `!(low & 3)`, 0x24 always; objects 0xc4 / 0x105 when even, 0x245 when `low & 3`. It runs after the room's DT1 list and before its tiles (FUN_0061b730), whose seed FUN_0066ee40 resets, so tiles don't shift. Act 1: the Crypt, Jail, Catacombs, Fence Fill 1, Cottages 2 |
 | Units in other acts: the act 2 / act 4 MonPreset remaps, type-4 units (NPCs by name) | not ported |
 | LvlSub CheckAll stamps | not ported (no act 1 wilderness row uses them) |
-| Act 2's doors (FUN_0066d9e0, the tombs' and lair's objects 0x5b / 0x5c with their rand(3)) | generated, diffed with the mazes' units |
+| Act 2's doors (FUN_0066d9e0, the tombs' and lair's objects 0x5b / 0x5c with their rand(3)) | generated, diffed with the mazes' units (rooms up in $ORDER both sides since 2026-10-13: a door on a shared edge goes to the room that comes up to it, and its rand(3) to that room's seed; drlg-dump's units had laid the rooms in list order, so the Halls of the Dead's doors missed on some seeds) |
 | Doors in acts 3–5, tile word bit 4 on non-plain paths beyond what these levels hit | not ported |
-| Logical areas (FUN_0066ccb0 / FUN_0066d110; room_tiles.hpp `logic_areas`) | diffed bit-exact on every Logicals room of act 1, seeds 1-3 (ids are ours, only id != 0 is used) |
+| Logical areas (FUN_0066ccb0 / FUN_0066d110; room_tiles.hpp `logic_areas`) | diffed bit-exact on every Logicals room of act 1, seeds 1-3; ids as game.exe gives them, merged across rooms (FUN_0066d040; monsters.md "Area ids"), `area_ids.py` at every tile |
 | Room collision, automap | not diffed |
 | Monster population on these rooms (components/rules/monsters.hpp) | uses the proven room seeds; its own rolls not diffed |
 | The app's use of it: d2d draws and walks the proven picks in the Blood Moor and the Den of Evil (`Level::picks`), and its warps take the player between them; where a warp puts the player is traced (below, "Taking a warp"); what counts as clicking one (2 cells, not LvlWarp's Select box) is a guess | wired up; warp arrival traced, not diffed |

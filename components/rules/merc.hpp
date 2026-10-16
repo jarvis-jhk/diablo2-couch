@@ -65,16 +65,18 @@ struct MercAct {
 // the same at pace 60. Not standing, it stands 5. Standing on bit 0x40, 6 in
 // 128 (12 for the bow and spear mercs, all but MonStats 0x152 / 0x230 /
 // 0x231) wander 5. Outside town, a foe under 25 off: the attack think. On
-// bit 0x40, wander 5. On another level than the owner: 8 off his path end at
+// bit 0x40, wander 5. In another spawn area than the owner (FUN_0061b130
+// ids, which carry across rooms and levels): 8 off his path end at
 // pace 60. Within 1 of him: path type 7 to a spot 4 about him, else 4 away
 // on each axis, else to his path end (steps 0x28). Else 5 in 100 a spot 16
 // about him; else it stands 5. A spot "n about" (FUN_005df530 / de200 /
 // df400): one step of its seed picks the axis that's n off (low bit 0: y),
 // the other rand(n), two more steps their signs. Rolls on the merc's seed
-// (+0x20). `level_at(x, y)` names the level under a subtile (FUN_0061b130);
+// (+0x20). `area_at(from_x, from_y, x, y)`: the spawn area id under a subtile
+// as seen from the room holding another (FUN_0061b130, game::area_id_at);
 // `try_move(move)` sets off, true when it finds a path.
-template <class LevelAt, class TryMove>
-MercAct hireable_think(const MercView& view, Rng& seed, LevelAt&& level_at, TryMove&& try_move) {
+template <class AreaAt, class TryMove>
+MercAct hireable_think(const MercView& view, Rng& seed, AreaAt&& area_at, TryMove&& try_move) {
     using Kind = MercAct::Kind;
     MercAct act{ .kind = Kind::failed };
     MercMove ctx;                                                 // FUN_005a6260: only what's not 0 is set
@@ -106,10 +108,10 @@ MercAct hireable_think(const MercView& view, Rng& seed, LevelAt&& level_at, TryM
     auto near_owner = [&](int pct) {
         static constexpr std::array<std::pair<int, int>, 8> kAhead{ { { 0, 1 }, { -1, 1 }, { -1, 0 }, { -1, -1 }, { 0, -1 }, { 1, -1 }, { 1, 0 }, { 1, 1 } } };
         int eighth = ((direction64(view.owner_x, view.owner_y, view.end_x, view.end_y) + 4) >> 3) & 7;
-        const int level = level_at(view.owner_x, view.owner_y);
+        const int area = area_at(view.owner_x, view.owner_y, view.owner_x, view.owner_y);
         for (int turn = 0; turn < 8; ++turn, eighth = (eighth + 1) & 7) {
             const int x = view.end_x + kAhead[std::size_t(eighth)].first * 8, y = view.end_y + kAhead[std::size_t(eighth)].second * 8;
-            if (level_at(x, y) != level) continue;
+            if (area_at(view.owner_x, view.owner_y, x, y) != area) continue;   // seen from the owner's room
             pace(0, pct, 0x28);
             if (set_out(x, y)) return;
         }
@@ -153,7 +155,7 @@ MercAct hireable_think(const MercView& view, Rng& seed, LevelAt&& level_at, TryM
     if (view.on_bit40 && seed(0x80) < (shooter ? 12 : 6)) { wander(view.x, view.y, 5); return act; }
     if (!view.town && view.target >= 0 && view.target < 0x19) return { .kind = Kind::attack };
     if (view.on_bit40) { wander(view.x, view.y, 5); return act; }
-    if (level_at(view.owner_x, view.owner_y) != level_at(view.x, view.y)) { near_owner(0x3c); return act; }
+    if (area_at(view.owner_x, view.owner_y, view.owner_x, view.owner_y) != area_at(view.x, view.y, view.x, view.y)) { near_owner(0x3c); return act; }
     if (gap <= 1) {
         pace(7, 0, 0);
         if (wander(view.owner_x, view.owner_y, 4)) return act;

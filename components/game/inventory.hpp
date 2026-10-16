@@ -84,7 +84,7 @@ inline Store open_store(const GameData& game_data, const Level& level, int npc, 
         const int page = type != tables.types.end() ? type->second.store_page : -1;
         return page >= 0 && d2d::rules::store_place(tables, store, page, std::move(*made));
     });
-    for (int i = 0; i < 4; ++i) if (!store.tabs[std::size_t(i)].empty()) { store.tab = i; break; }
+    store.first_tab();
     return store;
 }
 

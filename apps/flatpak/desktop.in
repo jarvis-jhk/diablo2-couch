@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=D2Decomp
+Comment=Play Diablo II with the D2Decomp engine
+Exec=d2d-launcher
+Icon=@D2D_FLATPAK_APP_ID@
+Categories=Game;RolePlaying;
+Terminal=false
+StartupNotify=true

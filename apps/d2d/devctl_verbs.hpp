@@ -171,6 +171,17 @@ void register_game_verbs(d2d::devctl::Channel& channel, Window& win, Screen& scr
             return std::format("ok {}\n", int(town.level->unit_blocked(std::strtof(args[2].c_str(), nullptr),
                                                                    std::strtof(args[3].c_str(), nullptr))));
         }
+        if (args.size() >= 2 && args[1] == "grid" && town.level) {   // the level, n spots a cell (subtiles: 5): '#' where a unit can't stand, a row a line
+            const int per_cell = args.size() >= 3 ? std::clamp(std::atoi(args[2].c_str()), 1, 5) : 1;
+            const float step = 1.f / float(per_cell);
+            std::string out;
+            for (int y = 0; y < town.level->ds1.height() * per_cell; ++y) {
+                for (int x = 0; x < town.level->ds1.width() * per_cell; ++x)
+                    out += town.level->unit_blocked((float(x) + 0.5f) * step, (float(y) + 0.5f) * step) ? '#' : '.';
+                out += '\n';
+            }
+            return out + "ok\n";
+        }
         if (args.size() >= 3 && args[1] == "wp") {         // activate waypoint index n
             town.world.set_waypoint(std::atoi(args[2].c_str()));
             return std::string("ok\n");
@@ -557,6 +568,7 @@ void register_game_verbs(d2d::devctl::Channel& channel, Window& win, Screen& scr
         if (!scene) return std::string("err no scene\n");
         std::string out;
         for (const auto& monster : town.net_game ? town.view.monsters : town.fight.monsters) {   // a joined game: the host's
+            if (monster.gone) continue;                                                        // left the game (the Dark Wanderer)
             const float dx = monster.unit.x - town.player.x, dy = monster.unit.y - town.player.y;
             const int screen_x = int(kScreenWidth) / 2 + int(std::lround((dx - dy) * (kIsoW / 2)));
             const int screen_y = kViewY + int(std::lround((dx + dy) * (kIsoH / 2)));
@@ -575,9 +587,9 @@ void register_game_verbs(d2d::devctl::Channel& channel, Window& win, Screen& scr
         std::string out;
         for (const auto& ground_item : town.net_game ? town.view.ground : town.loot.ground) {   // a joined game: the host's
             const float dx = ground_item.x - town.player.x, dy = ground_item.y - town.player.y;
-            out += std::format("{}\t{}\t{}\t{}\t#{}\n", ground_item.item.code, ground_item.label,
+            out += std::format("{}\t{}\t{}\t{}\t#{}\t{:.1f}\t{:.1f}\n", ground_item.item.code, ground_item.label,
                                int(kScreenWidth) / 2 + int(std::lround((dx - dy) * (kIsoW / 2))),
-                               kViewY + int(std::lround((dx + dy) * (kIsoH / 2))), ground_item.id);
+                               kViewY + int(std::lround((dx + dy) * (kIsoH / 2))), ground_item.id, ground_item.x, ground_item.y);
         }
         return out + "ok\n";
     });
@@ -606,7 +618,7 @@ void register_game_verbs(d2d::devctl::Channel& channel, Window& win, Screen& scr
              + " saves=" + std::to_string(scene ? scene->saves.size() : 0)
              + " stash=" + (town.stash_open ? "1" : "0")
              + " cube=" + (town.cube_open ? "1" : "0")
-             + " store=" + std::to_string(town.store.npc >= 0 ? town.store.vendor : -1)
+             + " store=" + std::to_string(town.store.npc >= 0 ? town.store.vendor : -1) + " store_tab=" + std::to_string(town.store.tab)
              + " gold=" + std::to_string(character.stats.get(d2d::d2s::kGold))
              + " statpts=" + std::to_string(character.stats.get(d2d::d2s::kStatPts))
              + " str=" + std::to_string(character.stats.get(d2d::d2s::kStr))

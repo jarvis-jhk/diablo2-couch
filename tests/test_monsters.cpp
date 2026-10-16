@@ -81,6 +81,14 @@ static void missile_flights() {
             std::abort();
         }
     }
+    // FUN_00641cb0's shapes by missile size / unit size: the farthest offset
+    // each strikes, and the nearest it misses. A blank Size strikes none.
+    assert(missile_touches(0, 0, 0, 0, 1, 1) && !missile_touches(1, 0, 0, 0, 1, 1));
+    assert(missile_touches(1, 0, 0, 0, 1, 2) && !missile_touches(1, 1, 0, 0, 2, 1));
+    assert(missile_touches(1, 1, 0, 0, 3, 1) && missile_touches(1, 1, 0, 0, 1, 3) && !missile_touches(2, 0, 0, 0, 1, 3));
+    assert(missile_touches(2, 0, 0, 0, 2, 2) && missile_touches(1, 1, 0, 0, 2, 2) && !missile_touches(2, 1, 0, 0, 2, 2));
+    assert(missile_touches(2, 1, 0, 0, 3, 2) && missile_touches(1, 2, 0, 0, 2, 3) && !missile_touches(2, 2, 0, 0, 3, 2));
+    assert(missile_touches(2, 2, 0, 0, 3, 3) && !missile_touches(3, 0, 0, 0, 3, 3) && !missile_touches(0, 0, 0, 0, 1, 0));
     // A wall: the step that reaches it ends the flight at the centre of the
     // last free point (FUN_00650150), not of the step's end.
     auto flight = MissileFlight::launch(100, 100, 120, 100, missile_velocity(24, 0, 1), 24 << 8, 0);
@@ -231,13 +239,15 @@ int main() {
         assert(bar_name_colour(Boss::none, "duriel") == kNameGold && bar_name_colour(Boss::none, "andariel") == kNameWhite && bar_name_colour(Boss::minion, "fallen1") == kNameWhite);
         // Act bosses (FUN_005b1cf0, by BaseId): Andariel mod 22, Blood Raven
         // 12, 22 and half freeze, the Smith 22, all flag 8 (gold, as a unique);
-        // the uber Andariel (0x2c3) and a plain monster aren't.
+        // a plain monster isn't; the ubers have their own (0x2c3, 0x2c0).
         const auto andariel = act_boss(0x9c, 0x9c), blood_raven = act_boss(0x10b, 0x10b);
         assert(andariel && andariel->mods == std::vector<int>{ 22 } && !andariel->half_freeze);
         assert(blood_raven && (blood_raven->mods == std::vector<int>{ 12, 22 }) && blood_raven->half_freeze);
         assert(act_boss(0x192, 0x192) && act_boss(0x192, 0x192)->mods == std::vector<int>{ 22 });
         assert(act_boss(0x11c, 0x11c) && (act_boss(0x11c, 0x11c)->mods == std::vector<int>{ 23, 22 }));   // the Maggot Queen: poison hit
-        assert(!act_boss(0x2c3, 0x9c) && !act_boss(5, 5) && bar_name_colour(Boss::unique, "andariel") == kNameGold);
+        assert(act_boss(0x2c3, 0x9c) && (act_boss(0x2c3, 0x9c)->mods == std::vector<int>{ 23, 6, 29 }));   // uber Andariel (FUN_005b1cf0)
+        assert(act_boss(0xf2, 0xf2) && act_boss(0x2c0, 0xf2) && (act_boss(0x2c0, 0xf2)->mods == std::vector<int>{ 22, 30, 17, 8, 6 }) && !act_boss(0xd3, 0xd3));   // Mephisto, uber; Duriel none
+        assert(!act_boss(5, 5) && bar_name_colour(Boss::unique, "andariel") == kNameGold);
         // A monster's sound set (FUN_004ca410): the Countess's own; a boss
         // or minion zombie's UMonSound; a plain one's MonSound.
         MonType zombie_sounds;
@@ -422,7 +432,7 @@ int main() {
                 d2d::rules::Rng seed;
                 seed.low = entry.low; seed.high = entry.high;
                 std::size_t next = 0;
-                const auto act = d2d::rules::hireable_think(view, seed, [&](int x, int) { return x - 5000 >= entry.split ? 2 : 1; },
+                const auto act = d2d::rules::hireable_think(view, seed, [&](int, int, int x, int) { return x - 5000 >= entry.split ? 2 : 1; },
                     [&](const d2d::rules::MercMove& move) {
                         assert(next < entry.tried.size());
                         const auto& want = entry.tried[next++];
@@ -500,7 +510,7 @@ int main() {
                     d2d::rules::Rng seed;
                     seed.low = entry.low; seed.high = entry.high;
                     std::size_t next = 0;
-                    const auto act = d2d::rules::necropet_think(view, seed, [&](int x, int) { return x - 5000 >= entry.split ? 2 : 1; },
+                    const auto act = d2d::rules::necropet_think(view, seed, [&](int, int, int x, int) { return x - 5000 >= entry.split ? 2 : 1; },
                         [&](const d2d::rules::MercMove& move) {
                             assert(next < entry.tried.size());
                             const auto& want = entry.tried[next++];
@@ -639,13 +649,17 @@ int main() {
             // game.exe's own runs, the back-offs' answers replayed): the scene,
             // what it comes to, its effects, the AI control and seed after.
             {
-                static constexpr std::string_view kCases[] = {
+                static const std::string_view kCases[] = {   // not constexpr: their lengths pass the step limit
 #include "mon_ais_cases.inc"
+#include "mon_ais3_cases.inc"
+#include "mon_ais_coldworm_cases.inc"
                 };
-                // Then the curse thinks (special AI 10 / 11) and the other thinks.
-                static constexpr std::array<std::string_view, 22> kAis{ "Duriel", "Swarm", "PinHead", "Mummy", "SandLeaper", "ClawViper", "PantherWoman", "PantherJavelin",
-                                                                       "Scarab", "BatDemon", "Baboon", "SandRaider", "GreaterMummy", "SandMaggot", "Summoner", "Vulture",
-                                                                       "MaggotEgg", "MaggotLarva", "DimVision", "Terror", "BatDemon", "SandMaggot" };
+                // The AIs a case's first number indexes (mon_ais.py ORDER): its name,
+                // whether it's an other think, whether its scene has Act 3's fields.
+                struct AiCase { std::string_view name; bool other, act3_scene; };
+                static constexpr AiCase kAis[] = {
+#include "mon_ais_names.inc"
+                };
                 using d2d::rules::ThinkEffect;
                 int checked = 0;
                 for (const std::string_view case_line : kCases) {
@@ -654,12 +668,13 @@ int main() {
                     std::istringstream fields(line.substr(0, bar));
                     auto read = [&] { long long value = 0; fields >> value; return int(value); };
                     const int which = read();
+                    assert(std::size_t(which) < std::size(kAis));
                     std::array<int, 3> ctrl{};
                     int pace = 0, steps = 0, command = 0;
                     bool rally = false;
                     std::vector<ThinkEffect> effects;
                     d2d::rules::ThinkIn input;
-                    input.difficulty = read(); input.frame = read(); (void)read();
+                    input.difficulty = read(); input.frame = read(); input.target = read() != 0;
                     input.dist = read(); input.in_melee = read() != 0; input.got_hit = read() != 0; input.life_pct = read();
                     for (auto& value : ctrl) value = read();
                     for (auto& value : input.aip) value = read();
@@ -681,6 +696,10 @@ int main() {
                     int cast_word = 0;
                     input.swings = read() != 0; input.runs = read() != 0; input.afraid = read() != 0; input.in_s4 = read() != 0; cast_word = read();
                     input.cast_word = &cast_word;
+                    if (kAis[std::size_t(which)].act3_scene) { input.next_event = read(); input.leader_mode = read(); input.command_unit = read() != 0; input.skill_level = read(); input.state_c = read() != 0; input.spot_clear = read() != 0; input.spared = read() != 0; input.line_clear = read() != 0; input.s1_range = read();
+                                         for (auto& value : input.skill678) value = read() != 0;
+                                         input.weak = read() != 0; input.near_player = read() != 0;
+                                         input.wisps = read(); input.bless_ok = read() != 0; }
                     d2d::rules::Rng seed;
                     seed.low = std::uint32_t(std::stoll([&] { std::string text; fields >> text; return text; }()));
                     seed.high = std::uint32_t(std::stoll([&] { std::string text; fields >> text; return text; }()));
@@ -698,10 +717,11 @@ int main() {
                         assert(asked < asks.size() && asks[asked].first == reach);
                         return asks[asked++].second != 0;
                     };
-                    const auto ai_name = kAis[std::size_t(which)];
-                    const auto act = which == 18 ? d2d::rules::dim_vision_think(input, seed)
-                                   : which == 19 ? d2d::rules::terror_think(input, seed, away)
-                                   : which >= 20 ? d2d::rules::other_think(ai_name, input)
+                    const auto& think = kAis[std::size_t(which)];
+                    const auto ai_name = think.name;
+                    const auto act = ai_name == "DimVision" ? d2d::rules::dim_vision_think(input, seed)
+                                   : ai_name == "Terror" ? d2d::rules::terror_think(input, seed, away)
+                                   : think.other ? d2d::rules::other_think(ai_name, input)
                                                  : d2d::rules::mon_think(ai_name, input, seed, away);
                     assert(asked == asks.size());
                     for (const auto& effect : effects)                     // the toggle back clears the scratch words (FUN_005b0e00)
@@ -713,11 +733,11 @@ int main() {
                         std::array<int, 3> value{};
                         if (three >> value[0] >> value[1] >> value[2]) want_effects.push_back(value);
                     }
-                    if (effects.size() != want_effects.size()) std::fprintf(stderr, "mon_ais %s: %s\n  got %zu effects\n", std::string(kAis[std::size_t(which)]).c_str(), line.c_str(), effects.size());
+                    if (effects.size() != want_effects.size()) std::fprintf(stderr, "mon_ais %s: %s\n  got %zu effects\n", std::string(ai_name).c_str(), line.c_str(), effects.size());
                     assert(effects.size() == want_effects.size());
                     for (std::size_t k = 0; k < effects.size(); ++k)
                         if (int(effects[k].kind) != want_effects[k][0] || effects[k].id != want_effects[k][1] || effects[k].value != want_effects[k][2])
-                            std::fprintf(stderr, "mon_ais %s: %s\n  got effect %d %d %d\n", std::string(kAis[std::size_t(which)]).c_str(), line.c_str(), int(effects[k].kind), effects[k].id, effects[k].value);
+                            std::fprintf(stderr, "mon_ais %s: %s\n  got effect %d %d %d\n", std::string(ai_name).c_str(), line.c_str(), int(effects[k].kind), effects[k].id, effects[k].value);
                     for (std::size_t k = 0; k < effects.size(); ++k)
                         assert(int(effects[k].kind) == want_effects[k][0] && effects[k].id == want_effects[k][1] && effects[k].value == want_effects[k][2]);
                     std::istringstream tail(line.substr(bar3 + 1));
@@ -727,7 +747,7 @@ int main() {
                     const bool same = int(act.act) == want[0] && act.n == want[1] && act.x == want[2] && y == want[3] && int(act.unit) == want[4] && act.wait == want[5] && act.event == want[6]
                                    && pace == want[7] && steps == want[8] && ctrl[0] == want[9] && ctrl[1] == want[10] && ctrl[2] == want[11]
                                    && seed.low == std::uint32_t(want[12]) && seed.high == std::uint32_t(want[13]) && (which != 21 || cast_word == want[14]);
-                    if (!same) std::fprintf(stderr, "mon_ais %s: %s\n  got %d %d %d %d %d %d %d | %d %d | %d %d %d | %u %u\n", std::string(kAis[std::size_t(which)]).c_str(), line.c_str(),
+                    if (!same) std::fprintf(stderr, "mon_ais %s: %s\n  got %d %d %d %d %d %d %d | %d %d | %d %d %d | %u %u\n", std::string(ai_name).c_str(), line.c_str(),
                                             int(act.act), act.n, act.x, y, int(act.unit), act.wait, act.event, pace, steps, ctrl[0], ctrl[1], ctrl[2], seed.low, seed.high);
                     assert(same);
                     ++checked;

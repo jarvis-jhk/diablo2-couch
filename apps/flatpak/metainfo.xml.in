@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>@D2D_FLATPAK_APP_ID@</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>D2Decomp</name>
+  <summary>Open source engine for Diablo II</summary>
+  <description>
+    <p>D2Decomp is an open source engine project for playing Diablo II. The game data is provided separately by the player.</p>
+  </description>
+  <launchable type="desktop-id">@D2D_FLATPAK_APP_ID@.desktop</launchable>
+  <url type="homepage">https://github.com/psi29a/d2decomped</url>
+</component>

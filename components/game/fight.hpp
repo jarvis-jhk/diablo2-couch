@@ -618,7 +618,7 @@ struct Fight {
     // experience, its pack may scatter, it drops its loot.
     // ponytail: the merc's own experience share isn't kept.
     void killed(std::size_t monster_index, std::uint32_t now_ms, bool credit = true);
-    struct Kill { int type; float x, y; int level; int super = -1; };   // super: its SuperUniques row
+    struct Kill { int type; float x, y; int level; int super = -1; int id = -1; };   // super: its SuperUniques row; id: its unit id
     std::vector<Kill> kills;                       // since the World last looked (its quests' death hooks)
 
     // The merc as a fighter: its hireling damage, attack rating, defense.
@@ -935,6 +935,9 @@ struct Fight {
     // Reading a scroll or a tome (Skills.txt 219 / 220): its skill cast,
     // no mana, anywhere but in town (checkfunc 5).
     bool portal_due = false;                       // Town Portal's action frame came
+    // The wisps' dance's blessing on the player (FUN_005f39b0): stat 0x50
+    // (magic find) for 0x1a5e00 frames, the last one's.
+    struct Blessing { int find = 0; std::uint32_t until = 0; } wisp_blessing;
     bool cast_scroll(int skill, std::uint32_t now_ms);
     bool cast(int skill, std::uint32_t now_ms);
     // Frenzy's state (FUN_005d8c70): each hit that lands raises it a level,

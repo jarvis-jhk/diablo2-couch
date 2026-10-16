@@ -26,6 +26,7 @@ struct MonType {
     bool prime_evil = false;                    // primeevil (+0xc & 0x80, FUN_0063edc0)
     bool no_ratio = false;                      // noRatio (+0xc & 4): stats as written, not MonLvl percentages (FUN_006538a0)
     int base = -1;                              // BaseId row (19: fallen1, 91: scarab1)
+    int next_in_class = -1;                     // NextInClass row (MonStats +4): the family's next, -1 none
     int min_grp = 0, max_grp = 0, party_min = 0, party_max = 0, sparse = 0, rarity = 0;
     std::array<int, 2> minion{ -1, -1 };        // minion1/2 rows
     std::array<int, 3> level{};                 // Level, Level(N), Level(H)
@@ -34,7 +35,7 @@ struct MonType {
     bool ranged = false;                        // rangedtype
     bool undead = false, demon = false;         // hUndead / lUndead, demon (Holy Bolt, FoH, Blessed Hammer)
     bool low_undead = false;                    // lUndead (MonStats flag byte +0xd & 8: what a Greater Mummy raises)
-    std::string miss_a1, miss_a2;               // MissA1 / MissA2: what an A1 / A2 attack fires (sk_archer1: skbowarrow1, quillrat1: spike1)
+    std::string miss_a1, miss_a2, miss_s1, miss_c;               // MissA1 / MissA2: what an A1 / A2 attack fires (sk_archer1: skbowarrow1, quillrat1: spike1)
     std::array<std::string, 8> skill;           // Skill1..8 (Skills.txt names; "" none): the MonAI thinks' skills
     std::array<std::string, 8> sk_mode;         // Sk1mode..8: a mode token, or a MonSeq sequence (seq_nestlay)
     std::array<int, 8> sk_lvl{};                // Sk1lvl..8 (record +0x198)

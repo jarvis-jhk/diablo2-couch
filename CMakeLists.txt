@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 cmake_minimum_required(VERSION 3.28)
-project(D2Decomp LANGUAGES CXX)
+project(D2Decomp LANGUAGES C CXX) # Bundled StormLib contains both C and C++ sources.
 
 # MSVC: CMake has no C++26 flag for it; 23 maps to /std:c++latest, the
 # newest dialect MSVC offers.
@@ -59,10 +59,18 @@ endif()
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(HeaderCheck)
 
+option(D2D_FLATPAK "Install apps using Flatpak's runtime and filesystem layout" OFF)
+
 include(FetchContent)
 set(FETCHCONTENT_QUIET OFF)
 
 # CLI argument parsing — CLI11 (header-only), matches thirdeye.
+if(D2D_FLATPAK AND
+   (NOT FETCHCONTENT_SOURCE_DIR_CLI11 OR
+    NOT EXISTS "${FETCHCONTENT_SOURCE_DIR_CLI11}/CMakeLists.txt"))
+    message(FATAL_ERROR
+        "Flatpak builds must provide CLI11 locally with -DFETCHCONTENT_SOURCE_DIR_CLI11=<source dir>")
+endif()
 FetchContent_Declare(
     cli11
     GIT_REPOSITORY https://github.com/CLIUtils/CLI11.git
@@ -74,8 +82,15 @@ include(CTest)
 enable_testing()
 
 option(D2D_BUILD_APPS  "Build end-user apps under apps/"  ON)
-option(D2D_BUILD_TOOLS "Build helper tools under tools/"  ON)
-option(D2D_BUILD_TESTS "Build tests under tests/"         ON)
+if(D2D_FLATPAK)
+    set(_d2d_tools_default OFF)
+    set(_d2d_tests_default OFF)
+else()
+    set(_d2d_tools_default ON)
+    set(_d2d_tests_default ON)
+endif()
+option(D2D_BUILD_TOOLS "Build helper tools under tools/"  ${_d2d_tools_default})
+option(D2D_BUILD_TESTS "Build tests under tests/"         ${_d2d_tests_default})
 
 # Components (shared libs) must configure before apps/tests that link them.
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/components/CMakeLists.txt")

@@ -14,10 +14,11 @@ data we own, and lets us adventure together.
 ## What to expect
 
 D2Decomp is an unfinished project—not the original game or a
-complete replacement. All of Act I plays through: character setup, the Rogue
-Encampment, every area from the Blood Moor to Andariel's lair, and all six
-quests. Act II isn't built yet, so Warriv's caravan goes nowhere. d2d can also join
-an Act I game hosted by the original game over TCP/IP.
+complete replacement. Acts I to III play through: character setup, the Rogue
+Encampment, Lut Gholein and the Kurast Docks, every area from the Blood Moor
+to Mephisto's Durance of Hate, and all eighteen quests. The hellgate opens,
+but Act IV isn't built yet. d2d can also join a game hosted by the original game
+over TCP/IP.
 
 | Area | Progress |
 |---|---:|
@@ -26,10 +27,16 @@ an Act I game hosted by the original game over TCP/IP.
 | Act I levels | ✅ 100% (38 of 38; maps match the original's) |
 | Act I quests | ✅ 100% (6 of 6) |
 | Act I matching the original exactly | Maps, item drops, monster and object placement ✅; a few details left |
-| Acts II–V | Not started |
+| Act II levels | ✅ 100% (35 of 35; maps match the original's) |
+| Act II quests | ✅ 100% (6 of 6) |
+| Act II matching the original exactly | Maps, town, vendors, hirelings, monster AI checked against the original ✅; a few details left |
+| Act III levels | ✅ 100% (28 of 28; maps match the original's) |
+| Act III quests | ✅ 100% (6 of 6) |
+| Act III matching the original exactly | Maps, monster and object placement, monster AI checked against the original ✅; a few details left |
+| Acts IV–V | Not started |
 | Single player, softcore and hardcore | ✅ Runs as a one-player client/server, like the original |
 | Multiplayer over TCP/IP (a d2d host) | Not started |
-| Joining a game hosted by the original | 🚧 Act I together: party, trade, portals, waypoints, chat; live checks pending |
+| Joining a game hosted by the original | 🚧 Acts I and II together: party, trade, portals, waypoints, chat, quests, travel; live checks pending |
 | Dedicated server | Not started |
 
 ## Bring your own game
@@ -57,6 +64,22 @@ walking over it, and roofs turn see-through around your character.
 
 **Planned:** continue through the rest of the campaign; let d2d host multiplayer
 games and run a dedicated server; and support controllers, high-DPI displays, and remappable controls. These features are not implemented yet.
+
+## Steam Deck
+
+Steam Deck support is experimental: there is no Flathub listing or controller
+support yet. Download and extract the `d2decomped-x86_64` artifact from a
+successful [CI workflow run](https://github.com/psi29a/d2decomped/actions/workflows/ci.yml),
+switch to Desktop Mode, then run:
+
+```sh
+cd ~/Downloads
+unzip -o d2decomped-x86_64.zip
+flatpak install --user --bundle ./d2decomped-x86_64.flatpak
+```
+
+To launch from Gaming Mode, add D2Decomp to Steam as a non-Steam game in
+Desktop Mode. You must provide your own Diablo II + Lord of Destruction data.
 
 ## Build and run
 

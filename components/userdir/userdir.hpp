@@ -4,7 +4,7 @@
 // Same layout as thirdeye's components/files (OpenMW lineage), so both
 // engines put their files in the same places:
 //   user dir    macOS    ~/Library/Preferences/<app>/
-//               Linux    ~/.config/<app>/
+//               Linux    $XDG_CONFIG_HOME/<app>/ (normally ~/.config/<app>/)
 //               Windows  Documents\My Games\<app>
 //   global dir  macOS    /Library/Preferences/<app>/
 //               Linux    /etc/<app>/
@@ -51,6 +51,10 @@ inline fs::path user_dir(std::string_view app) {
 #  if defined(__APPLE__)
     return base / "Library" / "Preferences" / app;
 #  else
+    if (const char* xdg = std::getenv("XDG_CONFIG_HOME"); xdg && *xdg) {
+        const fs::path xdg_path(xdg);
+        if (xdg_path.is_absolute()) return xdg_path / app;
+    }
     return base / ".config" / app;
 #  endif
 #endif

@@ -101,7 +101,7 @@ void view_units(const Scene& scene, const View& view, float camera_x, float came
         unit.rgb = ground_item.rgb;
         out.push_back(unit);
     }
-    for (const auto& fire : view.fires) out.push_back({ fire.x, fire.y, &scene.npc_anim(*fire.npc, fire.npc->mode), 0, nullptr, 0, -2 });
+    for (const auto& fire : view.fires) out.push_back({ fire.x, fire.y, &scene.npc_anim(*fire.npc, fire.npc->mode), 0, nullptr, fire.born, -2 });
     // The player's corpses: lying (DT's last frame, as the dead player is
     // drawn), in what they wore; named by the player (-3000 - which).
     for (const auto& corpse : view.corpses) {
@@ -314,6 +314,7 @@ auto Town::publish() -> void {
             const auto keep = store;
             store = *view.store;
             if (keep.npc == store.npc) { store.tab = keep.tab; store.mode = keep.mode; store.pressed = keep.pressed; }
+            else store.first_tab();                 // the tab isn't sent: the World's pick again
         } else {
             store = {};
         }

@@ -32,7 +32,7 @@ import drops as drops_oracle
 import monsters
 
 LEVELS = "2,8,4,9"                                          # game: Blood Moor, Den of Evil, Stony Field, Cave 1 (none touching)
-TOWNS = {1, 40, 75, 103, 109}                               # a camp room's line leaves out its seeds (d2d doesn't keep them)
+TOWNS = set(drlg.TOWNS)                                       # a camp room's line leaves out its seeds (d2d doesn't keep them)
 CONTAINERS = {1, 3, 4, 5, 14, 26}                           # OperateFn: casket, urn, chest, barrel, corpse / crate, bookshelf
 
 
@@ -133,15 +133,21 @@ def step(e, at, n):
 QUEST_STUBS = {0x5448b0: 0, 0x5448e0: 0, 0x544760: 1}
 
 
-def game_dump(e, seed, levels, kind="shuffle"):
-    """game_dump_hooked with the quest hooks it needs put back after, so a
-    shared emulator (diff_drlg.py's other kinds) runs game.exe's own again."""
+def quest_stubbed(e, fn, *args):
+    """fn(e, *args) with QUEST_STUBS hooked, game.exe's own code put back
+    after, so a shared emulator (diff_drlg.py's other kinds) runs it again."""
     saved = {addr: bytes(e.mu.mem_read(addr, 5)) for addr in QUEST_STUBS}
     try:
-        return game_dump_hooked(e, seed, levels, kind)
+        for addr, argc in QUEST_STUBS.items(): e.hook(addr, lambda _e: 0, argc)
+        return fn(e, *args)
     finally:
         for addr, code in saved.items():
             e.mu.mem_write(addr, code)
+            e.mu.ctl_remove_cache(addr, addr + len(code))
+
+
+def game_dump(e, seed, levels, kind="shuffle"):
+    return quest_stubbed(e, game_dump_hooked, seed, levels, kind)
 
 
 def game_dump_hooked(e, seed, levels, kind="shuffle"):
@@ -156,8 +162,6 @@ def game_dump_hooked(e, seed, levels, kind="shuffle"):
     g = monsters.new_game(e, seed)
     act = monsters.act_of(e, g, levels[0], drlg.act_of(levels[0]))
     dact = e.r32(act + 0x48)
-    # Lut Gholein's Jerhyn markers (InitFn 18 / 19) ask quests this bare game hasn't (npcs.py).
-    for addr, args in QUEST_STUBS.items(): e.hook(addr, lambda _e: 0, args)
     rgn = e.r32(g + 0x10f0)
     made, pre, out = [], [0, 0], []
     def on_make(mu, addr, size, _):                         # FUN_00555230(ECX type, EDX class; x, y, ...)

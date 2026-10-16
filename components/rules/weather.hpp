@@ -2,7 +2,7 @@
 // Rain — game.exe 1.14d, the client's weather (0x472320..0x473fc3).
 // docs/research/re/weather.md. Screen-space: drops fall across the view
 // and the world scrolls under them.
-// ponytail: Act 1's rain only; Act 5's snow, the mud's bubbles and the
+// ponytail: the rain only (Levels.txt Rain: acts 1 and 3); Act 5's snow, the mud's bubbles and the
 // lightning a skill sets off (FUN_00472c50) aren't here.
 #pragma once
 

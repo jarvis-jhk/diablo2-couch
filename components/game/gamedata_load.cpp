@@ -165,7 +165,7 @@ void load_monsters(GameData& game_data, const d2d::mpq::Stack& mpqs) {
         auto& type_info = monsters.types[row_index];
         auto text = [&](std::string column) { return monstats.get(row_index, column); };
         type_info.id = text("Id"); type_info.code = text("Code"); type_info.name_key = text("NameStr"); type_info.ai_name = text("AI");
-        type_info.base = row(text("BaseId"));
+        type_info.base = row(text("BaseId")); type_info.next_in_class = row(text("NextInClass"));
         type_info.min_grp = num(text("MinGrp")); type_info.max_grp = num(text("MaxGrp"));
         type_info.party_min = num(text("PartyMin")); type_info.party_max = num(text("PartyMax"));
         type_info.sparse = num(text("sparsePopulate")); type_info.rarity = num(text("Rarity"));
@@ -177,7 +177,7 @@ void load_monsters(GameData& game_data, const d2d::mpq::Stack& mpqs) {
         type_info.place_spawn = text("placespawn") == "1" ? row(text("spawn")) : -1;
         type_info.velocity = num(text("Velocity")); type_info.run = num(text("Run"));
         type_info.spawnable = text("isSpawn") == "1"; type_info.ranged = text("rangedtype") == "1"; type_info.killable = text("killable") == "1"; type_info.melee = text("isMelee") == "1"; type_info.open_doors = text("opendoors") == "1";
-        type_info.miss_a1 = text("MissA1"); type_info.miss_a2 = text("MissA2");
+        type_info.miss_a1 = text("MissA1"); type_info.miss_a2 = text("MissA2"); type_info.miss_s1 = text("MissS1"); type_info.miss_c = text("MissC");
         for (std::size_t skill = 0; skill < type_info.skill.size(); ++skill) { type_info.skill[skill] = text("Skill" + std::to_string(skill + 1)); type_info.sk_mode[skill] = text("Sk" + std::to_string(skill + 1) + "mode");
                                                    type_info.sk_lvl[skill] = num(text("Sk" + std::to_string(skill + 1) + "lvl")); }
         type_info.trans_lvl = num(text("TransLvl"));
@@ -298,6 +298,7 @@ void load_monsters(GameData& game_data, const d2d::mpq::Stack& mpqs) {
         if (!used) continue;
         GameData::MissileInfo missile_info;
         missile_info.name = name;
+        missile_info.size = number("Size");
         missile_info.vel_lev = number("VelLev"); missile_info.max_vel = number("MaxVel"); missile_info.accel = number("Accel"); missile_info.activate = number("Activate");
         missile_info.vel = number("Vel"); missile_info.range = number("Range"); missile_info.src_damage = number("SrcDamage"); missile_info.min = number("MinDamage"); missile_info.max = number("MaxDamage");
         missile_info.anim_speed = std::max(number("AnimSpeed"), 1); missile_info.anim_len = std::max(number("AnimLen"), 1); missile_info.trans = number("Trans"); missile_info.light = number("Light");
@@ -588,6 +589,9 @@ void load_npcs(GameData& game_data, const d2d::mpq::Stack& mpqs) {
         add(tmp, 162, 0, 0);
         add(tmp, 160, 0, 0);
         for (std::size_t k = 0; k < tmp.npcs.size() && k < 2; ++k) game_data.trap_fires[k] = std::move(tmp.npcs[k]);
+        Level glow_level;
+        add(glow_level, 131, 0, 0);                           // the afterglow (InitFn 59, FUN_005bd390): plays mode 1
+        if (!glow_level.npcs.empty()) { game_data.afterglow = std::move(glow_level.npcs[0]); game_data.afterglow.mode = "OP"; }
         Level portal_level;
         add(portal_level, 59, 0, 0);                          // the town portal
         if (!portal_level.npcs.empty()) game_data.town_portal = std::move(portal_level.npcs[0]);

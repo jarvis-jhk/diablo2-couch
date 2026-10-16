@@ -56,6 +56,7 @@ struct OutdoorLevel {
     Placed town;                                        // the Den goes far from it
     std::vector<int> jungle;                            // act 3's jungle (76-78): its 32-tile cells' Defs (act3_layout)
     int jungle_specials = 0;                            // and how many are clearings (level +0x1b8)
+    int act_roll = 0;                                   // act 3's roll (act +0x474): which end Kurast's edge gaps take
 };
 // A plain room's DS1 words ((8+1)x(8+1), row-major) as game.exe keeps
 // them at room data +0x00 / +0x14 / +0x28 (orientation, wall, floor),
@@ -903,6 +904,85 @@ struct Gen {
         }
     }
 
+    // ---- Kurast (FUN_0067f190, 79-82) and Travincal (FUN_0067f3b0, 83).
+    // A row of Defs scattered (FUN_0067eed0): every cell shuffled, each
+    // rolls a Def in [low, high] and takes it where it fits, up to `most`
+    // (0 = no limit).
+    void scatter(int low, int high, int most) {
+        int placed = 0;
+        for (auto [cell_x, cell_y] : shuffled(cells_wide, cells_high)) {
+            const int def = low + seed(high - low + 1);
+            if (!fits(cell_x, cell_y, def, 0, 0xf)) continue;
+            place(cell_x, cell_y, def, -1, false);
+            if (most > 0 && ++placed >= most) return;
+        }
+    }
+    // The walls (FUN_0067ead0 / 0067ec30 / 0067ed70): top and bottom rows
+    // (a gap Def + 8 at `top_gap` / `bottom_gap`; a middle gap is two cells
+    // wide), the sides, then the corners. Base: top, bottom, right, left,
+    // corners top-left, top-right, bottom-left, bottom-right. The Bazaar
+    // lays its top and bottom rows in one loop (`together`), which orders
+    // the rotations' first rolls differently.
+    void kurast_walls(int base, int top_gap, int bottom_gap, bool wide_top, bool wide_bottom, bool together = false) {
+        const int right = cells_wide - 1, bottom = cells_high - 1;
+        auto top = [&](int x) { place(x, 0, base + (x == top_gap ? 8 : 0), -1, false); };
+        auto low = [&](int x) { place(x, bottom, base + 1 + (x == bottom_gap ? 8 : 0), -1, false); };
+        if (together)
+            for (int x = 1; x < right; ++x) { top(x); low(x); }
+        else {
+            for (int x = 1; x < right; x += 1 + (wide_top && x == top_gap)) top(x);
+            for (int x = 1; x < right; x += 1 + (wide_bottom && x == bottom_gap)) low(x);
+        }
+        for (int y = 1; y < bottom; ++y) {
+            place(right, y, base + 2, -1, false);
+            place(0, y, base + 3, -1, false);
+        }
+        place(0, 0, base + 5, -1, false);
+        place(right, 0, base + 4, -1, false);
+        place(0, bottom, base + 7, -1, false);
+        place(right, bottom, base + 6, -1, false);
+    }
+    void lay_kurast() {
+        const int half = (cells_wide - 1) / 2, first = 1, last = cells_wide - 2, right = cells_wide - 4, bottom = cells_high - 4;
+        const bool roll = level.act_roll != 0;
+        switch (level.rect.level) {
+        case level_ids::kLowerKurast:
+            kurast_walls(0x25d, roll ? first : last, half, false, true);
+            anywhere(0x277, 0, 0, 0xf);
+            scatter(0x26a, 0x26a, 4);
+            scatter(0x268, 0x269, 0);
+            scatter(0x267, 0x267, 0);
+            break;
+        case level_ids::kKurastBazaar:
+            kurast_walls(0x26b, roll ? last : first, roll ? first : last, false, false, true);
+            place(3, 3, 0x275, 0, false);
+            place(right, 3, 0x275, 1, false);
+            anywhere(0x276, 0, 0, 0xf);
+            anywhere(0x276, 1, 0, 0xf);
+            anywhere(0x277, 0, 0, 0xf);
+            scatter(0x27b, 0x27b, 4);
+            scatter(0x279, 0x27a, 0);
+            scatter(0x278, 0x278, 0);
+            break;
+        case level_ids::kUpperKurast:
+            kurast_walls(0x27c, half, roll ? last : first, true, false);
+            place(3, bottom, 0x286, 0, false);
+            place(right, bottom, 0x286, 1, false);
+            anywhere(0x287, 0, 0, 0xf);
+            anywhere(0x287, 1, 0, 0xf);
+            anywhere(0x277, 0, 0, 0xf);
+            scatter(0x28b, 0x28b, 4);
+            scatter(0x289, 0x28a, 0);
+            scatter(0x288, 0x288, 0);
+            break;
+        case level_ids::kKurastCauseway: place(0, 0, 0x28c, 0, false); break;
+        case level_ids::kTravincal:
+            for (int k = 0; k < 6; ++k) place(std::array{ 0, 2, 6 }[std::size_t(k % 3)], k / 3 * 4, 0x28d + k, -1, false);
+            break;
+        default: break;
+        }
+    }
+
     // ---- act 2's desert (FUN_0067f980): LevelType 16, levels 41-46.
     [[nodiscard]] bool is_desert() const { return level.rect.level >= level_ids::kRockyWaste && level.rect.level <= level_ids::kCanyonOfTheMagi; }
     [[nodiscard]] int border_base() const { return is_desert() ? 0x16c : 4; }   // the border defs FUN_006752a0 is handed
@@ -1163,13 +1243,14 @@ inline Outdoor generate_outdoor(const OutdoorData& data, const OutdoorLevel& lev
     Gen gen(data, level, seed, out.notes);
     const int id = level.rect.level;                    // FUN_006807f0
     const bool wild = id >= level_ids::kBloodMoor && id <= level_ids::kTamoeHighland;
-    const bool desert = gen.is_desert(), jungle = gen.is_jungle();
-    if (!wild && !desert && !jungle && id != level_ids::kBurialGrounds && id != level_ids::kMooMooFarm) gen.note("drlg: outdoor level " + std::to_string(id) + " not implemented");
+    const bool desert = gen.is_desert(), act3 = id >= level_ids::kSpiderForest && id <= level_ids::kTravincal;
+    if (!wild && !desert && !act3 && id != level_ids::kBurialGrounds && id != level_ids::kMooMooFarm) gen.note("drlg: outdoor level " + std::to_string(id) + " not implemented");
     gen.neighbours();
     gen.outline();
-    if (jungle) {                                                                         // FUN_0067f450: no borders
+    if (act3) {                                                                           // FUN_0067f450: no borders
         gen.contacts();
-        gen.lay_jungle();
+        if (gen.is_jungle()) gen.lay_jungle();
+        gen.lay_kurast();
     } else if (desert) {                                                                  // FUN_0067f980
         gen.contacts();
         gen.borders();

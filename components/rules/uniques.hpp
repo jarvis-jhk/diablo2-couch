@@ -129,25 +129,37 @@ inline std::vector<int> superunique_mods(const UMods& umods, const MonType& type
 }
 
 // An act boss as it's made (FUN_005b1cf0 from FUN_005b2a00, by MonStats
-// BaseId): its mods, each FUN_005a4850(mod, 1), whose FUN_005a0320 sets
-// flag 8 (the gold name, the Demon / Undead label, TreasureClass3). Neither
-// mod has an init in 0x73c008, so no unique stats. Blood Raven also gets
-// stat 0x76 (half freeze). Their quests (FUN_005436b0 6 / 2) key off the
-// kill in d2d (World::andariel_died, blood_raven_died). The Smith (0x192)
-// gets mod 22 alone, no quest call. The Maggot Queen (0x11c) gets 23
-// (poison hit, its init FUN_005a1e00: make_boss's) and 22.
-// ponytail: Act 1's and the Maggot Queen; later acts' cases and the uber
-// Andariel aren't here.
+// BaseId; an uber by its own row): its mods, each FUN_005a4850(mod, 1),
+// whose FUN_005a0320 sets flag 8 (the gold name, the Demon / Undead label,
+// TreasureClass3). No mod has an init in 0x73c008, so no unique stats.
+// Blood Raven also gets stat 0x76 (half freeze). Most also bind a quest
+// (FUN_005436b0: Andariel 6, Blood Raven 2, Mephisto 0x14, Diablo 0x17,
+// Izual 0x16, Nihlathak 0x22, Baal 0x24, the orb 0x13), which d2d keys off
+// the kill (World::andariel_died, blood_raven_died). Travincal's compelling
+// orb also gets unit flag 0x20000. Duriel, Radament, the Summoner and a few
+// others bind a quest and take no mod.
+// ponytail: the ancients (0x21c, FUN_005b1c50) and the Fire Golem's
+// FUN_005a4850(0x1f, 0) aren't here.
 struct ActBoss {
     std::vector<int> mods;
     bool half_freeze = false;
 };
 inline std::optional<ActBoss> act_boss(int monstats_row, int base) {
-    if (base == 0x9c && monstats_row != 0x2c3) return ActBoss{ { umod::questcomplete }, false };
-    if (base == 0x10b) return ActBoss{ { umod::bloodraven, umod::questcomplete }, true };
-    if (base == 0x192) return ActBoss{ { umod::questcomplete }, false };
-    if (base == 0x11c) return ActBoss{ { umod::poisonhit, umod::questcomplete }, false };
-    return std::nullopt;
+    using namespace umod;
+    switch (base) {
+    case 0x9c: return monstats_row == 0x2c3 ? ActBoss{ { poisonhit, fast, multishot }, false } : ActBoss{ { questcomplete }, false };   // Andariel, uber
+    case 0xd3: if (monstats_row == 0x2c4) return ActBoss{ { fast, cold }, false }; return std::nullopt;                                  // Duriel: uber only
+    case 0xf2: return monstats_row == 0x2c0 ? ActBoss{ { questcomplete, aura, lightning, resist, fast }, false } : ActBoss{ { questcomplete }, false };   // Mephisto
+    case 0xf3: return monstats_row == 0x2c1 ? ActBoss{ { questcomplete, resist, fast }, false } : ActBoss{ { questcomplete }, false };   // Diablo
+    case 0x100: return monstats_row == 0x2c2 ? ActBoss{ { fast, cold }, false } : ActBoss{ { questcomplete }, false };                   // Izual
+    case 0x10b: return ActBoss{ { bloodraven, questcomplete }, true };
+    case 0x11c: return ActBoss{ { poisonhit, questcomplete }, false };                                                                     // the Maggot Queen
+    case 0x16e: return ActBoss{ { questcomplete }, false };                                                                                // the compelling orb
+    case 0x192: return ActBoss{ { questcomplete }, false };                                                                                // the Smith, no quest call
+    case 0x20e: return ActBoss{ { questcomplete }, false };                                                                                // Nihlathak
+    case 0x220: return monstats_row == 0x2c5 ? ActBoss{ { questcomplete, cold, resist, fast }, false } : ActBoss{ { questcomplete }, false };   // Baal, uber
+    default: return std::nullopt;
+    }
 }
 
 // The label under a boss's name (client FUN_004adea0, from FUN_00452580):

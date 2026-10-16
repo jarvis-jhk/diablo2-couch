@@ -19,7 +19,13 @@ option(D2D_BUNDLED_FFMPEG "Build a Bink-only FFmpeg from source" ${bundled_ffmpe
 set(D2D_FFMPEG_VERSION "9.0.2" CACHE STRING "FFmpeg release (source build)")
 set(D2D_FFMPEG_SHA256 "8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e"
     CACHE STRING "SHA-256 of ffmpeg-<D2D_FFMPEG_VERSION>.tar.xz")
+set(D2D_FFMPEG_SOURCE_DIR "" CACHE PATH "Use this prepared FFmpeg source tree instead of downloading it")
 if(D2D_BUNDLED_FFMPEG)
+    if(D2D_FLATPAK AND
+       (NOT D2D_FFMPEG_SOURCE_DIR OR NOT EXISTS "${D2D_FFMPEG_SOURCE_DIR}/configure"))
+        message(FATAL_ERROR
+            "Flatpak builds must provide FFmpeg locally with -DD2D_FFMPEG_SOURCE_DIR=<source dir>")
+    endif()
     # Only what Bink needs. No autodetect: nothing of the system's (zlib,
     # VideoToolbox, VAAPI...) creeps in. No protocols: video.hpp reads through
     # its own AVIOContext. No threads: Bink decodes on one. Not off: the safe
@@ -38,6 +44,22 @@ if(D2D_BUNDLED_FFMPEG)
     string(SHA1 ffmpeg_key "${D2D_FFMPEG_VERSION};${ffmpeg_options}")
     string(SUBSTRING "${ffmpeg_key}" 0 12 ffmpeg_key)
     set(ffmpeg_prefix "${CMAKE_BINARY_DIR}/ffmpeg-${ffmpeg_key}")
+    set(ffmpeg_build_dir "${ffmpeg_prefix}/build")
+    if(D2D_FFMPEG_SOURCE_DIR)
+        set(ffmpeg_source_dir "${D2D_FFMPEG_SOURCE_DIR}")
+        set(ffmpeg_source_args
+            SOURCE_DIR "${ffmpeg_source_dir}"
+            DOWNLOAD_COMMAND ""
+            UPDATE_COMMAND ""
+            PATCH_COMMAND "")
+    else()
+        set(ffmpeg_source_dir "${ffmpeg_prefix}/src")
+        set(ffmpeg_source_args
+            SOURCE_DIR "${ffmpeg_source_dir}"
+            URL "https://ffmpeg.org/releases/ffmpeg-${D2D_FFMPEG_VERSION}.tar.xz"
+            URL_HASH "SHA256=${D2D_FFMPEG_SHA256}"
+            DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+    endif()
     set(ffmpeg_archives "")
     foreach(lib avformat avcodec swscale swresample avutil)   # link order
         list(APPEND ffmpeg_archives "${ffmpeg_prefix}/lib/lib${lib}.a")
@@ -47,13 +69,11 @@ if(D2D_BUNDLED_FFMPEG)
         include(ExternalProject)
         cmake_host_system_information(RESULT cores QUERY NUMBER_OF_LOGICAL_CORES)
         ExternalProject_Add(ffmpeg_build
-            URL "https://ffmpeg.org/releases/ffmpeg-${D2D_FFMPEG_VERSION}.tar.xz"
-            URL_HASH "SHA256=${D2D_FFMPEG_SHA256}"
-            DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-            INSTALL_DIR "${ffmpeg_prefix}"
-            CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> ${ffmpeg_options}
+            ${ffmpeg_source_args}
+            BINARY_DIR "${ffmpeg_build_dir}"
+            CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=${ffmpeg_prefix} ${ffmpeg_options}
             BUILD_COMMAND make -j${cores}
-            INSTALL_COMMAND make install COMMAND ${CMAKE_COMMAND} -E touch <INSTALL_DIR>/built
+            INSTALL_COMMAND make install COMMAND ${CMAKE_COMMAND} -E touch "${ffmpeg_prefix}/built"
             BUILD_BYPRODUCTS ${ffmpeg_archives})
         add_dependencies(ffmpeg ffmpeg_build)
         file(MAKE_DIRECTORY "${ffmpeg_prefix}/include")   # exists before the build fills it

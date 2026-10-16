@@ -83,6 +83,26 @@ inline constexpr std::array<std::array<Special, 4>, 15> kAct2Specials = { {
     { { { 489, 500, -1, 3 }, { 483, 498, -1, 0 }, { 485, 499, -1, 1 }, { 482, 497, -1, 2 } } },
     { { { 489, 504, -1, 3 }, { 483, 502, -1, 0 }, { 485, 503, -1, 1 }, { 482, 501, -1, 2 } } } } };
 inline constexpr Special kLair64First = { 485, 509, -1, 1 }, kLair64Second = { 482, 505, -1, 2 };
+// Act 3's special tables (16-byte records, + 0x10 k): the Flayer
+// Dungeon and Swampy Pits' (LevelType 24, FUN_00672ea0: 0x6f0138 then
+// 0x6f0178), the sewers' (25, FUN_00672f00: 0x6f01b8, 0x6f01f8), the
+// Durance's (22, FUN_00672f60: 0x6f0238; level 101 0x6f0278 and 0x6f02b8,
+// level 100 0x6f02b8).
+inline constexpr std::array<std::array<Special, 4>, 7> kAct3Specials = { {
+    { { { 672, 698, -1, 3 }, { 666, 696, -1, 0 }, { 668, 697, -1, 1 }, { 665, 695, -1, 2 } } },
+    { { { 672, 702, -1, 3 }, { 666, 700, -1, 0 }, { 668, 701, -1, 1 }, { 665, 699, -1, 2 } } },
+    { { { 712, 742, -1, 3 }, { 706, 740, -1, 0 }, { 708, 741, -1, 1 }, { 705, 739, -1, 2 } } },
+    { { { 712, 746, -1, 3 }, { 706, 744, -1, 0 }, { 708, 745, -1, 1 }, { 705, 743, -1, 2 } } },
+    { { { 761, 787, -1, 3 }, { 755, 785, -1, 0 }, { 757, 786, -1, 1 }, { 754, 784, -1, 2 } } },
+    { { { 761, 795, -1, 3 }, { 755, 793, -1, 0 }, { 757, 794, -1, 1 }, { 754, 792, -1, 2 } } },
+    { { { 761, 791, -1, 3 }, { 755, 789, -1, 0 }, { 757, 790, -1, 1 }, { 754, 788, -1, 2 } } } } };
+// The spider caves' (23) room by link mask (0x6ef758 + 8, 12-byte rows; 0
+// none, the room keeps its def); the Spider Cave's 662 is 664, the Spider
+// Cavern's 661 is 663 (FUN_006709b0).
+inline constexpr std::array<int, 16> kSpiderDefs = { 0, 0, 0, 0, 0, 659, 660, 0, 0, 661, 662, 0, 0, 0, 0, 0 };
+// The Kurast Sewers' first level (92): its ring's rooms made special
+// (FUN_00673b30), each the first non-special listed room with the def.
+inline constexpr std::array<std::pair<int, int>, 4> kSewer92Specials = { { { 0x2c5, 0x2df }, { 0x2c6, 0x2e0 }, { 0x2c9, 0x2e1 }, { 0x2ca, 0x2e2 } } };
 // The tombs' entrance room by the side left free (0x6ef888, 8-byte rows),
 // and the turn its def starts the specials on (FUN_00672be0).
 inline constexpr std::array<int, 4> kTombEntrance = { 447, 444, 446, 445 };
@@ -93,9 +113,13 @@ inline constexpr std::array<std::array<int, 2>, 16> kHaremDefs = { { { 0, 0 }, {
 
 // A LevelType's first maze def (FUN_006709b0, FUN_006735f0, FUN_006738c0):
 // act 1's caves (3), crypts (4), Barracks (7), Jail (8), Catacombs (10);
-// act 2's sewers (13), tombs (17), lair (18), Arcane Sanctuary (19).
+// act 2's sewers (13), tombs (17), lair (18), Arcane Sanctuary (19);
+// act 3's Durance (22), Flayer Dungeon (24), sewers (25).
 inline int maze_base(int type) {
     switch (type) {
+    case 22: return 0x2f1;
+    case 24: return 0x298;
+    case 25: return 0x2c0;
     case 4: return 0x6c;
     case 7: return 0xa7;
     case 8: return 0xcd;
@@ -108,8 +132,8 @@ inline int maze_base(int type) {
     }
 }
 // The types with theme rooms (FUN_006735f0) and with a file rotation
-// (FUN_006738c0), of acts 1 and 2.
-inline bool maze_themes(int type) { return type == 3 || type == 4 || type == 7 || type == 8 || type == 10 || type == 13 || type == 17; }
+// (FUN_006738c0), of acts 1 to 3.
+inline bool maze_themes(int type) { return type == 3 || type == 4 || type == 7 || type == 8 || type == 10 || type == 13 || type == 17 || type == 22 || type == 24 || type == 25; }
 inline bool maze_rotates(int type) { return maze_themes(type) || type == 18; }
 
 struct Room {
@@ -217,6 +241,10 @@ inline std::vector<Outdoor::RoomSeed> generate_maze(const OutdoorData& data, con
             def = kHaremDefs[std::size_t(mask)][maze.type == 14 ? 0 : 1];
             if (level == level_ids::kPalaceCellarLevel1 && def == 0x169) file = 2;
             if (level == level_ids::kPalaceCellarLevel3 && (def == 0x169 || def == 0x167)) file = 3;
+        } else if (maze.type == 23) {                              // the spider caves: a table, 0 none
+            def = kSpiderDefs[std::size_t(mask)];
+            if (level == level_ids::kSpiderCave && def == 0x296) def = 0x298;
+            if (level == level_ids::kSpiderCavern && def == 0x295) def = 0x297;
         }
         if (def == 0) return;
         room.def = def;
@@ -268,14 +296,29 @@ inline std::vector<Outdoor::RoomSeed> generate_maze(const OutdoorData& data, con
     // above, left, below, closed back on the first). Catacombs: arms off the
     // first, which becomes special (FUN_006714d0): level 34 all four sides,
     // else a roll picks above / below or left / right.
+    // The ring (FUN_00670f60(n)): n - 1 rooms up, n - 1 left, n - 1 down,
+    // n - 2 right, each from the last one placed (a room that won't fit is
+    // freed), then the last linked right to the first. 2 but the Kurast
+    // Sewers' first level, 5, whose ring then has four rooms made special.
     bool grows = true;
-    if (maze.type == 7 || maze.type == 8 || maze.type == 13 || maze.type == 14 || maze.type == 15 || maze.type == 18) {
-        grows = maze.type != 14 && maze.type != 15;                 // the harem and cellars: the ring alone
+    if (maze.type == 7 || maze.type == 8 || maze.type == 13 || maze.type == 14 || maze.type == 15 || maze.type == 18
+        || maze.type == 22 || maze.type == 23 || maze.type == 24 || maze.type == 25) {
+        grows = maze.type != 14 && maze.type != 15 && maze.type != 23;   // the harem, cellars and spider caves: the ring alone
+        const int size = level == level_ids::kKurastSewersLevel1 ? 5 : 2;
         int last = first;
-        for (const int side : { 1, 0, 3 }) last = arm(last, side);                   // ponytail: a failed step (never, from one room) would crash game.exe
+        for (const auto& [side, count] : { std::pair{ 1, size - 1 }, std::pair{ 0, size - 1 }, std::pair{ 3, size - 1 }, std::pair{ 2, size - 2 } })
+            for (int step = 0; step < count; ++step)
+                if (const int placed = arm(last, side); placed >= 0) last = placed;
         link(last, first, 2);
         set_def(last);
         set_def(first);
+        if (level == level_ids::kKurastSewersLevel1)
+            for (const auto& [from, to_room] : kSewer92Specials) {
+                const auto found = std::ranges::find_if(list, [&](int index) { return !rooms[std::size_t(index)].special && rooms[std::size_t(index)].def == from; });
+                if (found == list.end()) continue;                  // ponytail: game.exe asserts (Maze.cpp 0x849..0x84c); never seen
+                auto& room = rooms[std::size_t(*found)];
+                room.special = true; room.def = to_room; room.file = -1;
+            }
     } else if (maze.type == 10) {
         const auto& sides = level == level_ids::kCatacombsLevel1 ? std::vector{ 1, 2, 3, 0 } : seed.next() & 1 ? std::vector{ 0, 2 } : std::vector{ 1, 3 };
         for (const int side : sides) arm(first, side);
@@ -353,7 +396,7 @@ inline std::vector<Outdoor::RoomSeed> generate_maze(const OutdoorData& data, con
         // (FUN_00672be0); the sewers' after a roll for level 47's last side
         // (FUN_00672810); none for the harem, cellars and Claw Viper 2.
         int sewer_side = 1, turn = 0;
-        const bool specials = maze.type != 14 && maze.type != 15 && !(maze.type == 17 && level == level_ids::kClawViperTempleLevel2);
+        const bool specials = maze.type != 14 && maze.type != 15 && maze.type != 23 && !(maze.type == 17 && level == level_ids::kClawViperTempleLevel2);
         if (maze.type == 7) turn = court_file;
         else if (maze.type == 17) {
             for (const int other_index : list)
@@ -446,6 +489,13 @@ inline std::vector<Outdoor::RoomSeed> generate_maze(const OutdoorData& data, con
             if (level == level_ids::kStonyTombLevel2 || level == level_ids::kClawViperTempleLevel2) special(kAct2Specials[10][std::size_t(turn)]);
             if (level == maze.boss_tomb) special(kAct2Specials[11][std::size_t(turn)]);
             if (level == maze.staff_tomb) special(kAct2Specials[12][std::size_t(turn)]);
+        } else if (maze.type == 24 || maze.type == 25) {                          // FUN_00672ea0 / FUN_00672f00
+            special(kAct3Specials[maze.type == 24 ? 0 : 2][std::size_t(turn)]);
+            special(kAct3Specials[maze.type == 24 ? 1 : 3][std::size_t(turn)]);
+        } else if (maze.type == 22) {                                               // FUN_00672f60
+            special(kAct3Specials[4][std::size_t(turn)]);
+            if (level == level_ids::kDuranceOfHateLevel2) { special(kAct3Specials[5][std::size_t(turn)]); special(kAct3Specials[6][std::size_t(turn)]); }
+            if (level == level_ids::kDuranceOfHateLevel1) special(kAct3Specials[6][std::size_t(turn)]);
         } else if (maze.type == 19) {                                               // FUN_00672e50
             special(kArcaneSpecials[std::size_t(turn)]);
         } else if (maze.type == 18) {                                               // FUN_00672dc0

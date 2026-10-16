@@ -527,7 +527,11 @@ Gaps, most important first:
    - monster door opening (FUN_005b0f50)
    - the locked door (mode 6) and the 0x8000-blocked door (mode 4)
 5. Type-2 object groups >= 0x23e (FUN_0054f490, table 0x731d28) only step the
-   seed. The MonPlace codes 4, 8, 10/11, 0x18/0x1a and 0x1d..0x20 (dead
+   seed. 582 is a quest's (FUN_0059d830 → FUN_0059d720, the Seven Tombs'
+   record 13): the Summoner's six tomb symbols, the table 0x738fac {313,
+   312, 308, 310, 311, 309, 307} by tomb 66..72 less the true tomb's (act
+   +0x94), handed out in turn (record +0x3a, round after six), so the wall
+   lacks the true tomb's symbol; 0x133 (307) with no record or true tomb. The MonPlace codes 4, 8, 10/11, 0x18/0x1a and 0x1d..0x20 (dead
    monsters, mode 0xc) have no cases, and the MonStats 0x1b6 event is missing.
 
 Open questions:

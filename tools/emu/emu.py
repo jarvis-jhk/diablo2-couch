@@ -103,6 +103,7 @@ class Emu:
         a = STUB + 16 * (len(self.slots) + 1)
         self.slots[a] = (f"hook_{addr:x}", lambda e: (fn(e), nstack))
         self.mu.mem_write(addr, b"\xe9" + struct.pack("<i", a - (addr + 5)))
+        self.mu.ctl_remove_cache(addr, addr + 5)        # a block already translated would run the old code
 
     def call(self, addr, *args, ecx=0, edx=0, cdecl=False, limit=0, regs=None):
         mu = self.mu

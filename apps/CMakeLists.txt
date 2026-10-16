@@ -9,7 +9,31 @@ endif()
 set(QT_DEPLOY_FORCE_ADJUST_RPATHS OFF)
 add_subdirectory(launcher)
 add_subdirectory(d2d)
-add_subdirectory(d2proxy)
+if(NOT D2D_FLATPAK)
+    add_subdirectory(d2proxy)
+endif()
+
+if(D2D_FLATPAK)
+    # Flatpak supplies Qt and the desktop integration through its runtime.
+    # Install the app entry point and engine side by side so the launcher can
+    # continue resolving d2d from its own executable directory.
+    set(D2D_FLATPAK_APP_ID "io.github.psi29a.d2decomped" CACHE STRING
+        "Flatpak application ID (provisional until confirmed for Flathub)")
+    set(_flatpak_desktop "${CMAKE_CURRENT_BINARY_DIR}/${D2D_FLATPAK_APP_ID}.desktop")
+    set(_flatpak_metainfo "${CMAKE_CURRENT_BINARY_DIR}/${D2D_FLATPAK_APP_ID}.metainfo.xml")
+    configure_file(flatpak/desktop.in "${_flatpak_desktop}" @ONLY)
+    configure_file(flatpak/metainfo.xml.in "${_flatpak_metainfo}" @ONLY)
+
+    install(TARGETS d2d-launcher d2d RUNTIME DESTINATION bin)
+    install(FILES "${_flatpak_desktop}" DESTINATION share/applications)
+    install(FILES "${_flatpak_metainfo}" DESTINATION share/metainfo)
+    install(FILES "${PROJECT_SOURCE_DIR}/apps/icon/d2d.png"
+        DESTINATION "share/icons/hicolor/256x256/apps"
+        RENAME "${D2D_FLATPAK_APP_ID}.png")
+    install(FILES "${PROJECT_SOURCE_DIR}/LICENSE"
+        DESTINATION "share/licenses/${D2D_FLATPAK_APP_ID}")
+    return()
+endif()
 
 # --- packaging: `cmake --build build --target package` -----------------------
 # The launcher is what a user runs; d2d sits next to it (engineBinaryPath

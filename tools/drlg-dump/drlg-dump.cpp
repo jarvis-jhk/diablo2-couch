@@ -55,6 +55,25 @@ using namespace d2d::drlg;
 
 static bool g_units = false;                            // print rooms' units instead of their tiles
 static bool g_seeds = false;                            // print rooms' room1 seeds instead of their tiles
+// The units kind brings rooms up in $ORDER, as drlg.py bring_up: list
+// positions (the list newest first), shuffled as walk_order shuffles; the
+// other kinds bring them up in list order.
+static std::vector<std::size_t> units_order(std::size_t count, std::uint32_t seed) {
+    const char* kind = std::getenv("ORDER");
+    if (!g_units || !kind || std::string(kind) == "list") return {};
+    std::vector<std::size_t> order(count);
+    for (std::size_t i = 0; i < count; ++i) order[i] = i;
+    if (std::string(kind) == "reverse") std::ranges::reverse(order);
+    if (std::string(kind) == "shuffle") {
+        std::uint32_t x = seed;
+        for (std::size_t i = count; i-- > 1;) {
+            x = (x * 1103515245u + 12345u) & 0x7fffffffu;
+            std::swap(order[i], order[x % (i + 1)]);
+        }
+    }
+    return order;
+}
+
 static std::string dump(const OutdoorAssets& assets, std::uint32_t seed, int id, const RoomDt1s* dt1s = nullptr) {
     std::ostringstream out;
     char buffer[256];
@@ -93,7 +112,7 @@ static std::string dump(const OutdoorAssets& assets, std::uint32_t seed, int id,
         for (const auto& room : sorted)
             pf("%d,%d %dx%d kind %d seed %08x def %d file %d at %d,%d\n", room.x, room.y, room.width, room.height, room.kind, room.seed, room.def, room.file, room.preset_x, room.preset_y);
         if (dt1s) {
-            auto built = level_room_tiles(rooms, {}, assets.data, *dt1s, id, warp_slots(assets, id), notes);
+            auto built = level_room_tiles(rooms, {}, assets.data, *dt1s, id, warp_slots(assets, id), notes, units_order(rooms.size(), seed));
             std::ranges::sort(built, {}, [](const auto& room) { return std::tuple(room.y, room.x); });
             if (g_seeds) {
                 for (const auto& room : built) pf("room1 %d,%d seed %08x\n", room.x, room.y, room.room1_seed);
@@ -144,7 +163,7 @@ static std::string dump(const OutdoorAssets& assets, std::uint32_t seed, int id,
     for (const auto& room : rooms) pf("%d,%d %dx%d kind %d seed %08x\n", room.x, room.y, room.width, room.height, room.kind, room.seed);
     auto notes = outdoor.notes;
     if (dt1s) {                                         // plain rooms' tiles, as tools/emu/drlg.py tiles
-        auto built = level_room_tiles(outdoor.rooms, outdoor.plain, assets.data, *dt1s, id, warp_slots(assets, id), notes);
+        auto built = level_room_tiles(outdoor.rooms, outdoor.plain, assets.data, *dt1s, id, warp_slots(assets, id), notes, units_order(outdoor.rooms.size(), seed));
         std::ranges::sort(built, {}, [](const auto& room) { return std::tuple(room.y, room.x); });
         if (g_seeds) {
             for (const auto& room : built) pf("room1 %d,%d seed %08x\n", room.x, room.y, room.room1_seed);
@@ -240,6 +259,11 @@ static std::string dump_game(d2d::game::GameData& game, std::uint32_t seed, cons
         if (!level && !camp) continue;
         if (level && spawning.levels.contains(&game.town))   // next door to the camp made already (install_level's link)
             level->nearby.push_back({ &game.town, game.town.world_x - level->world_x, game.town.world_y - level->world_y });
+        for (const auto& other : built)                       // and to the act's levels made already, both ways
+            if (level && d2d::rules::level_act(other->id) == d2d::rules::level_act(lid)) {
+                level->nearby.push_back({ other.get(), other->world_x - level->world_x, other->world_y - level->world_y });
+                other->nearby.push_back({ level.get(), level->world_x - other->world_x, level->world_y - other->world_y });
+            }
         auto& made = camp ? game.town : *level;
         const auto base = camp ? std::size_t(0) : made.npcs.size();
         out << "level " << lid << '\n';
@@ -267,6 +291,12 @@ static std::string dump_game(d2d::game::GameData& game, std::uint32_t seed, cons
                 std::snprintf(line, sizeof line, "room %d,%d r1 %08x seed %08x post %08x rgn %08x game %08x", made.rooms[room].x, made.rooms[room].y,
                               made.room1_seeds[room], group.pre, group.post, spawning.objects.low, spawning.game.low);
             out << line;
+            // $AREA_IDS=<level>: each room's spawn areas, clipped rect and id (tools/emu area_ids.py).
+            if (const char* ids_level = std::getenv("AREA_IDS"); ids_level && std::atoi(ids_level) == lid) {
+                std::fprintf(stderr, "areas %d,%d:", made.rooms[room].x, made.rooms[room].y);
+                for (const auto& area : made.room_areas[room]) std::fprintf(stderr, " %d,%d,%d,%d=%u", area.left, area.top, area.right, area.bottom, area.id);
+                std::fprintf(stderr, "\n");
+            }
             for (; from < made.npcs.size(); ++from)
                 if (made.npcs[from].root == "objects") out << ' ' << made.npcs[from].object_id << '@' << int(made.npcs[from].x * 5) << ',' << int(made.npcs[from].y * 5);
             out << '\n';
@@ -426,6 +456,7 @@ int main(int argc, char** argv) {
                     out << " specials " << cells.specials << '\n';
                 }
                 out << "roll " << act3.roll << '\n';
+                if (std::getenv("LAYOUT_STATS")) std::fprintf(stderr, "stats %u tries %d failed %d\n", seed, act3.tries, int(act3.failed));   // grids laid, game.exe's endless retry cut off
                 if (argc > 5) std::ofstream(fs::path(argv[4]) / (std::to_string(seed) + ".txt")) << out.str();
                 else std::fputs(out.str().c_str(), stdout);
                 if (seed == last) break;

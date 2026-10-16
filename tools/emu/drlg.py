@@ -186,9 +186,12 @@ def collision_dump(e, seed, lid, kind="shuffle"):
     return "\n".join(out)
 
 
+TOWNS = (1, 40, 75, 103, 109)   # each act's town, its first level (level_ids::kActTowns)
+
+
 def act_of(lid):
-    """A level's act (Levels.txt Act): the first ids of acts 2..5 are 40, 75, 103, 109."""
-    return sum(lid >= first for first in (40, 75, 103, 109))
+    """A level's act (Levels.txt Act): each act's levels follow its town's id."""
+    return sum(lid >= first for first in TOWNS[1:])
 
 
 def layout_dump(e, seed, lid):

@@ -37,7 +37,9 @@ The environment struct is 0x38 bytes. `FUN_0061be40` makes it, and
   intensity falls by 8 a frame to 32. d2d: `Day::set`.
 - **The step** (`FUN_0061bee0`, from the client frame `FUN_0044c790` via
   `FUN_0061bfc0`): time + 1 a frame. Night phases (type 2) add one more;
-  Act 4 adds 15 and Act 3 at night 9. The time wraps at 360 × scale. When
+  Act 4 adds 15 and Act 3 at night 8 more: 10 a frame (the +9 builds on
+  the time + 1, over the night's extra one; tools/emu: an Act 3 day is
+  29 702 frames, night 1537). d2d: `Day::step(act)`. The time wraps at 360 × scale. When
   the time passes the next phase's start × scale, the phase moves on and
   the time snaps to that start.
 - **The day is 340° long** (bugs.md #9): phase 2 starts at 0°, so "0 <
@@ -163,7 +165,7 @@ The environment struct is 0x38 bytes. `FUN_0061be40` makes it, and
 - The Den of Evil's light once cleared: quests.md "The Den lights up".
 
 ponytail, not yet: type 2's cached shadows, lights easing to a new radius,
-Act 3 / 4 days.
+Act 4's day.
 
 ## The unit under the cursor
 
