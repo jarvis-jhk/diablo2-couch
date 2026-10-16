@@ -19,6 +19,12 @@ namespace d2d::rules {
 // A difficulty's quest flags (the d2s block's 96 bytes): quest q's bit b
 // is bit q * 16 + b (FUN_0065c310 / 0065c360 / 0065c3a0).
 using QuestBits = std::array<std::uint8_t, 96>;
+// The original client's quest log has slots 0..40; its flag packet has
+// all 48 quest words from the save. Act III already uses log slots 17..22.
+inline constexpr std::size_t kQuestLogCount = 41;
+inline constexpr std::size_t kQuestFlagCount = QuestBits{}.size() / 2;
+using QuestLogStates = std::array<std::uint8_t, kQuestLogCount>;
+using QuestGameFlags = std::array<std::uint16_t, kQuestFlagCount>;
 [[nodiscard]] inline bool qbit(const QuestBits& quest_bits, int quest, int bit) {
     const int bit_index = quest * 16 + bit;
     return quest_bits[std::size_t(bit_index >> 3)] >> (bit_index & 7) & 1;
@@ -1832,8 +1838,8 @@ inline constexpr std::array<std::array<std::uint16_t, 29>, 12> kQuestLogRecords 
 // the open log picks that quest, FUN_004a3220).
 struct QuestText { int string = 0, count = -1, speech = 0, shown = 2, state = -1; bool marks = false; };
 struct QuestState {
-    std::array<std::uint8_t, 15> log{};     // the log state the server sent, by quest (the view's quest_log)
-    std::array<std::uint16_t, 15> game{};   // the game's quest flags (the view's game_quests)
+    QuestLogStates log{};                  // the log state the server sent, by quest (the view's quest_log)
+    QuestGameFlags game{};                 // the game's quest flags (the view's game_quests)
     int den_left = 0;                      // DAT_007bf2a4
 };
 inline QuestText quest_text(const d2d::rules::QuestBits& quest_bits, int quest, const QuestState& quest_state) {

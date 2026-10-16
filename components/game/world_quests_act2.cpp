@@ -23,7 +23,7 @@
 
 namespace d2d::game {
 
-auto World::act2_log(std::array<std::uint8_t, 15>& log, const d2d::rules::QuestBits& bits) const -> void {
+auto World::act2_log(d2d::rules::QuestLogStates& log, const d2d::rules::QuestBits& bits) const -> void {
         log[d2d::rules::RadamentQuest::kQuest] = std::uint8_t(radament.log_state(bits));
         log[d2d::rules::TaintedSunQuest::kQuest] = std::uint8_t(tainted.log_state(bits));
         log[d2d::rules::HoradricStaffQuest::kQuest] = std::uint8_t(staff.log_state(bits, staff_items(), tainted.used));

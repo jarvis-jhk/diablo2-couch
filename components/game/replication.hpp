@@ -164,7 +164,8 @@ inline std::vector<std::uint8_t> encode_view(const GameData& game_data, const Vi
         chunk.u8(view.merc && !merc_type.empty());
         if (view.merc && !merc_type.empty()) { chunk.str(merc_type).str(view.merc->mode); wire::unit(chunk, view.merc->unit); }
         chunk.i32(view.attack).i32(view.attack_skill).i32(view.aura).i32(view.day.phase).i32(view.day.time).u8(view.day.eclipse).i32(view.day.dimmed).u8(view.den_cleared).i32(view.light_bonus);
-        for (std::size_t quest = 0; quest < view.quest_log.size(); ++quest) chunk.u8(view.quest_log[quest]).u16(view.game_quests[quest]);
+        for (const auto quest : view.quest_log) chunk.u8(quest);
+        for (const auto quest : view.game_quests) chunk.u16(quest);
         chunk.i32(view.den_left);
         for (const auto& line : view.attack_lines)
             chunk.i32(line.skill).u8(line.damage).i32(line.min).i32(line.max).u8(line.damage_colour).i32(line.attack_rating).u8(line.ar_colour);
@@ -346,7 +347,8 @@ inline bool apply_view(const GameData& game_data, std::span<const std::uint8_t> 
             if (const auto found = game_data.mercs.find(std::atoi(type.c_str())); found != game_data.mercs.end()) view.merc = View::Merc{ unit, &found->second.npc, mode };
         }
         view.attack = i32(); view.attack_skill = i32(); view.aura = i32(); view.day.phase = i32(); view.day.time = i32(); view.day.eclipse = byte() != 0; view.day.dimmed = i32(); view.den_cleared = byte() != 0; view.light_bonus = i32(); 
-        for (std::size_t quest = 0; quest < view.quest_log.size(); ++quest) { view.quest_log[quest] = std::uint8_t(byte()); view.game_quests[quest] = std::uint16_t(u16()); }
+        for (auto& quest : view.quest_log) quest = std::uint8_t(byte());
+        for (auto& quest : view.game_quests) quest = std::uint16_t(u16());
         view.den_left = i32();
         for (auto& line : view.attack_lines) {
             line.skill = i32(); line.damage = byte() != 0; line.min = i32(); line.max = i32(); line.damage_colour = byte();

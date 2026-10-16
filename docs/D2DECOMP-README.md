@@ -115,3 +115,8 @@ Your install is read in place and never changed. Its Fullscreen box sets
 
 D2Decomp is licensed under the GNU General Public License, version 3 or later
 (GPL-3.0-or-later); the full text is in [LICENSE](LICENSE).
+
+## Acknowledgments
+
+Thanks to [SophieLovesMorrowind](https://github.com/Sophialovesmorrowind) for
+finding the Act III quest-state bounds crash and preparing the initial fix.

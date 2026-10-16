@@ -1677,11 +1677,10 @@ auto Town::net_quests(std::uint32_t frame_ms) -> void {
         }
         net_game->npc_quests.clear();
         // The log as the host has it (0x52 / 0x5d / 0x29): the View's are d2d's own records'.
-        if (net_game->quest_log_known)
-            for (std::size_t quest = 0; quest < view.quest_log.size(); ++quest) {
-                view.quest_log[quest] = net_game->quest_log[quest];
-                view.game_quests[quest] = net_game->game_quests[quest];
-            }
+        if (net_game->quest_log_known) {
+            view.quest_log = net_game->quest_log;
+            view.game_quests = net_game->game_quests;
+        }
         view.den_left = net_game->den_left;
         if (net_game->sky) { world.day.set(net_game->sky->phase, net_game->sky->time, net_game->sky->eclipse); net_game->sky.reset(); }
         // The Cube: the host opens it (0x77 0x15); shut here, the host's shuts too (0x4f 0x17).

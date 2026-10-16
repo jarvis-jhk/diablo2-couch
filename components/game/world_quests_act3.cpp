@@ -25,7 +25,7 @@
 
 namespace d2d::game {
 
-auto World::act3_log(std::array<std::uint8_t, 15>& log, const d2d::rules::QuestBits& bits) const -> void {
+auto World::act3_log(d2d::rules::QuestLogStates& log, const d2d::rules::QuestBits& bits) const -> void {
         log[d2d::rules::GoldenBirdQuest::kQuest] = std::uint8_t(golden_bird.log_state(bits, carries(d2d::rules::GoldenBirdQuest::kFigurine), carries(d2d::rules::GoldenBirdQuest::kBird), !fight.remote_monsters));
         log[d2d::rules::BladeQuest::kQuest] = std::uint8_t(blade.log_state(bits, carries(d2d::rules::BladeQuest::kGidbinn)));
         log[d2d::rules::KhalimQuest::kQuest] = std::uint8_t(khalim.log_state(bits, khalim_parts(), temple.orb_broken));

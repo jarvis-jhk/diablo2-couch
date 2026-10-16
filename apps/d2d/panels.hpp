@@ -297,7 +297,7 @@ struct QuestLog {
     // log is shut (FUN_004a2cb0): on, held (0x7bf2b0), and its quest waiting
     // for the log to open (0x7bf298 1).
     bool button = false, button_down = false, notified = false;
-    std::array<std::uint8_t, 15> sent{};      // the log states last told, to spot a new one (S->C 0x5d)
+    d2d::rules::QuestLogStates sent{};       // the log states last told, to spot a new one (S->C 0x5d)
     bool sent_known = false;
 };
 

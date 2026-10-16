@@ -174,8 +174,8 @@ struct NetGame {
     // The quest log as the host has it: each quest's log state by its word
     // (0x52 whole, 0x5d one), the game's quest words (0x29), the Den's
     // count (0x5d flags 0x20). `quest_log_known` once 0x52 came.
-    std::array<std::uint8_t, 41> quest_log{};
-    std::array<std::uint16_t, 48> game_quests{};
+    d2d::rules::QuestLogStates quest_log{};
+    d2d::rules::QuestGameFlags game_quests{};
     int den_left = 0;
     bool quest_log_known = false;
     // An NPC's quest lines as the host has them for us (0x27 mode 1), for

@@ -168,12 +168,12 @@ auto World::view() const -> View {
             act1_log(view.quest_log, quest_bits);
             act2_log(view.quest_log, quest_bits);
             act3_log(view.quest_log, quest_bits);
-            for (int quest = 1; quest < 15; ++quest) {
+            for (int quest = 1; quest < int(view.quest_log.size()); ++quest) {
                 const bool bit0 = d2d::rules::qbit(quest_bits, quest, 0) || d2d::rules::qbit(quest_bits, quest, 15);
                 if (bit0 && !d2d::rules::qbit(quest_bits, quest, 13) && !d2d::rules::qbit(quest_bits, quest, 14)) view.quest_log[std::size_t(quest)] = 0;
             }
             const bool done[7] = { false, den.state >= 4, burial.state >= 4, tools.game_returned, cain.rescued_flag, tower.dead, andy.log == 0xd };
-            for (std::size_t quest = 1; quest < 15; ++quest)
+            for (std::size_t quest = 1; quest < view.game_quests.size(); ++quest)
                 view.game_quests[quest] = std::uint16_t(((quest < 7 ? done[quest] : d2d::rules::qbit(game_bits, int(quest), 13)) ? 1 << 13 : 0)
                                                         | (closed_at_join[quest] ? 1 << 15 : 0));
         }
@@ -842,7 +842,7 @@ auto World::new_game() -> void {
         // The first join (FUN_00546270): quests the player's done or closed
         // are shut for the game (FUN_00544410, game flag 15), every quest's
         // join runs, then the chain from quest 1.
-        for (int quest = 1; quest < 15; ++quest)
+        for (int quest = 1; quest < int(closed_at_join.size()); ++quest)
             closed_at_join[std::size_t(quest)] = d2d::rules::qbit(quests(), quest, 0) || d2d::rules::qbit(quests(), quest, 15);
         game_bits = {};
         act1_join();

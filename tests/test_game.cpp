@@ -20,6 +20,7 @@
 #include <object_ids.hpp>
 #include <protocol.hpp>
 #include <quests.hpp>
+#include <replication.hpp>
 #include <rules.hpp>
 #include <world.hpp>
 
@@ -48,6 +49,19 @@ int main() {
     const char* mpq_dir = std::getenv("D2_MPQ_DIR");
     const char* home = std::getenv("HOME");
     const fs::path data_dir = mpq_dir ? fs::path(mpq_dir) : fs::path(home ? home : "") / "Workspace/private/diablo2";
+    {
+        GameData empty_data;
+        View sent;
+        sent.level = &empty_data.town;
+        sent.quest_log.back() = 9;
+        sent.game_quests.back() = 0x8000;
+        ViewEncoder encoder;
+        const auto bytes = encode_view(empty_data, sent, encoder);
+        View received;
+        assert(apply_view(empty_data, bytes, received));
+        assert(received.quest_log == sent.quest_log);
+        assert(received.game_quests == sent.game_quests);
+    }
     if (!fs::exists(data_dir / "d2data.mpq")) { std::printf("SKIP: no d2data.mpq in %s\n", data_dir.string().c_str()); return 0; }
     const char* patch = std::getenv("D2_PATCH_INSTALLER");
 

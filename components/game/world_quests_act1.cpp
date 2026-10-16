@@ -19,7 +19,7 @@
 
 namespace d2d::game {
 
-auto World::act1_log(std::array<std::uint8_t, 15>& log, const d2d::rules::QuestBits& bits) const -> void {
+auto World::act1_log(d2d::rules::QuestLogStates& log, const d2d::rules::QuestBits& bits) const -> void {
         const int clvl = int(character.stats.get(d2d::d2s::kLevel));
         log = { 0, std::uint8_t(den.log_state(bits)), std::uint8_t(burial.log_state(bits)),
                 std::uint8_t(tools.log_state(bits, holding_malus(), clvl)), std::uint8_t(cain.log_state(bits)),
