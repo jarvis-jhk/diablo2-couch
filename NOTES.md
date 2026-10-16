@@ -162,3 +162,23 @@
   The descriptor's [[data]] (`./d2exp.mpq`, import_args `--data {path}`) already matches;
   no `present` (d2d keeps the path in d2d.cfg, not as a file) and no `known` fingerprints
   (no game data here to hash), so no warpzone PR for it.
+- Checked on the v0.0.2 draft's Windows zip under Wine (no game data, no display): a
+  planted `d2d.running` (v0.0.1) became the pending line "Diablo 2 Couch v0.0.1 Windows
+  crash" (Wine has no curl.exe), the mark was gone after exit, WARPZONE_DATA_D2LOD (a dir
+  with an empty d2data.mpq) was taken and written as `data =`, and a second start read it
+  from d2d.cfg. The launcher under Xvfb showed the v0.0.2 changelog box after a seeded
+  `changelog/seen = v0.0.1` and stored v0.0.2. Found: the modal box held the pending
+  report back until closed — 7646e1f sends first; v0.0.2 retagged on it.
+- v0.0.2 published: https://github.com/jarvis-jhk/diablo2-couch/releases/tag/v0.0.2 from
+  7646e1f, CI run 38912670732 (Linux/Windows/macOS/both Flatpaks green, 40/40, source SHA
+  checked in the Linux and Windows job logs). All five assets downloaded, SHA-256 equal to
+  GitHub's digests (hashes in the release notes). The rebuilt launcher under Wine/Xvfb
+  posted a pending line to the ntfy topic while the changelog box was open ("relay test
+  … not a fault", which the workflow skips as foreign). `/releases?per_page=5` now lists
+  v0.0.2 first. v0.0.1 launchers have no update check (they shipped with an empty URL);
+  v0.0.2 onwards does.
+- Combined roadmap item diablo2-four-players-packaging closed with this prerelease.
+  Open for Jan's test: real data, three/four real pads, the Deck, the Flatpak's crash
+  path (does its runtime have curl, else the launcher sends). Open work (ROADMAP M2):
+  self-installing updates, an older-glibc Linux tarball (Warpzone Linux/Deck needs it;
+  warpzone PR #2 still open), personal panels (M1).

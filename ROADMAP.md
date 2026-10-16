@@ -42,6 +42,7 @@ becomes a GitHub issue; Flatpak for Linux/Deck, Windows zip, assets checksum-ver
       only exist on Ubuntu 25.04+). Open: a self-installing update (today the launcher
       links the release page), an older-glibc tarball (SDL3/Qt built from source).
 - [x] Anonymous fault relay (ntfy → GitHub issue → lane), 2026-10-16.
+- [x] Prerelease v0.0.2 with the above (2026-10-16); combined item closed.
 - [~] Warpzone tier 0: `d2d --data <dir>` now persists `data =` (2026-10-16); the launcher's
       update notice stays silent with `.warpzone-managed`. Open: recheck
       games/diablo2-couch.toml in jarvis-jhk/warpzone against the release assets.
