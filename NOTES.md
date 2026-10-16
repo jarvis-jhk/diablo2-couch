@@ -91,3 +91,28 @@
   covers the first start. The inherited launcher's update check is off (empty
   D2LAUNCHER_UPDATE_URL); if we turn it on it must respect `.warpzone-managed`.
 - Online via Warpzone is an M3 item, after couch co-op.
+
+## 2026-10-16 — two players on one screen (M1 prototype)
+- Merged upstream af67c23 (quest flag replication fixes); README conflict, ours kept.
+- Asked upstream, as the contact plan says, whether they want the PlayerSession split
+  (net-host.md stage 1) and SDL3 gamepad input as PRs: psi29a/d2decomped#30 (AI-written,
+  stated). Tracked for the github-inbox in agent data/pr-watch/d2decomped-upstream.md.
+  Not waiting for it: the fork carries a narrow party layer until upstream decides.
+- Server (2d4cfca): components/couch/party, see docs/COUCH.md "Built (2026-10-16)".
+  Upstream files touched: Fight::world (side_pair(), guests' sides, host-only monster and
+  missile steps) and World::tick (couch_guest gates). Single player takes the same path
+  as before (no guests: no sides, every gate open). At each upstream merge check new
+  World/Fight/Loot fields against lend().
+- Client (9ebc5bd): apps/d2d/couch, pads join with a hero picker, pad controls, group
+  camera, guests drawn as other players, their HUD corners; devctl `couch` verbs.
+- Release job: a tag now makes a draft prerelease of the d2d-* packages only (the Flatpak
+  bundles carry upstream's app id), titled ours; publish by hand after checking assets.
+- Versions: v0.0.x. Upstream's v0.1.0 tag is on our fork (from the fork) and v0.3.0
+  upstream, so our first tags are v0.0.x and never collide.
+- Verified: local clang 23 + libc++ build of game/couch_party/tests (-Werror), clang-tidy
+  23 clean on our files, syntax check of every touched app file against SDL3/OpenAL/
+  FFmpeg headers; test_couch_party compiles but SKIPs: no Diablo II data exists here or in
+  the RE lab (re lane answer, 2026-10-16), so no gameplay run has been seen by us.
+  Open: everything with real data, real pads and the Deck is Jan's first test.
+- Known gaps (README "Couch preview"): guests have no panels, own waypoints or portals;
+  guest missiles credit the host; the wall see-through follows the camera, not each hero.

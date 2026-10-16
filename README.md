@@ -11,8 +11,9 @@ following the group. This project brings that to Diablo II, built on
 [D2Decomp](https://github.com/psi29a/d2decomped), an open reimplementation of the
 Diablo II engine that runs natively on Linux, Windows and macOS.
 
-> ⚠️ **Early work in progress. There is no release yet.** Today this repository is
-> D2Decomp plus our plans. Couch co-op is being built; this page will say when you can play it.
+> ⚠️ **Early work in progress.** The first preview of couch co-op is out: a second (third,
+> fourth) player joins with a controller and their own hero. It is a prototype: see
+> [Couch preview](#couch-preview) for what works and what doesn't yet.
 
 ## What it will be
 
@@ -33,8 +34,9 @@ Diablo II engine that runs natively on Linux, Windows and macOS.
 | Act II (all areas and quests) | ✅ playable in D2Decomp |
 | Act III (all areas and quests) | ✅ playable in D2Decomp |
 | Acts IV–V | 🚧 being built upstream |
-| Two players on one screen | 📋 next — first prototype in Act I |
-| Controllers | 📋 planned |
+| Two to four players on one screen | 🧪 preview — guests join with a pad, shared camera |
+| Controllers | 🧪 preview — stick walk, skills on buttons; menus still need the mouse |
+| Per-player inventory, stash, merchants | 📋 next |
 | Four players, Deck packaging | 📋 planned |
 
 The plan is in [ROADMAP.md](ROADMAP.md), the running log in [NOTES.md](NOTES.md).
@@ -59,6 +61,35 @@ build/apps/d2d/d2d --data /path/to/your/MPQ-folder
 ```
 
 More in the [D2Decomp README](docs/D2DECOMP-README.md).
+
+## Couch preview
+
+Start a game as usual (mouse and keyboard: that hero is player 1). Then press any button
+on a controller: a list of your other saved characters appears — pick one with the d-pad
+and **A**, and that hero joins next to player 1. Up to three controllers can join.
+
+| Controller | |
+|---|---|
+| Left stick | walk |
+| A | attack the nearest monster (hold to keep attacking), or pick up / open / use what's next to you |
+| X | right skill at the nearest monster |
+| Y | next left skill · **LB / RB** previous / next right skill |
+| D-pad | drink from belt column 1–4 |
+| B | run / walk |
+| A when dead | get up again, next to the party |
+| Back (hold 2 s) | leave the game (your hero is saved) |
+
+On a Steam Deck the first controller plays player 1 instead (`pad_player1 = 1` in
+`d2d.cfg` does that anywhere, `0` turns it off).
+
+How it plays: one camera follows the whole party and nobody can walk off the screen.
+Player 1 leads — when they take a waypoint, portal, cave entrance or walk into the next
+area, everyone comes along. The game no longer pauses under the Esc menu while guests
+play. Each guest is saved when player 1 saves and leaves.
+
+Not there yet: guests have no inventory, stash, merchant or skill-tree screens, can't
+use waypoints themselves, and share player 1's town portal; a guest's missiles and spells
+count their kills for player 1. Real controllers and the Deck are untested by us so far — please report what you find.
 
 ## Credits and licence
 

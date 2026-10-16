@@ -109,6 +109,19 @@ lists controllers under "Cross-platform polish" (PLAN.md step 7), not started.
    commands; the client only draws.
 7. **Pause.** The menu pause applies only with one local player.
 
+*Built (2026-10-16), before upstream's split:* seams 1-5 and 7 in a fork-only shape.
+`components/couch/party` keeps the host's `World` as the game and gives every guest
+hero a `World` of its own; the game's shared state (monsters, missiles, floor, NPCs,
+objects, doors, quest records, day, rolls; the list is `lend()`) is swapped into a
+guest's World for its pass and back. `World::couch_guest` gates the game's own steps in
+`World::tick`, `Fight::couch_sides` / `couch_taken` put the guests' sides into the
+host's monster pass and hand back what each took. The host leads level changes, the
+guests follow; the leash undoes a step that would pull the party off screen; a fallen
+guest gets up where it fell. `apps/d2d/couch` is the client: SDL3 gamepads, seats, the
+hero picker, pad commands, the group camera, guests drawn as other players. A field
+upstream adds to World / Fight / Loot that belongs to the game must be added to
+`lend()` at the merge, or a guest keeps its own stale copy.
+
 Different acts for different players fight over `palette_act`; group rules
 (M1 "waypoints, portals, area transitions") keep the party in one act, which
 sidesteps that.
