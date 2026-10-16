@@ -12,12 +12,15 @@ following the group. This project brings that to Diablo II, built on
 Diablo II engine that runs natively on Linux, Windows and macOS.
 
 > ⚠️ **Early work in progress.** The first preview of couch co-op is out —
-> [v0.0.1](../../releases/tag/v0.0.1): a second (third, fourth) player joins with a
+> [v0.0.2](../../releases/tag/v0.0.2): up to four players, each joining with a
 > controller and their own hero. It is a prototype: see [Couch preview](#couch-preview)
 > for what works and what doesn't yet.
 
 **Download** from [Releases](../../releases): the Flatpak (`diablo2-couch-x86_64.flatpak`)
-for Steam Deck and Linux, the zip for Windows.
+for Steam Deck and Linux, the zip for Windows. The launcher tells you when a newer release
+is out and shows what changed after an update ([CHANGELOG.md](CHANGELOG.md)). The Linux
+`.tar.gz` is built on Ubuntu 26.04 and needs a distribution that new (glibc 2.43): use the
+Flatpak on anything older, including SteamOS and Linux Mint 22.
 
 ## What it will be
 
@@ -41,7 +44,7 @@ for Steam Deck and Linux, the zip for Windows.
 | Two to four players on one screen | 🧪 preview — guests join with a pad, shared camera |
 | Controllers | 🧪 preview — stick walk, skills on buttons; menus still need the mouse |
 | Per-player inventory, stash, merchants | 📋 next |
-| Four players, Deck packaging | 📋 planned |
+| Four players, packaging | 🧪 preview — four heroes, Flatpak for Deck/Linux, update notice, crash reports |
 
 The plan is in [ROADMAP.md](ROADMAP.md), the running log in [NOTES.md](NOTES.md).
 New acts arrive here as D2Decomp builds them.
@@ -94,6 +97,10 @@ play. Each guest is saved when player 1 saves and leaves.
 Not there yet: guests have no inventory, stash, merchant or skill-tree screens, can't
 use waypoints themselves, and share player 1's town portal; a guest's missiles and spells
 count their kills for player 1. Real controllers and the Deck are untested by us so far — please report what you find.
+
+**Crash reports.** If the game did not close normally, the next start sends one anonymous
+line — version, platform and the word "crash", nothing else — so the bug turns up in this
+repository's issues. `fault_reports = 0` in `d2d.cfg` (or `D2COUCH_NO_REPORT=1`) turns it off.
 
 ## Credits and licence
 

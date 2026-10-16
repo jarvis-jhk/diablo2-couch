@@ -133,3 +133,26 @@
   tag refs too) or tag a commit without it.
 - Combined roadmap item diablo2-two-players-act-i closed with this prerelease. Open, for
   Jan's test: real game data, real pads, the Deck (nobody here has played this build).
+
+## 2026-10-16 — M2: fault reports, update notice, changelog, --data
+- Combined roadmap item diablo2-four-players-packaging; its done-when is in ROADMAP M2.
+- Four players were already in the M1 code: host + three guests (`party.size() >= 3` caps
+  the guests), seats 0–3, corners 3 × 196 px along the 800 px top; at 1280×800 the game is
+  letterboxed (SDL logical presentation) to 1067×800. Nothing to change there.
+- Fault reports (05c26a8): components/couch/fault_report.hpp + test_couch_fault (negative
+  control: accepting `-g` dev stamps fails it). Only a tag's own build (`git describe` =
+  `vX.Y.Z`) reports; a `d2d.running` mark left in the user dir is a session that never
+  ended, reported once at the next windowed start. d2d spawns a detached curl
+  (System32\curl.exe on Windows); with no curl (the Flatpak runtime may have none) the line
+  waits in `fault-report.txt` and the launcher posts it. Topic
+  `diablo2-couch-faults-ae4dac602ec557e8` (public), `.github/workflows/fault-reports.yml`
+  every 30 min → issue labelled fault-report → JARVIS_REPORT_URL (repo secret, set) → lane.
+  A double Ctrl-C (`_exit(130)`) or power loss also counts as a crash: acceptable noise.
+- Launcher: update check against `/releases?per_page=5` (ours are prereleases, which
+  `/releases/latest` hides), numeric vX.Y.Z compare, silent with `.warpzone-managed` in
+  its dir or the one above; CHANGELOG.md (Qt resource) section shown once per new version
+  (QSettings `changelog/seen`; a fresh install shows nothing). No self-installing update.
+- d2d remembers a working `--data` as `data =` unless `--headless`/`--no-save`.
+- Warpzone: jarvis-jhk/warpzone PR #2 (descriptor patterns) is still open, and its
+  Linux/Deck entries point at the tarball, which needs glibc 2.43 — so Warpzone on the
+  Deck needs an older-base tarball first.

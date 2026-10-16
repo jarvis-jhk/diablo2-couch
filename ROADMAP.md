@@ -28,15 +28,23 @@ camera, with keyboard+pad or two pads.
 - [ ] Guests' missiles credit their own kills; per-player town portals.
 
 ## M2 — Four players, packaging
-- [ ] Four players; UI layout scaling for 1280×800 (Deck).
-- [ ] Linux/Windows/Deck builds, installer, safe auto-update, first-start changelog.
-      v0.0.1 ships a Flatpak (our id) for Linux/Deck and the Windows zip; the Linux tarball
-      needs glibc 2.43 (built on ubuntu-latest): build it on an older base or drop it.
-- [ ] Anonymous fault relay (ntfy → GitHub issue).
-- [ ] Warpzone tier 0 (launcher install/update/data hand-over): `d2d --data <dir>` persists
-      `data =` into d2d.cfg (the hand-over passes it only once); any own updater stays silent
-      when the install dir has `.warpzone-managed`; recheck games/diablo2-couch.toml in
-      jarvis-jhk/warpzone against the release assets (docs/integration.md there).
+Done when (combined roadmap item diablo2-four-players-packaging): prerelease v0.0.2 where
+host plus three pads play four heroes on one screen (letterboxed at the Deck's 1280x800),
+the launcher checks our releases (silent under .warpzone-managed) and shows the changelog
+once after an update, d2d remembers --data, crashes post an anonymous fault report that
+becomes a GitHub issue; Flatpak for Linux/Deck, Windows zip, assets checksum-verified.
+
+- [x] Four players: the host plus three pads (or four pads with pad_player1); the guests'
+      corners fit along the top, the 800x600 game letterboxed at 1280x800 (2026-10-16).
+- [~] Linux/Windows/Deck builds, installer, update notice, first-start changelog (2026-10-16:
+      launcher update check against our releases, CHANGELOG.md shown once after an update).
+      Flatpak = Linux/Deck download; the Linux tarball needs glibc 2.43 (SDL3 and Qt 6.5
+      only exist on Ubuntu 25.04+). Open: a self-installing update (today the launcher
+      links the release page), an older-glibc tarball (SDL3/Qt built from source).
+- [x] Anonymous fault relay (ntfy → GitHub issue → lane), 2026-10-16.
+- [~] Warpzone tier 0: `d2d --data <dir>` now persists `data =` (2026-10-16); the launcher's
+      update notice stays silent with `.warpzone-managed`. Open: recheck
+      games/diablo2-couch.toml in jarvis-jhk/warpzone against the release assets.
 - [ ] First full release (Act I couch co-op with packaging), hardware evidence recorded
       separately. Our versions are v0.0.x for now: upstream's own v0.1.0 / v0.3.0 tags exist
       and our tags must never collide with them.
