@@ -954,6 +954,7 @@ public:
     // After the window shows: what's new since the version last started
     // (CHANGELOG.md, built in), and a fault report d2d could not send.
     void afterShow() {
+        sendPendingFault();   // first: the changelog box is modal
         const QString version = QString::fromUtf8(d2::kAppVersion);
         QSettings settings;
         const QString seen = settings.value("changelog/seen").toString();
@@ -961,7 +962,6 @@ public:
             settings.setValue("changelog/seen", version);
             if (!seen.isEmpty()) showChangelog(version);   // a fresh install has nothing to compare
         }
-        sendPendingFault();
     }
 
 private:
