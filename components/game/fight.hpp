@@ -963,6 +963,19 @@ struct Fight {
     // One frame of the fight outside town (`in_moor`: in the level whose
     // monsters these are), and the merc's turn (following, in town).
     void world(bool in_moor, std::uint32_t now_ms, float elapsed, const Crowd& crowd);
+    // The player and the merc as the monsters' foes (indices 0 and 1).
+    std::vector<Foe> side_pair(std::uint32_t now_ms);
+
+    // Diablo 2 Couch (fork, components/couch/party.hpp): the other local
+    // heroes of a shared-screen game. The host's world() hands the guests'
+    // sides (hero, merc, pets) to the monsters after its own and writes back
+    // what each took; a guest's world() moves no monster or missile and
+    // takes its side as the host's pass left it (`couch_taken`).
+    struct CouchSide { std::vector<Foe> foes; };
+    std::vector<CouchSide>* couch_sides = nullptr;   // the host's: the guests', in and out
+    const std::vector<Foe>* couch_taken = nullptr;   // a guest's: its side after the host's pass
+    // This side as couch_sides wants it: side_pair, then the pets.
+    std::vector<Foe> couch_side(std::uint32_t now_ms);
     // Bosses' auras (Aura Enchanted), each at its level within its
     // aurarange: Might, Blessed Aim, Fanaticism add their damage / to-hit %
     // to the monsters there; Conviction cuts the foes' resistances and

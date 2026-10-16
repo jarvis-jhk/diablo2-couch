@@ -3979,27 +3979,56 @@ auto Fight::crowd(Crowd& crowd_out) -> void {
             if (pet.monster.alive() && pet.where == level) crowd_out.units.push_back(&pet.monster.unit);
     }
 
+auto Fight::side_pair(std::uint32_t now_ms) -> std::vector<Foe> {
+        std::vector<Foe> foes{ Foe{ player.x, player.y, int(character.stats.get(d2d::d2s::kLevel)), true, player.walking, player_combat },
+                               Foe{ merc ? merc->unit.x : 0, merc ? merc->unit.y : 0, merc_st.level, merc && merc->mode != "DT",
+                                    merc && merc->unit.walking, merc_fighter() } };
+        foes[0].running = owner_mode == 3;                   // RN (World: walking with run on and stamina)
+        foes[0].life_pct = int(std::int64_t(character.stats.get(d2d::d2s::kLife)) * 100 / std::max<std::int64_t>(character.stats.get(d2d::d2s::kMaxLife), 1));
+        foes[1].pet = true;                                  // the merc: its MonStats class's size
+        foes[1].life_pct = merc ? int(std::int64_t(merc->hit_points) * 100 / std::max(merc_max_life(), 1)) : 0;
+        if (const int row = merc_npc ? game_data->monsters.row(merc_npc->id) : -1; row >= 0)
+            foes[1].size = game_data->monsters.types[std::size_t(row)].size, foes[1].threat = game_data->monsters.types[std::size_t(row)].threat;
+        // The merc's curse: its damageresist (Amplify Damage's -100 %).
+        // ponytail: its other aurastats (Weaken's damagepercent) aren't on the merc's fighter.
+        if (const auto* skill = now_ms < curses[1].until ? game_data->skills.get(curses[1].skill) : nullptr)
+            for (std::size_t i = 0; i < skill->aurastat.size(); ++i)
+                if (skill->aurastat[i] == d2d::d2s::kDamageResist) foes[1].fighter.dr_pct += calc(*skill, skill->aura_calc[i], curses[1].level);
+        return foes;
+    }
+
+auto Fight::couch_side(std::uint32_t now_ms) -> std::vector<Foe> {
+        auto foes = side_pair(now_ms);
+        for (const auto& pet : pets) foes.push_back(pet_foe(pet));
+        return foes;
+    }
+
 auto Fight::world(bool in_moor, std::uint32_t now_ms, float elapsed, const Crowd& crowd) -> void {
         // Monsters think while the player is near (D2 runs the rooms
         // around each player); what they hit comes off the player's life,
         // and a hit of a twelfth of max life or more makes them flinch (GH).
         if (in_moor) {
-            std::vector<Foe> foes{ Foe{ player.x, player.y, int(character.stats.get(d2d::d2s::kLevel)), true, player.walking, player_combat },
-                                   Foe{ merc ? merc->unit.x : 0, merc ? merc->unit.y : 0, merc_st.level, merc && merc->mode != "DT",
-                                        merc && merc->unit.walking, merc_fighter() } };
-            foes[0].running = owner_mode == 3;                   // RN (World: walking with run on and stamina)
-            foes[0].life_pct = int(std::int64_t(character.stats.get(d2d::d2s::kLife)) * 100 / std::max<std::int64_t>(character.stats.get(d2d::d2s::kMaxLife), 1));
-            foes[1].pet = true;                                  // the merc: its MonStats class's size
-            foes[1].life_pct = merc ? int(std::int64_t(merc->hit_points) * 100 / std::max(merc_max_life(), 1)) : 0;
-            if (const int row = merc_npc ? game_data->monsters.row(merc_npc->id) : -1; row >= 0)
-                foes[1].size = game_data->monsters.types[std::size_t(row)].size, foes[1].threat = game_data->monsters.types[std::size_t(row)].threat;
-            // The merc's curse: its damageresist (Amplify Damage's -100 %).
-            // ponytail: its other aurastats (Weaken's damagepercent) aren't on the merc's fighter.
-            if (const auto* skill = now_ms < curses[1].until ? game_data->skills.get(curses[1].skill) : nullptr)
-                for (std::size_t i = 0; i < skill->aurastat.size(); ++i)
-                    if (skill->aurastat[i] == d2d::d2s::kDamageResist) foes[1].fighter.dr_pct += calc(*skill, skill->aura_calc[i], curses[1].level);
-            monster_auras(foes, now_ms);
+            std::vector<Foe> foes = side_pair(now_ms);
+            // Diablo 2 Couch: the other local heroes' sides (hero, merc,
+            // pets) join the monsters' list after this side's own, so the
+            // fixed indices below (0 the player, 1 the merc, 2 + k the pets)
+            // still hold; a guest's own pass takes what its side was dealt.
+            std::vector<std::size_t> couch_at;
+            if (couch_taken) {
+                foes = *couch_taken;
+            } else {
+                if (couch_sides) for (const auto& side : *couch_sides) foes.insert(foes.end(), side.foes.begin(), side.foes.begin() + 2);
+                monster_auras(foes, now_ms);
+                const std::vector<Foe> guests(foes.begin() + 2, foes.end());
+                foes.resize(2);
             for (const auto& pet : pets) foes.push_back(pet_foe(pet));
+                if (couch_sides)
+                    for (std::size_t k = 0; k < couch_sides->size(); ++k) {
+                        couch_at.push_back(foes.size());
+                        foes.insert(foes.end(), guests.begin() + std::ptrdiff_t(2 * k), guests.begin() + std::ptrdiff_t(2 * k + 2));
+                        foes.insert(foes.end(), (*couch_sides)[k].foes.begin() + 2, (*couch_sides)[k].foes.end());
+                    }
+            }
             // FUN_0065c310(pcdata +0x10 + diff * 4, 0x15, 0): the zealots' spare (a pet's owner's, FUN_0058f090).
             const bool a3q5 = d2d::rules::qbit(character.header.quests[std::size_t(std::clamp(character.header.active_difficulty(), 0, 2))], 0x15, 0);
             for (auto& foe : foes) foe.a3q5_done = a3q5;
@@ -4011,7 +4040,8 @@ auto Fight::world(bool in_moor, std::uint32_t now_ms, float elapsed, const Crowd
             // ponytail: a monster's missiles, poison and Mana Burn reach only
             // the player's side; monsters block as the player does.
             const std::size_t sides = foes.size();
-            if (std::ranges::any_of(monsters, [](const Monster& monster) { return monster.align || monster.set_kind; }))
+            const bool host = !couch_taken;                      // a guest's pass: the monsters and missiles moved in the host's
+            if (host && std::ranges::any_of(monsters, [](const Monster& monster) { return monster.align || monster.set_kind; }))
                 for (const auto& monster : monsters) {
                     const auto target = monster.target(*game_data);
                     auto fighter = d2d::rules::simple_fighter(monster.stats.a1_min, monster.stats.a1_max, monster.stats.to_hit, target.armor_class);
@@ -4022,7 +4052,7 @@ auto Fight::world(bool in_moor, std::uint32_t now_ms, float elapsed, const Crowd
                     foe.size = type_info.size; foe.threat = type_info.threat; foe.of = &monster;
                 }
             std::vector<Monster> born;
-            for (std::size_t i = 0; i < monsters.size(); ++i) {
+            for (std::size_t i = 0; host && i < monsters.size(); ++i) {
                 auto& monster = monsters[i];
                 if (std::abs(monster.unit.x - player.x) < 30 && std::abs(monster.unit.y - player.y) < 30
                     && monster_update(*game_data, *level, monster, foes, rng, now_ms, elapsed, crowd, missiles, monsters, &born, &area_seen, &open_door))
@@ -4035,20 +4065,22 @@ auto Fight::world(bool in_moor, std::uint32_t now_ms, float elapsed, const Crowd
             if (foes[0].blessed) wisp_blessing = { foes[0].blessed, now_ms + 0x1a5e00u * 40 };   // FUN_006251f0: 0x1a5e00 frames
             foes.resize(sides);
             for (auto& young : born) add_monster(std::move(young));
+            if (host) {
             boss_events(foes, now_ms);
             monster_dots(now_ms, elapsed);
             monster_states(now_ms);
+            }
             buff_events(foes[0], now_ms);
             if (merc) merc_buff_events(foes[1], now_ms);
             buff_tick(now_ms);
             aura_pulse(now_ms);
-            for (auto& monster : monsters) monster.in_aura = monster.alive() && in_aura(monster);   // its auratargetstate shows (states.md)
+            if (host) for (auto& monster : monsters) monster.in_aura = monster.alive() && in_aura(monster);   // its auratargetstate shows (states.md)
             for (std::size_t k = 0; k < pets.size(); ++k) pet_hurt(pets[k], foes[2 + k].damage, now_ms);
             pets_turn(now_ms, elapsed, crowd);
             missile_tick(now_ms);
             // The merc's arrows strike the first live monster they reach.
             const auto reach = [&](float x, float y) { return missile_rooms(*game_data, *level, x, y); };
-            missiles_update(*level, missiles, foes, rng, now_ms, reach, [&](Missile& missile) {
+            if (host) missiles_update(*level, missiles, foes, rng, now_ms, reach, [&](Missile& missile) {
                 const bool moving = missile.velocity_x != 0 || missile.velocity_y != 0;
                 for (std::size_t i = 0; i < monsters.size(); ++i) {
                     auto& monster = monsters[i];
@@ -4072,6 +4104,11 @@ auto Fight::world(bool in_moor, std::uint32_t now_ms, float elapsed, const Crowd
                 }
                 return false;
             });
+            if (couch_sides)                                       // what the guests' sides took, for their own passes
+                for (std::size_t k = 0; k < couch_sides->size(); ++k) {
+                    auto& side = (*couch_sides)[k].foes;
+                    std::copy_n(foes.begin() + std::ptrdiff_t(couch_at[k]), side.size(), side.begin());
+                }
             return_fire(foes[0], now_ms);                          // the missiles that reached the player just now
             std::ranges::move(pending, std::back_inserter(missiles));
             pending.clear();
@@ -4085,7 +4122,7 @@ auto Fight::world(bool in_moor, std::uint32_t now_ms, float elapsed, const Crowd
                 }
             }
             for (auto& monster : monsters)
-                if (std::abs(monster.unit.x - player.x) < 30 && std::abs(monster.unit.y - player.y) < 30) monster_sounds(monster, now_ms);
+                if (host && std::abs(monster.unit.x - player.x) < 30 && std::abs(monster.unit.y - player.y) < 30) monster_sounds(monster, now_ms);
             auto& foe = foes[0];
             // Poison works on the player over its ticks (a negative potion).
             // One poison at a time: a new one at least as strong replaces it

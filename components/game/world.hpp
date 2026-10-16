@@ -545,6 +545,16 @@ struct World {
     std::uint32_t day_at = 0;                         // when the day last stepped
     void tick(const std::vector<Command>& cmds, std::uint32_t now_ms, std::uint32_t last_ms);
 
+    // Diablo 2 Couch (fork, components/couch/party.hpp): a shared-screen game
+    // with other local heroes. Each guest hero is a World of its own whose
+    // tick runs with the host's game state lent to it; `couch_guest` makes
+    // that tick move only its own hero (no monsters, NPCs, quests' timers,
+    // level changes). `couch_crowd`: the other heroes and theirs, in the way.
+    // `couch_frames`: the 40 ms frames the host's tick ran (a guest's stamina).
+    bool couch_guest = false;
+    std::vector<UnitState*> couch_crowd;
+    int couch_frames = 0;
+
 };
 
 }  // namespace d2d::game

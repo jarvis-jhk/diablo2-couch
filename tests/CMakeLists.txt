@@ -34,6 +34,7 @@ d2d_add_test(test_game game)
 d2d_add_test(test_net net)
 d2d_add_test(test_couch couch)   # fork: couch co-op
 d2d_add_test(test_couch_pads couch)   # fork: couch controllers
+d2d_add_test(test_couch_party couch_party)   # fork: two local heroes in one game (needs MPQs)
 
 d2d_add_test(test_userdir userdir)
 d2d_add_test(test_install install_detect)

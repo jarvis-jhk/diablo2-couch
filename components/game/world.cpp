@@ -2067,8 +2067,9 @@ auto World::tick(const std::vector<Command>& cmds, std::uint32_t now_ms, std::ui
         }
         // Levels: finished builds come in; the ones next to the player's
         // start building when it changes (GameData::level).
-        game_data->poll_levels();
-        fight.spawning.game_quests = game_bits;          // the town markers' inits read them as rooms come up
+        const bool host = !couch_guest;               // Diablo 2 Couch: a guest's pass leaves the game's own state to the host's
+        if (host) game_data->poll_levels();
+        if (host) fight.spawning.game_quests = game_bits;          // the town markers' inits read them as rooms come up
         // a3q7: the Dark Wanderer gone (ai.cpp) marks every player in act 3 (FUN_005bd260: word 0x20 bit 0, if missing).
         if (d2d::rules::level_act(level->id) == 2 && !d2d::rules::qbit(quests(), 0x20, 0)
             && std::ranges::any_of(fight.monsters, [](const Monster& monster) { return monster.gone && monster.type == d2d::rules::monster_ids::kDarkWanderer; }))
@@ -2080,7 +2081,7 @@ auto World::tick(const std::vector<Command>& cmds, std::uint32_t now_ms, std::ui
         // ponytail: made the tick he goes, not two on; the free spot is
         // nearest_free's, not FUN_00545340's size 3 / mask 0x3f11 search.
         if (const auto wanderer = std::ranges::find_if(fight.monsters, [](const Monster& monster) { return monster.gone && monster.type == d2d::rules::monster_ids::kDarkWanderer; });
-            !afterglow_made && wanderer != fight.monsters.end() && !game_data->afterglow.code.empty()) {
+            host && !afterglow_made && wanderer != fight.monsters.end() && !game_data->afterglow.code.empty()) {
             afterglow_made = true;
             static constexpr std::array<std::pair<int, int>, 8> kAround{ { { -3, -3 }, { -3, 0 }, { -3, 3 }, { 0, -3 }, { 0, 3 }, { 3, -3 }, { 3, 0 }, { -3, 3 } } };
             for (auto at = std::size_t(fight.spawning.quests.next() & 1); at < kAround.size(); ++at) {
@@ -2089,27 +2090,30 @@ auto World::tick(const std::vector<Command>& cmds, std::uint32_t now_ms, std::ui
             }
             d2d::log::info("the Dark Wanderer's afterglow: {}", std::ranges::count(fires, &game_data->afterglow, &Fire::npc));
         }
-        std::erase_if(fires, [&](const Fire& fire) { return fire.gone && now_ms >= fire.gone; });
-        if (level != wanted_near) { want_nearby(*game_data, *level); wanted_near = level; }
+        if (host) std::erase_if(fires, [&](const Fire& fire) { return fire.gone && now_ms >= fire.gone; });
+        if (host && level != wanted_near) { want_nearby(*game_data, *level); wanted_near = level; }
         item_ids();
         // The day moves a frame a tick (40 ms); a stall doesn't fast-forward it.
-        if (now_ms - day_at > 1000) day_at = now_ms;
-        for (; now_ms - day_at >= kTickMs; day_at += kTickMs) {
+        if (host && now_ms - day_at > 1000) day_at = now_ms;
+        if (host) couch_frames = 0;
+        for (; host && now_ms - day_at >= kTickMs; day_at += kTickMs) {
             day.step(act());
             act1_tick();
             act2_tick();
             stamina_frame();
+            ++couch_frames;
         }
+        for (int frame = 0; !host && frame < couch_frames; ++frame) stamina_frame();   // the host's frames, this hero's stamina
         if (fight.boost.until && now_ms >= fight.boost.until) {     // the state runs out
             if (shrine_code(fight.boost.shrine) == 14) character.stats.values[d2d::d2s::kStamina] = character.stats.values[d2d::d2s::kMaxStamina];
             fight.boost = {};
         }
         fight.update_fighters(now_ms);
-        spring_traps(now_ms);
+        if (host) spring_traps(now_ms);
         // Used shrines and chests: OP while it plays, then ON; a shrine back
         // to NU after its reset time (Shrines.txt Reset x 1200 + 1 frames;
         // 0 never).
-        for (auto entry = operated.begin(); entry != operated.end();) {
+        for (auto entry = operated.begin(); host && entry != operated.end();) {
             const auto& [key, when_ms] = *entry;
             const auto npc_index = std::size_t(key.second);
             const auto& npc = key.first->npcs[npc_index];
@@ -2124,11 +2128,12 @@ auto World::tick(const std::vector<Command>& cmds, std::uint32_t now_ms, std::ui
             entry = back ? operated.erase(entry) : std::next(entry);
         }
         for (const auto& [key, door] : doors)                  // doors in the mode they were left in
-            if (key.first == level && std::size_t(key.second) < npc_states.size())
+            if (host && key.first == level && std::size_t(key.second) < npc_states.size())
                 std::tie(npc_states[std::size_t(key.second)].mode, npc_states[std::size_t(key.second)].mode_ms) = std::pair{ kObjectModes[std::size_t(door.mode)], door.when };
         Crowd crowd;                           // who's in whose way this frame
         crowd.units.push_back(&player);
         if (merc) crowd.units.push_back(&merc->unit);
+        crowd.units.insert(crowd.units.end(), couch_crowd.begin(), couch_crowd.end());   // the other local heroes and theirs
         for (std::size_t i = 0; i < npc_states.size() && i < level->npcs.size(); ++i)
             if (level->npcs[i].root != "objects" && !npc_states[i].hidden) crowd.units.push_back(&npc_states[i]);
         const bool in_moor = !in_town(level);     // outside: this level's monsters are about
@@ -2142,7 +2147,10 @@ auto World::tick(const std::vector<Command>& cmds, std::uint32_t now_ms, std::ui
             return std::holds_alternative<cmd::Move>(command) || (use_skill && use_skill->left);
         });
         const bool resurrect = std::ranges::any_of(cmds, [](const Command& command) { return std::holds_alternative<cmd::Resurrect>(command); });
-        if (fight.player_modes(button, now_ms, elapsed) && resurrect) respawn(now_ms);
+        if (fight.player_modes(button, now_ms, elapsed) && resurrect) {
+            if (host) respawn(now_ms);
+            else fight.revive(now_ms);                   // a guest gets up where it fell, by the party
+        }
         if (fight.pmode != last_pmode) {                 // death's stages: the penalty as it starts, the corpse as it ends
             if (fight.pmode == kModeDT) death_penalty(now_ms);
             if (fight.pmode == kModeDD) make_corpse();
@@ -2245,29 +2253,29 @@ auto World::tick(const std::vector<Command>& cmds, std::uint32_t now_ms, std::ui
                                  && (player.x != before_x || player.y != before_y);
             }
         }
-        npc_patrol(*game_data, *level, npc_states, talking, now_ms, elapsed, crowd, &player, arcane.guard_state == 2);
-        cain_step(now_ms, elapsed);
-        for (const auto& neighbour : level->nearby) {           // over the edge, still in play
+        if (host) npc_patrol(*game_data, *level, npc_states, talking, now_ms, elapsed, crowd, &player, arcane.guard_state == 2);
+        if (host) cain_step(now_ms, elapsed);
+        if (host) for (const auto& neighbour : level->nearby) {           // over the edge, still in play
             auto& states = other_npcs[neighbour.level];
             if (states.size() > neighbour.level->npcs.size()) states = npc_start(*neighbour.level);   // a new game's
             grow_states(states, *neighbour.level);
             npc_patrol(*game_data, *neighbour.level, states, { -1, -1, -1 }, now_ms, elapsed, Crowd{});
         }
-        for (std::size_t i = 0; i < npc_states.size() && i < level->npcs.size(); ++i)
+        for (std::size_t i = 0; host && i < npc_states.size() && i < level->npcs.size(); ++i)
             npc_states[i].alert = act1_alert(level->npcs[i].hc_idx) || act2_alert(level->npcs[i].hc_idx) || act3_alert(level->npcs[i].hc_idx);
         // The player's mode as the merc's think reads it: 2 walk, 3 run, 6 walk in town.
         fight.owner_mode = !player.walking ? 1 : running && character.stats.values[d2d::d2s::kStamina] > 0 ? 3 : in_moor ? 2 : 6;
         fight.world(in_moor, now_ms, elapsed, crowd);
-        den_count(now_ms);
-        if (den_log_at && now_ms >= den_log_at) { den.log = 5; den_log_at = 0; }
-        use_warp();
+        if (host) den_count(now_ms);
+        if (host && den_log_at && now_ms >= den_log_at) { den.log = 5; den_log_at = 0; }
+        if (host) use_warp();                        // a guest goes where the host goes (couch/party.hpp)
         if (fight.portal_due) { fight.portal_due = false; open_portal(now_ms); }
         if (take_corpse >= 0 && std::size_t(take_corpse) < corpses.size() && corpses[std::size_t(take_corpse)].level == level) {
             const auto& corpse = corpses[std::size_t(take_corpse)];
             if (std::hypot(corpse.x - player.x, corpse.y - player.y) < 2.f) { take_corpse_items(std::size_t(take_corpse), now_ms); take_corpse = -1; }
             else if (!player.walking) take_corpse = -1;
         }
-        use_portal(now_ms);
+        if (host) use_portal(now_ms);
         }
         for (const auto& kill : hosted_quests ? std::vector<Fight::Kill>{} : fight.kills) {
             act1_kill(kill, now_ms);
@@ -2276,11 +2284,11 @@ auto World::tick(const std::vector<Command>& cmds, std::uint32_t now_ms, std::ui
         }
         fight.kills.clear();
         loot.blessed_find = fight.wisp_blessing.find; loot.blessed_until = fight.wisp_blessing.until;
-        act2_update();
-        act3_update(now_ms);
-        cross_level();
+        if (host) act2_update();
+        if (host) act3_update(now_ms);
+        if (host) cross_level();
         fight.rooms_up(*level, player.x, player.y, false);
-        grow_states(npc_states, *level);
+        if (host) grow_states(npc_states, *level);
         if (!fight.dead()) fight.apply_regen(now_ms, last_ms);
     }
 
