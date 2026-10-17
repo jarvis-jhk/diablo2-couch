@@ -35,7 +35,7 @@ jobs:
         run: |
           dnf -y install epel-release dnf-plugins-core
           dnf config-manager --set-enabled powertools
-          dnf -y install git make perl zlib-devel bzip2-devel \
+          dnf -y install git make perl zlib-devel bzip2-devel libcurl-devel \
             mesa-libGL-devel mesa-libEGL-devel mesa-libgbm-devel libdrm-devel \
             libX11-devel libXext-devel libXcursor-devel libXi-devel libXrandr-devel \
             libXScrnSaver-devel libXfixes-devel libXtst-devel libxkbcommon-devel \

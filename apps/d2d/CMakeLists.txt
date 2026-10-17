@@ -14,7 +14,7 @@ set(SENTRY_ENABLE_INSTALL OFF CACHE BOOL "Install Sentry Native" FORCE)
 set(SENTRY_SCREENSHOT none CACHE STRING "Do not capture crash screenshots" FORCE)
 # Fork: our builds never send to Sentry (no DSN, apps/launcher/CMakeLists.txt;
 # our own crash line is couch/fault_report.hpp), so no transport and no libcurl
-# for the portable Linux tarball to carry.
+# from sentry itself (crashpad still links it on Linux: linux-portable.yml).
 set(SENTRY_TRANSPORT none CACHE STRING "Sentry transport" FORCE)
 FetchContent_Declare(
     sentry_native
