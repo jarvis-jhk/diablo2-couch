@@ -320,3 +320,16 @@
   (28 dropped from the list) fails the new case. Act IV waypoints: share_waypoints, as before.
 - Not verified here (no MPQs): the hellgate crossing with guests, the seals/Hellforge used by
   a guest, Diablo's kill in a guest save. Jan's test.
+- CI: merge run 38988213549 had Linux/Windows/macOS green but the portable build failed —
+  crashpad's util needs libcurl on Linux even with SENTRY_TRANSPORT none — and the aarch64
+  Flatpak hit a GitHub artifact-upload timeout. 13c5615 adds libcurl-devel to
+  linux-portable (the tarball now bundles libcurl.so.4, and crashpad_handler ships unused);
+  run 38989801484 all green, 43/43 on Linux and Windows, test_couch_progress passed, source
+  SHA checked in both logs, four distro starts green.
+- v0.0.6 published: https://github.com/jarvis-jhk/diablo2-couch/releases/tag/v0.0.6 from 13c5615,
+  tag run 38991508786 green. All five assets downloaded, SHA-256 equal to GitHub's digests
+  (hashes in the release notes); the Windows zip holds d2d.exe, d2d-launcher.exe, SDL3.dll;
+  the tarball's `d2d --help` ran and its launcher stayed up under Xvfb here; no Sentry DSN
+  string in any binary. Flatpaks grew 3 -> 9 MB (crashpad). Combined item
+  diablo2-act-iv-couch closed. Open for Jan's test: the hellgate with guests, a guest at the
+  seals/Hellforge, Diablo's kill (also by a guest) in every save. Next version > v0.0.6.

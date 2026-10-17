@@ -68,7 +68,8 @@ becomes a GitHub issue; Flatpak for Linux/Deck, Windows zip, assets checksum-ver
       2026-10-16: blocked — upstream hasn't built Act IV (only branch act4-prep).
       2026-10-17: unblocked — upstream main fd86f34 builds Act IV (levels, quests, Diablo).
       2026-10-17: merged fd86f34; hellgate/Hellforge/seals/Tyrael's portal to player 1, a guest's
-      boss kills run the host's quest hooks, Terror's End and Act V travel shared (v0.0.6).
+      boss kills run the host's quest hooks, Terror's End and Act V travel shared; v0.0.6
+      published, item closed.
       Act V (combined item diablo2-act-v-couch), done when: a prerelease where the party
       follows player 1 to Harrogath, plays Act V through Baal together (Ancients fight and
       Worldstone portal take guests along), and Baal's kill and the Act V waypoints reach
