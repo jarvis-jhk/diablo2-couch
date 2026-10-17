@@ -46,6 +46,9 @@ becomes a GitHub issue; Flatpak for Linux/Deck, Windows zip, assets checksum-ver
 - [~] Warpzone tier 0: `d2d --data <dir>` now persists `data =` (2026-10-16); the launcher's
       update notice stays silent with `.warpzone-managed`. Open: recheck
       games/diablo2-couch.toml in jarvis-jhk/warpzone against the release assets.
+- [ ] Faults through Warpzone feedback (t_mvc4341b4kjxr, 2026-10-17): once libwarpzone 0.1.3 is
+      released and /api/v1/feedback is live, route the existing fault_report path (pending
+      crash mark, caught faults) to game "diablo2-couch" with stable titles; keep ntfy as fallback.
 - [ ] First full release (Act I couch co-op with packaging), hardware evidence recorded
       separately. Our versions are v0.0.x for now: upstream's own v0.1.0 / v0.3.0 tags exist
       and our tags must never collide with them.

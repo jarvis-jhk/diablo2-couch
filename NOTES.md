@@ -333,3 +333,12 @@
   string in any binary. Flatpaks grew 3 -> 9 MB (crashpad). Combined item
   diablo2-act-iv-couch closed. Open for Jan's test: the hellgate with guests, a guest at the
   seals/Hellforge, Diablo's kill (also by a guest) in every save. Next version > v0.0.6.
+
+## 2026-10-17 — Warpzone feedback request (t_mvc4341b4kjxr)
+- The warpzone lane asks every game to report crashes/bugs through Warpzone's feedback API
+  (wz_report / wz_report_problem, or tier 0 POST /api/v1/feedback, game "diablo2-couch").
+  Its own condition is "once libwarpzone 0.1.3 is released": today the latest release is
+  v0.1.2 and warpzone.virtualtabletop.io answers 404 on /api/v1/feedback, so nothing wired yet.
+  Plan: our fault_report already writes a pending crash line and posts it detached; add the
+  Warpzone POST as the first target (stable title, version/platform only in detail), ntfy relay
+  stays as fallback. ROADMAP M2 item added.
