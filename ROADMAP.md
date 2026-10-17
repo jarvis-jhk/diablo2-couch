@@ -66,6 +66,11 @@ becomes a GitHub issue; Flatpak for Linux/Deck, Windows zip, assets checksum-ver
       enters the Pandemonium Fortress with player 1 through the hellgate, plays Act IV through
       Diablo together, and Diablo's kill and the Act IV waypoints reach every guest's save.
       2026-10-16: blocked — upstream hasn't built Act IV (only branch act4-prep).
+      2026-10-17: unblocked — upstream main fd86f34 builds Act IV (levels, quests, Diablo).
+      Act V (combined item diablo2-act-v-couch), done when: a prerelease where the party
+      follows player 1 to Harrogath, plays Act V through Baal together (Ancients fight and
+      Worldstone portal take guests along), and Baal's kill and the Act V waypoints reach
+      every guest's save. 2026-10-17: blocked — upstream has no Act V code or branch yet.
 - [ ] Online co-op through Warpzone (rooms/invites, hole-punch/relay, C API
       crates/capi/include/warpzone.h), after the couch milestones. No chat or free-text
       player content; warpzone.virtualtabletop.io is the only Jan domain allowed in the repo.

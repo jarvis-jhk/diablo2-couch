@@ -285,3 +285,13 @@
   the release notes); the released tarball's launcher drew its window here (Debian 12, Xvfb),
   the Windows zip holds d2d.exe, d2d-launcher.exe, SDL3.dll. Warpzone's Linux/Deck entries
   point at this tarball, which now starts there. Next version > v0.0.5.
+
+## 2026-10-17 — Act V couch blocked on upstream; Act IV unblocked
+- Upstream main fd86f34: no Act V anywhere (no act5 files, branch or commit). The combined
+  item diablo2-act-v-couch got its done-when (ROADMAP M3) and is blocked ("upstream Act V
+  unbuilt"). Resume when upstream lands Act V: merge, then the Acts II–IV road (Anya's
+  portal/Ancients' altar and the Worldstone portal take guests along, Baal's kill and the
+  progression via progress.hpp).
+- Upstream main now builds Act IV (cf873d8 levels + hellgate, 0fcaf4e quests, 5244c2b/bd25656
+  monsters and Diablo, 202cc87 ending), not merged here yet. The Act IV item's block was
+  cleared so the next quota worker merges upstream and takes it.
