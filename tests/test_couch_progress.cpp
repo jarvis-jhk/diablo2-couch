@@ -94,5 +94,22 @@ int main() {
     std::uint8_t normal = 1;
     share_progression(7, 8, 1, 0, normal);     // the host in Nightmare, the guest in Normal
     assert(normal == 1);
+
+    // Act IV: Diablo dies (word 26) and Tyrael's portal opens Act V (28):
+    // both reach the guest. Izual's (25: Tyrael's skill points) and the
+    // Hellforge (27: Cain's soulstone) stay player 1's.
+    Bits a4_before{}, a4_after{}, a4_guest{};
+    set(a4_after, 25, 0); set(a4_after, 25, 1);
+    set(a4_after, 27, 0); set(a4_after, 27, 1);
+    set(a4_after, 26, 0); set(a4_after, 26, 13);
+    set(a4_after, 28, 0); set(a4_after, 28, 13);
+    share_quests(a4_before, a4_after, a4_guest);
+    assert(bit(a4_guest, 26, 0) && bit(a4_guest, 26, 13));
+    assert(bit(a4_guest, 28, 0) && bit(a4_guest, 28, 13));
+    assert(!bit(a4_guest, 25, 0) && !bit(a4_guest, 27, 0));
+    // Classic: Diablo's death opens Nightmare (progression 3 -> 4, World::open_act(4)).
+    std::uint8_t classic = 3;
+    share_progression(3, 4, 0, 0, classic);
+    assert(classic == 4);
     return 0;
 }

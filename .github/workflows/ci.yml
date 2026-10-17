@@ -59,7 +59,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y cmake ninja-build build-essential pkg-config \
+          sudo apt-get install -y cmake ninja-build build-essential pkg-config libcurl4-openssl-dev \
             libsdl3-dev libopenal-dev zlib1g-dev libbz2-dev libstorm-dev qt6-base-dev libgl1-mesa-dev \
             clang-tidy
 
@@ -153,7 +153,7 @@ jobs:
             EXTRA_ARGS+=("-DCMAKE_PREFIX_PATH=$(brew --prefix qtbase)")
           fi
           cmake -S . -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             "${EXTRA_ARGS[@]}"
@@ -170,7 +170,7 @@ jobs:
           $env:PKG_CONFIG_PATH = "$ff\lib\pkgconfig"
           # BtbN's .pc files are relocatable (prefix=${pcfiledir}/../..).
           cmake -S . -B build -G Ninja `
-            -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo `
             -DCMAKE_C_COMPILER_LAUNCHER=ccache `
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache `
             "-DCMAKE_PREFIX_PATH=$sdl\cmake;$z" `
@@ -180,7 +180,7 @@ jobs:
 
       - name: Build
         # -k 0: keep going past the first failure so one run shows every error.
-        run: cmake --build build --config Release -- -k 0
+        run: cmake --build build --config RelWithDebInfo -- -k 0
 
       # Names say what they hold and files include what they use (docs/PLAN.md
       # "Code style"): .clang-tidy's identifier-length and include-cleaner
@@ -210,7 +210,7 @@ jobs:
       - name: Test (Linux/macOS)
         if: runner.os != 'Windows'
         shell: bash
-        run: ctest --test-dir build --output-on-failure -C Release
+        run: ctest --test-dir build --output-on-failure -C RelWithDebInfo
 
       # Put every runtime DLL next to the binaries: the tests need them on
       # PATH, and the uploaded artifact then runs as-is.
@@ -234,7 +234,7 @@ jobs:
       - name: Test (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
-        run: ctest --test-dir build --output-on-failure -C Release
+        run: ctest --test-dir build --output-on-failure -C RelWithDebInfo
 
       # The shipping package (apps/CMakeLists.txt): launcher + d2d + every
       # library they need; a .dmg, .tar.gz or .zip. Built on every run so a
@@ -242,6 +242,51 @@ jobs:
       # Chocolatey's.
       - name: Package
         run: cmake --build build --target package
+
+      - name: Upload Sentry debug information
+        if: startsWith(github.ref, 'refs/tags/') && runner.os != 'Windows'
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: mindwerks
+          SENTRY_PROJECT: d2d
+        shell: bash
+        run: |
+          if [ -z "$SENTRY_AUTH_TOKEN" ]; then
+            echo "::notice::SENTRY_AUTH_TOKEN is not configured; native crash reports will lack symbolicated stack traces."
+            exit 0
+          fi
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            dsymutil build/apps/d2d/d2d -o build/d2d.dSYM
+            dsymutil build/_deps/sentry_native-build/crashpad_build/handler/crashpad_handler \
+              -o build/crashpad_handler.dSYM
+            npx --yes @sentry/cli@3.8.0 debug-files upload --include-sources \
+              --org "$SENTRY_ORG" --project "$SENTRY_PROJECT" \
+              build/apps/d2d/d2d build/d2d.dSYM \
+              build/_deps/sentry_native-build/crashpad_build/handler/crashpad_handler \
+              build/crashpad_handler.dSYM
+          else
+            npx --yes @sentry/cli@3.8.0 debug-files upload --include-sources \
+              --org "$SENTRY_ORG" --project "$SENTRY_PROJECT" \
+              build/apps/d2d/d2d \
+              build/_deps/sentry_native-build/crashpad_build/handler/crashpad_handler
+          fi
+
+      - name: Upload Sentry debug information (Windows)
+        if: startsWith(github.ref, 'refs/tags/') && runner.os == 'Windows'
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: mindwerks
+          SENTRY_PROJECT: d2d
+        shell: pwsh
+        run: |
+          if (-not $env:SENTRY_AUTH_TOKEN) {
+            Write-Host "::notice::SENTRY_AUTH_TOKEN is not configured; native crash reports will lack symbolicated stack traces."
+            exit 0
+          }
+          npx --yes @sentry/cli@3.8.0 debug-files upload --include-sources `
+            --org $env:SENTRY_ORG --project $env:SENTRY_PROJECT `
+            build/apps/d2d `
+            build/_deps/sentry_native-build/crashpad_build/handler
 
       # One artifact per OS: the package (the dev tools are in it, beside
       # d2d). Only for main and tags (pull requests build it, but uploading
@@ -301,6 +346,31 @@ jobs:
           bundle: diablo2-couch-${{ matrix.arch }}.flatpak   # fork: our app id and name
           artifact-name: diablo2-couch-${{ matrix.arch }}
           arch: ${{ matrix.arch }}
+          build-dir: flatpak_app-${{ matrix.arch }}
+          keep-build-dirs: true
+
+      - name: Upload Flatpak Sentry debug information
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: mindwerks
+          SENTRY_PROJECT: d2d
+        shell: bash
+        run: |
+          if [ -z "$SENTRY_AUTH_TOKEN" ]; then
+            echo "::notice::SENTRY_AUTH_TOKEN is not configured; Flatpak crash reports will lack symbolicated stack traces."
+            exit 0
+          fi
+          build_dir="flatpak_app-${{ matrix.arch }}"
+          d2d_binary=$(find "$build_dir" -type f -name d2d -print -quit)
+          crashpad_handler=$(find "$build_dir" -type f -name crashpad_handler -print -quit)
+          if [ -z "$d2d_binary" ] || [ -z "$crashpad_handler" ]; then
+            echo "::error::Could not find both d2d and crashpad_handler in the Flatpak build directory."
+            exit 1
+          fi
+          npx --yes @sentry/cli@3.8.0 debug-files upload --include-sources --wait-for 60 \
+            --org "$SENTRY_ORG" --project "$SENTRY_PROJECT" \
+            "$d2d_binary" "$crashpad_handler"
 
   # Fork: the Linux tarball, built on glibc 2.28 and started on Ubuntu 24.04,
   # Debian 12, Fedora and Arch (linux-portable.yml).

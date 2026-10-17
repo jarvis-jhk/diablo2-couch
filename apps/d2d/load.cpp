@@ -384,6 +384,7 @@ std::optional<Scene> load_scene(const fs::path& data_dir, const fs::path& patch_
         scene.medium_sel_button = d2d::dc6::Sprite(mpqs.read(R"(data\global\ui\FrontEnd\MediumSelButtonBlank.dc6)"));
         scene.textbox = d2d::dc6::Sprite(mpqs.read(R"(data\global\ui\FrontEnd\textbox.dc6)"));
         scene.clickbox = d2d::dc6::Sprite(mpqs.read(R"(data\global\ui\FrontEnd\clickbox.dc6)"));
+        if (auto grey = mpqs.try_read(R"(data\global\ui\FrontEnd\joingameclickboxgrey.dc6)")) scene.clickbox_grey = d2d::dc6::Sprite(*grey);
         scene.charselect_bg = d2d::dc6::Sprite(mpqs.read(R"(data\global\ui\CharSelect\characterselectscreenEXP.dc6)"));
         scene.charselect_box = d2d::dc6::Sprite(mpqs.read(R"(data\global\ui\CharSelect\charselectbox.dc6)"));
         scene.charselect_scroll = d2d::dc6::Sprite(mpqs.read(R"(data\global\ui\FrontEnd\joingamescrollbars.dc6)"));

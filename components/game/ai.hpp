@@ -244,6 +244,11 @@ struct Monster {
     std::string_view seq_mode;
     int seq_frame = -1;
     int charging = -1;                        // Charge (srvstfunc 31) under way: its skill, swung at its end
+    // DiabRun under way (seq_diablorun): 1 winding up, 2 running, 3 stopping;
+    // the phase's start, and its one contact hit still to come (unit +0x4e).
+    int diab_run = 0;
+    std::uint32_t diab_run_ms = 0;
+    bool run_hit = false;
     // Leap (srvstfunc 40) under way: where it rose and where it lands (cells).
     bool leaping = false;
     // A sand maggot down (MagottDown's start, FUN_005cb270: unit flags 0xe
@@ -268,6 +273,13 @@ struct Monster {
     int breath = -1;
     std::uint32_t breath_until = 0, breath_next = 0;
     bool breath_state = false;
+    // Act 4's: Diablo's kept point (his leader word, kind 10: his own spot at
+    // his first think, FUN_0058ef40); a knight's Bone Armor up since its
+    // think, and its absorb pool (stat 132, the cast's aurastat calc / 256).
+    bool has_point = false, armored = false;
+    int armor_pool = 0;
+    bool greeted = false;                     // Izual's first think (ThinkEffect::greet): a4q1's FUN_005b4390, the World's to take
+    int point_x = 0, point_y = 0;
     std::uint32_t laid_until = 0;
     // Its unit seed (+0x20) as its look left it: what its thinks draw. A
     // special AI (AI control [0], FUN_005b0e00: the Countess's 0xd, Dim
@@ -279,6 +291,7 @@ struct Monster {
     bool other = false;
     std::vector<std::pair<int, int>> path;
     bool half_freeze = false;
+    int variant = -1;                         // the knights' rand(4) as made (d2d::rules::monster_variant), -1 none
     [[nodiscard]] bool alive() const { return hit_points > 0 && !gone; }
     [[nodiscard]] bool targetable() const { return alive() && killable && !buried && !aloft; }   // unit flags 0xe: not a buried maggot, a vulture aloft, an unkillable one
     // As a target for the player's (or the merc's) hits.
@@ -322,6 +335,7 @@ struct Foe {
     const Monster* of = nullptr;              // a monster in the fight (Confuse, Attract: monsters fight monsters)
     bool a3q5_done = false;                   // a player, or its pet, with quest 0x15 bit 0 (the zealots spare it)
     int blessed = 0;                          // the wisps' dance's magic find (stat 0x50) put on it this frame
+    d2d::rules::DiabloPick pick;              // a player's: what Diablo's target score reads (FUN_005e8530)
     void take(const d2d::rules::Taken& taken) {
         blocked = blocked || taken.blocked;
         hits += taken.hit ? 1 : 0;
@@ -373,6 +387,7 @@ struct Missile {
     // sent outside that room, so the room moves with it.
     std::optional<std::pair<float, float>> to;
     int bolt = -1;
+    bool wall_maker = false;                    // FUN_005cd110: a draw first, under 20 its path stays straight
     d2d::rules::MissileFlight flight;
     bool launched = false, follow = true;
     float flown_x = 0, flown_y = 0, aimed_x = 0, aimed_y = 0;
@@ -407,11 +422,12 @@ bool missile_fly(const Level& level, Missile& missile, Reach&& reach) {
         const int to_x = aimed ? origin_x + subtile(missile.to->first) : from_x, to_y = aimed ? origin_y + subtile(missile.to->second) : from_y;
         missile.flight = d2d::rules::MissileFlight::launch(from_x, from_y, to_x, to_y, path_velocity, max_velocity, accel);
         if (!aimed) std::tie(missile.flight.aim_x, missile.flight.aim_y) = d2d::rules::missile_aim_along(missile.velocity_x, missile.velocity_y);
-        if (missile.bolt >= 0 && aimed) {                    // FUN_005c9290: 77 frames at most, its wiggle
+        if (missile.bolt >= 0 && aimed) {                    // FUN_005c9290 / FUN_005cd110: 77 frames at most, its wiggle
             const int bolt_to_x = to_x == from_x && to_y == from_y ? to_x + 1 : to_x, bolt_to_y = to_x == from_x && to_y == from_y ? to_y + 1 : to_y;
             missile.dies = std::min(missile.dies, missile.born + 77 * 40);
-            missile.flight.points = d2d::rules::wiggle_points(from_x, from_y, bolt_to_x, bolt_to_y, int(missile.dies - missile.born) / 40,
-                                                              d2d::rules::Rng{ std::uint32_t(bolt_to_x + missile.bolt) });
+            d2d::rules::Rng seed{ std::uint32_t(bolt_to_x + missile.bolt) };
+            if (!missile.wall_maker || seed.next() % 100 >= 20)
+                missile.flight.points = d2d::rules::wiggle_points(from_x, from_y, bolt_to_x, bolt_to_y, int(missile.dies - missile.born) / 40, seed);
         }
         missile.rooms = reach(missile.x, missile.y);
         const auto& room = missile.rooms.empty() ? std::array<int, 4>{} : missile.rooms.front();
@@ -558,6 +574,9 @@ void set_mode(const GameData& game_data, Monster& monster, std::string_view mode
 // True when this killed it.
 // ponytail: the eighth is the commonly given threshold, not traced.
 bool hurt(const GameData& game_data, Monster& monster, int damage, std::uint32_t now_ms);
+// Bone Armor's absorb on a monster (event 22, FUN_005c6370): the pool takes
+// the hit's physical; at 0 the state goes. The damage left.
+int soak(Monster& monster, int physical, int damage);
 
 // A monster that blocked plays its block (BL), when it has one.
 void block_anim(const GameData& game_data, Monster& monster, std::uint32_t now_ms);

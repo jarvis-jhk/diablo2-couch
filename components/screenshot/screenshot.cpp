@@ -40,9 +40,9 @@ void write_chunk(std::vector<std::uint8_t>& out,
 
 }  // namespace
 
-std::size_t save_png(const std::filesystem::path& path,
-                     std::span<const std::uint8_t> pixels,
-                     std::uint32_t width, std::uint32_t height) {
+std::vector<std::uint8_t> encode_png(std::span<const std::uint8_t> pixels,
+                                     std::uint32_t width,
+                                     std::uint32_t height) {
     if (width == 0 || height == 0)
         throw std::runtime_error("screenshot: zero dimension");
     if (pixels.size() != std::size_t(width) * height * 4)
@@ -88,7 +88,13 @@ std::size_t save_png(const std::filesystem::path& path,
     write_chunk(out, "IDAT", comp.data(), comp.size());
     write_chunk(out, "IEND", nullptr, 0);
 
-    // Write the whole file at once — dev-only, doesn't warrant streaming.
+    return out;
+}
+
+std::size_t save_png(const std::filesystem::path& path,
+                     std::span<const std::uint8_t> pixels,
+                     std::uint32_t width, std::uint32_t height) {
+    const auto out = encode_png(pixels, width, height);
     std::ofstream file(path, std::ios::binary | std::ios::trunc);
     if (!file) throw std::runtime_error("screenshot: open failed: " + path.string());
     file.write(reinterpret_cast<const char*>(out.data()),

@@ -54,6 +54,10 @@ inline constexpr int kKhalimHeart = 57, kKhalimEye = 58, kKhalimBrain = 59;   //
 inline constexpr int kGidbinnAltar = 31;    // FUN_005b9b40: the Gidbinn's altar (a3q3, object 252)
 inline constexpr int kLamTome = 28;         // FUN_005b7a60: Lam Esen's tome on its stand (a3q1)
 inline constexpr int kHellgate = 46;        // the red portal to the Pandemonium Fortress (a3q6)
+// Act 4's (quests-act4.md): the burning souls' (FUN_005869f0), the Hellforge
+// (FUN_005b5c10), the seals (52 FUN_005b5630; 54 / 55 / 56 each with its
+// boss, FUN_005b6b70..), Tyrael's last portal to Harrogath (FUN_005b5880).
+inline constexpr int kBurningSoul = 48, kHellforge = 49, kSeal = 52, kSealInfector = 54, kSealDeSeis = 55, kSealVizier = 56, kLastPortal = 73;
 inline constexpr int kCubeChest = 39, kScrollChest = 40, kShaftChest = 41;   // the Horadric Staff's chests (FUN_00599df0 / FUN_00599c10 / FUN_00599cf0)
 }  // namespace operate_fn
 
@@ -64,6 +68,8 @@ inline constexpr int kStoneAlpha = 17;        // the Cairn stone the portal open
 inline constexpr int kGibbet = 26;
 inline constexpr int kMephistoBridge = 341;   // InitFn 45: rises over the lava once he's dead (a3q6)
 inline constexpr int kHellgate = 342;         // InitFn 44: the red portal to Act 4 (a3q6)
+inline constexpr int kDiabloStart = 255;      // InitFn 55: where Diablo comes (a4q2)
+inline constexpr int kLastPortal = 566;       // OperateFn 73: Tyrael's portal to Harrogath (a4q2, LoD)
 inline constexpr int kLargeChestR = 371;      // the Countess' treasure chests
 inline constexpr int kSparklyChest = 397;     // rolls its own table (open_container)
 inline constexpr int kSubclassWaypoint = 0x40;   // objects.txt SubClass bit: a waypoint

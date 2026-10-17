@@ -17,6 +17,7 @@
 #include <string>
 #include <unordered_map>
 #include <utility>
+#include <optional>
 #include <vector>
 
 namespace d2d::drlg {
@@ -114,10 +115,11 @@ inline constexpr std::array<std::array<int, 2>, 16> kHaremDefs = { { { 0, 0 }, {
 // A LevelType's first maze def (FUN_006709b0, FUN_006735f0, FUN_006738c0):
 // act 1's caves (3), crypts (4), Barracks (7), Jail (8), Catacombs (10);
 // act 2's sewers (13), tombs (17), lair (18), Arcane Sanctuary (19);
-// act 3's Durance (22), Flayer Dungeon (24), sewers (25).
+// act 3's Durance (22), Flayer Dungeon (24), sewers (25); act 4's lava (28).
 inline int maze_base(int type) {
     switch (type) {
     case 22: return 0x2f1;
+    case 28: return 836;                                    // act 4's River of Flame: LavaX + mask
     case 24: return 0x298;
     case 25: return 0x2c0;
     case 4: return 0x6c;
@@ -132,9 +134,9 @@ inline int maze_base(int type) {
     }
 }
 // The types with theme rooms (FUN_006735f0) and with a file rotation
-// (FUN_006738c0), of acts 1 to 3.
+// (FUN_006738c0), of acts 1 to 4 (the River of Flame rotates, no themes).
 inline bool maze_themes(int type) { return type == 3 || type == 4 || type == 7 || type == 8 || type == 10 || type == 13 || type == 17 || type == 22 || type == 24 || type == 25; }
-inline bool maze_rotates(int type) { return maze_themes(type) || type == 18; }
+inline bool maze_rotates(int type) { return maze_themes(type) || type == 18 || type == 28; }
 
 struct Room {
     int x = 0, y = 0, width = 0, height = 0, def = 0, file = -1;
@@ -195,7 +197,8 @@ inline std::vector<Outdoor::RoomSeed> generate_preset(const OutdoorData& data, i
 inline std::vector<Outdoor::RoomSeed> generate_maze(const OutdoorData& data, const MazeDef& maze, int level, int level_w,
                                                    int level_h, d2d::rules::Rng seed, int difficulty,
                                                    std::vector<std::string>& notes, int court_file = -1, std::array<int, 4>* court = nullptr) {
-    // court: the Barracks' (28) level 27 {x, y, w, h} and its file in, the Barracks' own rect out (FUN_00673120).
+    // court: the Barracks' (28) level 27 {x, y, w, h} and its file in, the Barracks' own rect out (FUN_00673120);
+    // the River of Flame's (107) the Chaos Sanctuary's rect in, its own out (FUN_00673320).
     using namespace maze_detail;
     std::vector<Room> rooms;
     std::vector<int> list;                              // the level's room list, newest first
@@ -214,12 +217,14 @@ inline std::vector<Outdoor::RoomSeed> generate_maze(const OutdoorData& data, con
         return std::pair{ first.x < second.x ? second.x - first.width - first.x : first.x - second.width - second.x, first.y < second.y ? second.y - first.height - first.y : first.y - second.height - second.y };
     };
     // FUN_00670880: beside room `at` on `side` (0 left, 1 above, 2 right, 3
-    // below), clear of every room but `at`.
+    // below; 4..7 the corners: up-left, up-right, down-right, down-left), clear of every room but `at`.
     auto place = [&](int index, int next_to, int side) {
         auto& room = rooms[std::size_t(index)];
         const auto& neighbour = rooms[std::size_t(next_to)];
-        room.x = side == 0 ? neighbour.x - neighbour.width : side == 2 ? neighbour.x + neighbour.width : neighbour.x;
-        room.y = side == 1 ? neighbour.y - neighbour.height : side == 3 ? neighbour.y + neighbour.height : neighbour.y;
+        const bool left = side == 0 || side == 4 || side == 7, right = side == 2 || side == 5 || side == 6;
+        const bool above = side == 1 || side == 4 || side == 5, down = side == 3 || side == 6 || side == 7;
+        room.x = left ? neighbour.x - neighbour.width : right ? neighbour.x + neighbour.width : neighbour.x;
+        room.y = above ? neighbour.y - neighbour.height : down ? neighbour.y + neighbour.height : neighbour.y;
         for (const int other_index : list) {
             if (other_index == next_to) continue;
             const auto [gap_x, gap_y] = gap(room, rooms[std::size_t(other_index)]);
@@ -390,13 +395,14 @@ inline std::vector<Outdoor::RoomSeed> generate_maze(const OutdoorData& data, con
     }
 
     int court_room = -1;
+    std::optional<std::pair<int, int>> river_shift;     // FUN_00673320's move, absolute
     // Special rooms (FUN_00672550 caves, FUN_00672610 crypts -> FUN_006724e0 / FUN_00670eb0).
     {
         // The turn: the Barracks' court file; the tombs' from the entrance
         // (FUN_00672be0); the sewers' after a roll for level 47's last side
         // (FUN_00672810); none for the harem, cellars and Claw Viper 2.
         int sewer_side = 1, turn = 0;
-        const bool specials = maze.type != 14 && maze.type != 15 && maze.type != 23 && !(maze.type == 17 && level == level_ids::kClawViperTempleLevel2);
+        const bool specials = maze.type != 14 && maze.type != 15 && maze.type != 23 && maze.type != 28 && !(maze.type == 17 && level == level_ids::kClawViperTempleLevel2);
         if (maze.type == 7) turn = court_file;
         else if (maze.type == 17) {
             for (const int other_index : list)
@@ -443,7 +449,7 @@ inline std::vector<Outdoor::RoomSeed> generate_maze(const OutdoorData& data, con
             return best;
         };
         // FUN_00670de0: a special room of its own beside `anchor`, no merge.
-        auto connect = [&](int anchor, int side, int def) {
+        auto connect = [&](int anchor, int side, int def, int file = 0) {
             const int index = alloc(maze.width, maze.height);
             if (!place(index, anchor, side)) return -1;
             link(anchor, index, side);
@@ -452,10 +458,47 @@ inline std::vector<Outdoor::RoomSeed> generate_maze(const OutdoorData& data, con
             auto& room = rooms[std::size_t(index)];
             room.special = true;
             room.def = def;
-            room.file = 0;
+            room.file = file;
             return index;
         };
-        if (maze.type == 13) {                                                      // FUN_00672810
+        if (maze.type == 28) {                                                      // FUN_00673320, the River of Flame
+            // Warp Mesa below the lowest room, BridgeLava above the topmost,
+            // two Bridge rooms on up from it (no set_def), the forge swapped
+            // in on a roll, then a LavaX room on all eight sides of every
+            // room listed so far but the last bridge.
+            // ponytail: a room that doesn't fit leaves game.exe going on from a null room (a crash); never seen, d2d stops.
+            const int lowest = best_fit(3, [](const Room& room, const Room& best) { return room.y > best.y; });   // FUN_006724a0
+            if (lowest >= 0) connect(lowest, 3, 852, -1);
+            const int topmost = best_fit(1, [](const Room& room, const Room& best) { return room.y < best.y; });  // FUN_006723e0
+            int bridge = topmost >= 0 ? connect(topmost, 1, 855, -1) : -1;
+            for (int step = 0; step < 2 && bridge >= 0; ++step) {
+                const int index = alloc(maze.width, maze.height);
+                if (!place(index, bridge, 1)) { bridge = -1; break; }
+                link(bridge, index, 1);
+                add(index);
+                auto& room = rooms[std::size_t(index)];
+                room.special = true; room.def = 856; room.file = -1;
+                bridge = index;
+            }
+            special(seed.next() & 1 ? Special{ 838, 854, -1, 0 } : Special{ 837, 853, -1, 2 });   // 0x6f0474: Forge W / E
+            const auto listed = list;                                               // FUN_00671320
+            for (const int other_index : listed) {
+                if (other_index == bridge) continue;
+                for (int side = 0; side < 8; ++side) {
+                    const int index = alloc(maze.width, maze.height);
+                    if (!place(index, other_index, side)) continue;
+                    link(other_index, index, side);
+                    add(index);
+                    auto& room = rooms[std::size_t(index)];
+                    room.special = true; room.def = 836; room.file = -1;
+                }
+            }
+            if (bridge >= 0 && court) {                    // the last bridge under the sanctuary's entry: x + 2w, y + h
+                const auto [chaos_x, chaos_y, chaos_w, chaos_h] = *court;
+                const auto& last = rooms[std::size_t(bridge)];
+                river_shift = { 2 * last.width - last.x + chaos_x, chaos_h - last.y + chaos_y };
+            }
+        } else if (maze.type == 13) {                                                      // FUN_00672810
             if (level == level_ids::kSewersLevel1) {
                 // Up from the topmost room two rooms and a special (0x14d) to
                 // their left; right from the rightmost two rooms, a special
@@ -551,6 +594,16 @@ inline std::vector<Outdoor::RoomSeed> generate_maze(const OutdoorData& data, con
     int min_x = rooms[std::size_t(list.front())].x, min_y = rooms[std::size_t(list.front())].y;
     for (const int other_index : list) { min_x = std::min(min_x, rooms[std::size_t(other_index)].x); min_y = std::min(min_y, rooms[std::size_t(other_index)].y); }
     for (const int other_index : list) { rooms[std::size_t(other_index)].x -= min_x; rooms[std::size_t(other_index)].y -= min_y; }
+    if (river_shift && court) {                         // the River of Flame: its rect is its rooms' box, moved (FUN_00642520)
+        auto& [river_x, river_y, width, height] = *court;
+        river_x = min_x + river_shift->first;
+        river_y = min_y + river_shift->second;
+        width = height = 0;
+        for (const int other_index : list) {
+            width = std::max(width, rooms[std::size_t(other_index)].x + rooms[std::size_t(other_index)].width);
+            height = std::max(height, rooms[std::size_t(other_index)].y + rooms[std::size_t(other_index)].height);
+        }
+    }
     if (court_room != -1 && court) {                   // the Barracks beside level 27: its rect is its rooms' box (FUN_00642520)
         auto& [court_x, court_y, width, height] = *court;
         const auto& room = rooms[std::size_t(court_room)];

@@ -115,6 +115,7 @@ void place_act1(GameData& game_data, d2d::mpq::Stack& mpqs, const d2d::drlg::Out
     game_data.act1_layout = layout;
     game_data.act2_layout = d2d::drlg::act2_layout(d2d::drlg::level_defs(act1.levels), d2d::drlg::act_seed(map_seed));
     game_data.act3_layout = d2d::drlg::act3_layout(d2d::drlg::level_defs(act1.levels), d2d::drlg::act_seed(map_seed));
+    game_data.act4_layout = d2d::drlg::act4_layout(d2d::drlg::level_defs(act1.levels), d2d::drlg::act_seed(map_seed));
 }
 
 // Monster tables (MonStats, MonStats2, MonLvl), unique names and mods, and
@@ -436,7 +437,7 @@ void load_skills(GameData& game_data, const d2d::mpq::Stack& mpqs) {
         skill_row.name = text("skill"); skill_row.cls = text("charclass"); skill_row.desc = text("skilldesc");
         skill_row.srvstfunc = d2d::rules::ServerStartFunction(number("srvstfunc")); skill_row.srvdofunc = d2d::rules::ServerDoFunction(number("srvdofunc"));
         skill_row.anim = text("anim"); skill_row.range = text("range"); skill_row.monanim = text("monanim");
-        skill_row.aitype = number("aitype"); skill_row.aibonus = number("aibonus"); skill_row.delay = calc("delay"); skill_row.progressive = text("progressive") == "1";
+        skill_row.aitype = number("aitype"); skill_row.attack_rank = number("attackrank"); skill_row.aibonus = number("aibonus"); skill_row.delay = calc("delay"); skill_row.progressive = text("progressive") == "1";
         skill_row.leftskill = text("leftskill") == "1"; skill_row.passive = text("passive") == "1"; skill_row.aura = text("aura") == "1";
         skill_row.use_attack_rate = text("UseAttackRate") == "1"; skill_row.in_town = text("InTown") == "1"; skill_row.attack_no_mana = text("AttackNoMana") == "1";
         skill_row.reqlevel = std::max(number("reqlevel"), 1); if (number("maxlvl") > 0) skill_row.maxlvl = number("maxlvl");

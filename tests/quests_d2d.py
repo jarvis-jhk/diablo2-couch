@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Acts 1-3's quests end to end: drive a headless d2d over devctl.
+"""Acts 1-4's quests end to end: drive a headless d2d over devctl.
 
 Usage: quests_d2d.py <path-to-d2d> [acts]
 
-`acts` picks the acts to play, "123" by default; each one starts on its
-own from a new character (ctest runs quests_act1..3 side by side).
+`acts` picks the acts to play, "1234" by default; each one starts on its
+own from a new character (ctest runs quests_act1..4 side by side).
 
 A new Amazon (made sturdy: 400 Vitality) plays Act 1's six quests
 through the World: the NPC talks, the quest objects (Tree of Inifuss,
@@ -26,9 +26,9 @@ import tempfile
 import time
 
 d2d = sys.argv[1]
-acts = sys.argv[2] if len(sys.argv) > 2 else "123"
-if not acts or set(acts) - set("123"):
-    sys.exit(f"acts must be digits from 1-3, got {acts!r}")
+acts = sys.argv[2] if len(sys.argv) > 2 else "1234"
+if not acts or set(acts) - set("1234"):
+    sys.exit(f"acts must be digits from 1-4, got {acts!r}")
 data = os.environ.get("D2_MPQ_DIR") or os.path.expanduser("~/Workspace/private/diablo2")
 patch = os.environ.get("D2_PATCH_INSTALLER")
 if not os.path.exists(os.path.join(data, "d2data.mpq")) or not patch or not os.path.exists(patch):
@@ -649,6 +649,93 @@ def act3():
     go(75)
     talk_until("Ormus", lambda: not bits(0x16) & 0x800, "the report not taken")
     print("OK: Mephisto dead, the hellgate open, the bridge up, the report (a3q6)")
+
+
+def act4():
+    # The hellgate (OperateFn 46, FUN_00584750): Mephisto dead (word 0x16
+    # bit 0 here) lets the player through; from the Durance's third level
+    # word 0x17 gets bits 0 and 13 (FUN_00546ac0), the fortress's waypoint,
+    # and the player stands at the Pandemonium Fortress's start.
+    cmd("debug quest 22")
+    go(102)
+    gate = [l.split("\t") for l in cmd("debug objects").splitlines() if l.split("\t")[3:4] == ["op46"]]
+    assert gate, f"no hellgate on level 102: {cmd('debug objects')!r}"
+    cmd(f"debug warp {gate[0][1]} {gate[0][2]}")
+    cmd(f"debug operate {gate[0][0]}")
+    until("in the Pandemonium Fortress", lambda: level() == 103, 10)
+    assert bits(0x17) & 0x2001 == 0x2001, f"word 0x17: {bits(0x17):#x}"
+    print("OK: through the hellgate to the Pandemonium Fortress")
+
+    def objects(op):
+        return [l.split("\t") for l in cmd("debug objects").splitlines() if l.split("\t")[3:4] == [f"op{op}"]]
+    def kill_until(what, done, seconds=30):
+        deadline = time.time() + seconds
+        while time.time() < deadline and not done():
+            cmd("debug kill"); time.sleep(1)
+        assert done(), f"{what}: {log_text()[-2000:]}"
+    # a4q0: Tyrael's welcome (664) sets word 0x18 bit 0.
+    talk_until("Tyrael", lambda: bits(0x18) & 1, "the welcome not heard")
+    # a4q1: Tyrael gives it (670, bit 2); Izual dies on the Plains of Despair
+    # (bits 13 and 1), his ghost speaks (675, bit 5); Tyrael's reward (676):
+    # bit 0 and 2 skill points.
+    talk_until("Tyrael", lambda: bits(0x19) & 4, "the Fallen Angel not given")
+    cmd("debug goto 105")
+    until("on the Plains of Despair", lambda: level() == 105, 60)
+    cmd("debug warp 20 14")                              # his room (16, 8), him at 18, 18 in it (map seed 3: drlg-dump 3 105 units)
+    until("Izual made", lambda: any(l.startswith("izual\t") for l in cmd("monsters").splitlines()), 30)
+    izual = [l.split("\t") for l in cmd("monsters").splitlines() if l.startswith("izual\t")][0]
+    cmd(f"debug warp {int(float(izual[1]))} {int(float(izual[2])) + 3}"); time.sleep(1)
+    # His first think (FUN_005b4390): the Fallen Angel's log sent again (the Quest Log button).
+    until("Izual's first think", lambda: "Izual's first think" in log_text(), 10)
+    kill_until("Izual dead", lambda: "The Fallen Angel: Izual is dead" in log_text())
+    assert bits(0x19) & 0x2002 == 0x2002, f"word 0x19: {bits(0x19):#x}"
+    until("his ghost", lambda: "Izual's ghost" in log_text(), 10)
+    talk_until("Izual", lambda: bits(0x19) & 0x20, "the ghost not heard")
+    go(103)
+    points = int(state()["skillpts"]) if "skillpts" in state() else None
+    talk_until("Tyrael", lambda: bits(0x19) & 1, "the Fallen Angel not rewarded")
+    assert "+2 skill points" in log_text(), "no skill points"
+    print("OK: the welcome, the Fallen Angel (a4q0, a4q1)")
+    # a4q3: Cain's soulstone (679); Hephasto drops the hammer in the River of
+    # Flame; the forge takes the stone, then three blows of the hammer in hand;
+    # Cain's reward (680).
+    talk_until("Cain", lambda: "[mss " in cmd("items"), "no soulstone")
+    cmd("debug goto 107")
+    until("on the River of Flame", lambda: level() == 107, 60)
+    cmd("debug warp 35 84"); time.sleep(1)               # the forge's room (32, 80), Hephasto there too (map seed 3)
+    forge = objects(49)
+    assert forge, f"no Hellforge: {cmd('debug objects')!r}"
+    cmd(f"debug warp {forge[0][1]} {forge[0][2]}"); time.sleep(1)
+    kill_until("Hephasto dead", lambda: "Hephasto drops the hammer" in log_text())
+    cmd("debug equip hfh 4")
+    cmd(f"debug warp {forge[0][1]} {forge[0][2]}")
+    for _ in range(4): cmd(f"debug operate {forge[0][0]}")
+    until("the forge struck", lambda: "the soulstone is shattered" in log_text(), 5)
+    assert bits(0x1b) & 0x2002 == 0x2002, f"word 0x1b: {bits(0x1b):#x}"
+    go(103)
+    talk_until("Cain", lambda: bits(0x1b) & 1, "the Hellforge not rewarded")
+    print("OK: the Hellforge (a4q3)")
+    # a4q2: Tyrael (681); the five seals, their three bosses dead release
+    # Diablo; his death sets bits 13 and 0; LoD, Tyrael's portal (20000, bit 9).
+    talk_until("Tyrael", lambda: bits(0x1a) & 4, "Terror's End not given")
+    cmd("debug goto 108")
+    until("in the Chaos Sanctuary", lambda: level() == 108, 60)
+    for arm in ((55, 32), (36, 60), (84, 60), (60, 60)):   # the seals' rooms (map seed 3: drlg-dump 3 108 units): N, W, E, the heart
+        cmd(f"debug warp {arm[0]} {arm[1]}"); time.sleep(0.5); cmd("debug kill")
+    seals = [o for op in (52, 54, 55, 56) for o in objects(op)]
+    assert len(seals) == 5, f"seals: {seals}"
+    for seal in seals:
+        cmd(f"debug warp {seal[1]} {seal[2]}"); time.sleep(0.5)
+        cmd(f"debug operate {seal[0]}")
+        kill_until("its boss dead", lambda: True, 1)
+    kill_until("the seals broken", lambda: "the seals are broken" in log_text())
+    until("Diablo comes", lambda: "Terror's End: Diablo" in log_text(), 10)
+    kill_until("Diablo dead", lambda: "Diablo is dead" in log_text())
+    assert bits(0x1a) & 0x2001 == 0x2001, f"word 0x1a: {bits(0x1a):#x}"
+    go(103)
+    talk_until("Tyrael", lambda: bits(0x1a) & 0x200, "Tyrael's portal not given")
+    until("the portal", lambda: "Tyrael opens the way" in log_text(), 5)
+    print("OK: Terror's End (a4q2)")
 
 
 try:

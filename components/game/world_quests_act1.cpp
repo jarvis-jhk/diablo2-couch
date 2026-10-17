@@ -83,7 +83,7 @@ auto World::act1_said(int hc_idx, int message_string) -> void {
         const auto scroll = std::ranges::find(character.items, std::string_view("bks"), &d2d::d2s::Item::code);
         const bool cain_flagged = cain.rescued_flag;
         const auto cain_said = cain.said(quests(), hc_idx, message_string, scroll != character.items.end());
-        if (cain_said == Said::ring && !cain_flagged && d2d::rules::qbit(quests(), 4, 13)) chain(4);   // FUN_00592250: the game's (4, 13) goes on
+        if (cain_said == Said::ring && !cain_flagged && d2d::rules::quest::bit(quests(), 4, 13)) chain(4);   // FUN_00592250: the game's (4, 13) goes on
         if (cain_said == Said::decipher) {        // ponytail: bks becomes bkd where it lies (same size), not a new item (agent A's)
             scroll->code = "bkd";
             d2d::log::info("Search for Cain: Akara deciphered the scroll");

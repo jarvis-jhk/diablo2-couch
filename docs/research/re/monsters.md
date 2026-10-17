@@ -614,3 +614,24 @@ candidate spots) compare two points, so two outdoor levels' whole rooms
 another. d2d: room_tiles.hpp `logic_areas` / `merge_areas`,
 `game::area_id_at`; `tools/emu/area_ids.py` calls FUN_0061b130 at every
 tile as each room populates.
+
+## Act 4's population (2026-10-16)
+
+- **The knights' variant** (FUN_00573cb0, after the look, before the life
+  roll): MonStats rows 0x137 (doomknight2, Abyss Knight) and 0x138
+  (doomknight3, Oblivion Knight) roll `rand(4)` on the unit seed into
+  monster data +0xe (0x138 also +0xf): the row DoomKnightMissile adds to its
+  missile. One more unit-seed step, so their groups' counts come after it.
+  d2d: `rules::monster_variant`, `Monster::variant`.
+- **Trapped souls** (InitFn 46, FUN_005506d0, object 369 "trapped soul
+  placeholder", from ObjGrp 46's scatter): on the object seed,
+  ((w·h) >> 7)·30 >> 8 souls for the room; up to 12 tries of a spot
+  rand(w − 4), rand(h − 4) in that FUN_00550220 takes (3x3: the room's
+  margins, no 0xc01 in 10x10, no 0x3f11 in 3x3); a hit makes a soul (odd
+  step 0x194 trappedsoul2, else 0x193) at the placeholder (FUN_005b2f20,
+  mode 1, that spot only; made: the object to mode 2), then hops on from
+  the random spot: hop k (from 1) goes on while rand(k >> 1) is 0, up to
+  max(left, 4)·3 steps of dir = step & 7, (step % 5 + 5)·2·0x731b7c[dir]
+  then the same for y (0x731b9c), until FUN_00550220 takes one (a soul
+  there); none: rand(k >> 1) once more, and the try ends. d2d:
+  objgroups.cpp `trapped_souls`; `monsters.py` counts each soul alone.

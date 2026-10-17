@@ -46,6 +46,7 @@ int main() {
     const auto path = fs::temp_directory_path()
         / ("d2d-screenshot-test-" + std::to_string(std::random_device{}()) + ".png");
 
+    const auto encoded = d2d::screenshot::encode_png(src, kWidth, kHeight);
     const auto wrote = d2d::screenshot::save_png(path, src, kWidth, kHeight);
     assert(wrote > 8);
     std::printf("wrote %zu bytes to %s\n", wrote, path.string().c_str());
@@ -54,6 +55,7 @@ int main() {
     std::ifstream png_file(path, std::ios::binary);
     std::vector<std::uint8_t> file(std::istreambuf_iterator<char>(png_file), {});
     assert(file.size() == wrote);
+    assert(file == encoded);
 
     // PNG signature.
     static constexpr std::uint8_t kSig[8] =

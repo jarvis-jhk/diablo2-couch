@@ -433,10 +433,13 @@ try:
             break
         time.sleep(0.1)
     frames(1)
+    cmd("click 326 532"); frames(2)           # Expansion Character off (box 0xD4): a classic character
     cmd("click 690 555"); frames(10)          # OK
     st = state()
     assert st["screen"] == "ingame" and st["name"] == "Newbie" and st["level"] == "1", st
     assert os.path.getsize(os.path.join(saves, "Newbie.d2s")) > 0x2FD
+    with open(os.path.join(saves, "Newbie.d2s"), "rb") as save:
+        assert save.read()[0x24] & 0x20 == 0, "Expansion Character unticked, yet an expansion save"
     cmd("quit")
     assert proc.wait(timeout=10) == 0
     print("OK")

@@ -804,6 +804,8 @@ auto Town::update(std::vector<std::uint8_t>& framebuffer, const Mouse& frame_mou
                 else open_game_menu();
             }
         }
+        // Classic Terror's End: the game closed under the player (FUN_00530590).
+        if (world.game_closed) { world.game_closed = false; save(); screen = Screen::CharSelect; return; }
         // The game menu takes every click while it's up; Exit saves and goes
         // to the roster. Its volumes go to d2d.cfg.
         // ponytail: Configure Controls (UI 0xb) isn't drawn; it closes the menu.
@@ -1635,6 +1637,7 @@ auto Town::handle(const Event& event, std::uint32_t frame_ms) -> void {
             level_ms = frame_ms;                                  // its song comes in 3 s later
             return;
         }
+        if (const auto* news = std::get_if<ev::QuestNews>(&event)) { quest_log_notify(quest_log, news->quest); return; }
         if (const auto* object_speech = std::get_if<ev::Speech>(&event)) {   // FUN_004a1600 mode 2: the speech box, heard at once
             speech = start_speech(*scene, object_speech->npc, std::uint16_t(object_speech->string), frame_ms);
             send(cmd::QuestMessage{ object_speech->npc, object_speech->string });
@@ -1748,7 +1751,7 @@ auto Town::open_menu(int npc) -> void {
             int(character.stats.get(d2d::d2s::kLevel)), d2d::rules::unidentified(character.items), [&] {
                 const int difficulty = character.header.active_difficulty();
                 const auto& quest_bits = character.header.quests[std::size_t(std::clamp(difficulty, 0, 2))];
-                return !d2d::rules::qbit(quest_bits, d2d::rules::kRespecQuest, 0) && (d2d::rules::qbit(quest_bits, d2d::rules::kRespecQuest, 1) || difficulty == 2);
+                return !d2d::rules::quest::bit(quest_bits, d2d::rules::kRespecQuest, 0) && (d2d::rules::quest::bit(quest_bits, d2d::rules::kRespecQuest, 1) || difficulty == 2);
             }(), character.header.quest_flag(character.header.active_difficulty(),   // table 0x7253e0: Warriv by quest 6, Meshif by quest 14 (bit 0)
                                              npc_info.hc_idx == d2d::rules::monster_ids::kMeshif ? d2d::rules::SevenTombsQuest::kQuest : d2d::rules::AndyQuest::kQuest, 0),
             character.header.quest_flag(character.header.active_difficulty(), d2d::rules::ToolsQuest::kQuest, 1),

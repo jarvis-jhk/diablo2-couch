@@ -14,8 +14,15 @@
 #include <cstdint>
 #include <filesystem>
 #include <span>
+#include <vector>
 
 namespace d2d::screenshot {
+
+// Encodes `pixels` (w*h*4 bytes) as PNG. Throws std::runtime_error on
+// invalid input or compression failure.
+std::vector<std::uint8_t> encode_png(std::span<const std::uint8_t> pixels,
+                                    std::uint32_t width,
+                                    std::uint32_t height);
 
 // Writes `pixels` (w*h*4 bytes) as a PNG to `path`. Throws std::runtime_error
 // on any I/O or compression failure. Returns the number of bytes written.

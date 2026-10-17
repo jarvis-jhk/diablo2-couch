@@ -23,8 +23,10 @@ namespace d2d::couch {
 // Quest words (the save's 16-bit quest flags, couch's copy of
 // rules/quests.hpp's numbering): Andariel (6), Act II opened (7), the Seven
 // Tombs / Duriel (14), Act III opened (15), the Guardian / Mephisto (22),
-// Act IV opened (23).
-inline constexpr std::array<int, 6> kPartyQuests{ 6, 7, 14, 15, 22, 23 };
+// Act IV opened (23), Terror's End / Diablo (26), Act V opened (28, Tyrael's
+// portal). The Fallen Angel (25: Tyrael's skill points) and the Hellforge
+// (27: Cain's soulstone, the forge's gems) are claimed by player 1.
+inline constexpr std::array<int, 8> kPartyQuests{ 6, 7, 14, 15, 22, 23, 26, 28 };
 
 // The bits of `quest` the host gained this tick (before -> after) go to the
 // guest, unless the guest's own quest is already done (bit 0) or closed

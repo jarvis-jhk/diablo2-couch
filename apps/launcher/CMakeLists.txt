@@ -37,6 +37,9 @@ set(D2LAUNCHER_UPDATE_URL "https://api.github.com/repos/jarvis-jhk/diablo2-couch
     "Optional URL returning JSON with 'tag_name' for update check")
 set(D2_PATCH_URL "" CACHE STRING
     "Optional URL to fetch a Blizzard patch installer from")
+set(D2D_SENTRY_DSN
+    ""
+    CACHE STRING "Public Sentry client DSN")
 
 configure_file(config.hpp.in ${CMAKE_CURRENT_BINARY_DIR}/config.hpp @ONLY)
 

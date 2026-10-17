@@ -3,7 +3,7 @@
 
     uv run python npcs.py <map seed> [thinks] [level]
 
-`level` 1 (the camp, the default), 40 or 75 (Lut Gholein, the docks: the act is made for it
+`level` 1 (the camp, the default), 40, 75 or 103 (Lut Gholein, the docks, the fortress: the act is made for it
 as game.exe makes an act a player enters, FUN_0053ac70). Each unit thinks
 with its MonAI's think: Npc FUN_005e7130, Towner FUN_005e7540 (MonStats
 195, 196, 203, 294, 296), Vendor FUN_005e9e00 (204, 205); a Towner or Npc without a

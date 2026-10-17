@@ -13,6 +13,23 @@ if(NOT D2D_FLATPAK)
     add_subdirectory(d2proxy)
 endif()
 
+function(d2d_remove_crashpad_build_artifacts)
+    install(CODE "
+        set(prefix \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}\")
+        foreach(libdir lib lib64)
+            set(libdir \"\${prefix}/\${libdir}\")
+            file(REMOVE_RECURSE \"\${libdir}/cmake/sentry\")
+            file(GLOB archives
+                \"\${libdir}/libcrashpad_*.a\"
+                \"\${libdir}/libmini_chromium.a\"
+                \"\${libdir}/crashpad_*.lib\"
+                \"\${libdir}/mini_chromium.lib\")
+            foreach(archive IN LISTS archives)
+                file(REMOVE \"\${archive}\")
+            endforeach()
+        endforeach()")
+endfunction()
+
 if(D2D_FLATPAK)
     # Flatpak supplies Qt and the desktop integration through its runtime.
     # Install the app entry point and engine side by side so the launcher can
@@ -24,7 +41,7 @@ if(D2D_FLATPAK)
     configure_file(flatpak/desktop.in "${_flatpak_desktop}" @ONLY)
     configure_file(flatpak/metainfo.xml.in "${_flatpak_metainfo}" @ONLY)
 
-    install(TARGETS d2d-launcher d2d RUNTIME DESTINATION bin)
+    install(TARGETS d2d-launcher d2d crashpad_handler RUNTIME DESTINATION bin)
     install(FILES "${_flatpak_desktop}" DESTINATION share/applications)
     install(FILES "${_flatpak_metainfo}" DESTINATION share/metainfo)
     install(FILES "${PROJECT_SOURCE_DIR}/apps/icon/d2d.png"
@@ -32,6 +49,7 @@ if(D2D_FLATPAK)
         RENAME "${D2D_FLATPAK_APP_ID}.png")
     install(FILES "${PROJECT_SOURCE_DIR}/LICENSE"
         DESTINATION "share/licenses/${D2D_FLATPAK_APP_ID}")
+    d2d_remove_crashpad_build_artifacts()
     return()
 endif()
 
@@ -54,7 +72,7 @@ foreach(tool mpq-cat drlg-dump)
         list(APPEND tools ${tool})
     endif()
 endforeach()
-set(beside_d2d d2d ${tools})
+set(beside_d2d d2d crashpad_handler ${tools})
 install(TARGETS d2d-launcher BUNDLE DESTINATION . RUNTIME DESTINATION .)
 install(FILES "${PROJECT_SOURCE_DIR}/LICENSE" "${PROJECT_SOURCE_DIR}/README.md" DESTINATION .)
 
@@ -139,6 +157,7 @@ install(SCRIPT "${deploy_script}")
 # Qt finalizes only qt_add_executable targets by itself. A distro Qt found
 # them anyway; the Qt Company's build (linux-portable.yml) shipped none.
 qt_finalize_target(d2d-launcher)
+d2d_remove_crashpad_build_artifacts()
 
 if(APPLE)
     # macdeployqt copies every plugin Homebrew has; the launcher needs only

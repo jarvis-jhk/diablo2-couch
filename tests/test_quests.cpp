@@ -23,12 +23,12 @@ int main() {
     // Not given: Akara greets with it; the others say nothing.
     assert(akara().size() == 1 && akara()[0].string == 64 && akara()[0].greet);
     assert(den.talk(quest_bits, 150).empty());
-    assert(!den.said(quest_bits, 148, 64) && den.state == 2 && qbit(quest_bits, 1, 2));
+    assert(!den.said(quest_bits, 148, 64) && den.state == 2 && quest::bit(quest_bits, 1, 2));
     assert(den.talk(quest_bits, 150).size() == 1 && den.talk(quest_bits, 150)[0].string == 66 && !den.talk(quest_bits, 150)[0].greet);
 
     // Into the Den: bit 4; the others' early-return topics.
     den.enter_den(quest_bits);
-    assert(den.state == 3 && qbit(quest_bits, 1, 4) && !qbit(quest_bits, 1, 3));
+    assert(den.state == 3 && quest::bit(quest_bits, 1, 4) && !quest::bit(quest_bits, 1, 3));
     assert(akara()[0].string == 71 && !akara()[0].greet);
 
     // A new game from these flags: back in the Den's state.
@@ -40,13 +40,13 @@ int main() {
     assert(den.killed(quest_bits, 5) == DenQuest::Kill::few && den.log == 4);         // "Monsters remaining"
 
     assert(den.killed(quest_bits, 0) == DenQuest::Kill::cleared && den.state == 4);
-    assert(qbit(quest_bits, 1, 1) && qbit(quest_bits, 1, 13) && den.killed(quest_bits, 0) == DenQuest::Kill::none);
+    assert(quest::bit(quest_bits, 1, 1) && quest::bit(quest_bits, 1, 13) && den.killed(quest_bits, 0) == DenQuest::Kill::none);
 
     // Akara's reward, once.
     assert(akara().size() == 1 && akara()[0].string == 76 && akara()[0].greet);
     assert(den.talk(quest_bits, 147)[0].string == 79);
-    assert(den.said(quest_bits, 148, 76) && qbit(quest_bits, 1, 0) && !qbit(quest_bits, 1, 1) && !qbit(quest_bits, 1, 4));
-    assert(qbit(quest_bits, 41, 1) && qbit(quest_bits, 41, 13));
+    assert(den.said(quest_bits, 148, 76) && quest::bit(quest_bits, 1, 0) && !quest::bit(quest_bits, 1, 1) && !quest::bit(quest_bits, 1, 4));
+    assert(quest::bit(quest_bits, 41, 1) && quest::bit(quest_bits, 41, 13));
     assert(!den.said(quest_bits, 148, 76) && akara().empty() && !den.alert(quest_bits, 148));
 
     // Cleared without talking to her first: still her reward.
@@ -69,18 +69,18 @@ int main() {
     assert(andy.state == 1 && andy.alert(andy_bits, AndyQuest::kCain) && andy.talk(andy_bits, AndyQuest::kCain)[0].string == 166);
     andy.said(andy_bits, AndyQuest::kCain, 166);
     andy.talk_closed(AndyQuest::kCain);
-    assert(andy.state == 2 && andy.log == 1 && qbit(andy_bits, 6, 2) && andy.talk(andy_bits, AndyQuest::kWarriv)[0].string == 171);
+    assert(andy.state == 2 && andy.log == 1 && quest::bit(andy_bits, 6, 2) && andy.talk(andy_bits, AndyQuest::kWarriv)[0].string == 171);
     andy.enter(andy_bits, 1, 2);
-    assert(andy.state == 3 && qbit(andy_bits, 6, 3) && andy.talk(andy_bits, AndyQuest::kWarriv)[0].string == 177);
+    assert(andy.state == 3 && quest::bit(andy_bits, 6, 3) && andy.talk(andy_bits, AndyQuest::kWarriv)[0].string == 177);
     andy.enter(andy_bits, 36, d2d::rules::level_ids::kCatacombsLevel4);
-    assert(andy.killed(andy_bits, true) && andy.state == 4 && qbit(andy_bits, 6, 1) && qbit(andy_bits, 6, 13) && andy.cain);
+    assert(andy.killed(andy_bits, true) && andy.state == 4 && quest::bit(andy_bits, 6, 1) && quest::bit(andy_bits, 6, 13) && andy.cain);
     assert(!andy.killed(andy_bits, true));                                            // no second drop
     int portal_tick = 0;
     for (int i = 2; i <= 12; ++i) if (andy.tick()) portal_tick = i;
     assert(portal_tick == 10 && andy.log == 3 && andy.after_kill == 0);
     assert(andy.alert(andy_bits, AndyQuest::kWarriv) && andy.talk(andy_bits, AndyQuest::kWarriv)[0].string == 183 && andy.talk(andy_bits, AndyQuest::kWarriv)[0].greet);
     assert(andy.talk(andy_bits, AndyQuest::kCain)[0].string == 184 && andy.talk(andy_bits, monster_ids::kCharsi)[0].string == 180);
-    assert(andy.said(andy_bits, AndyQuest::kWarriv, 183) && qbit(andy_bits, 6, 0) && !qbit(andy_bits, 6, 1) && andy.state == 5 && andy.log == 0xd);
+    assert(andy.said(andy_bits, AndyQuest::kWarriv, 183) && quest::bit(andy_bits, 6, 0) && !quest::bit(andy_bits, 6, 1) && andy.state == 5 && andy.log == 0xd);
     assert(!andy.said(andy_bits, AndyQuest::kWarriv, 183) && !andy.alert(andy_bits, AndyQuest::kWarriv));
 
     // Sisters' Burial Grounds: open once the Den's done; Kashya gives it
@@ -92,23 +92,23 @@ int main() {
     assert(burial.state == 0 && burial.talk(burial_bits, BurialQuest::kKashya).empty() && !burial.alert(burial_bits, BurialQuest::kKashya));
     assert(!burial.chain() && burial.state == 1 && burial.alert(burial_bits, BurialQuest::kKashya));
     assert(burial.talk(burial_bits, BurialQuest::kKashya)[0].string == 81 && burial.talk(burial_bits, BurialQuest::kKashya)[0].greet);
-    assert(!burial.said(burial_bits, BurialQuest::kKashya, 81) && burial.state == 2 && burial.log == 0 && qbit(burial_bits, 2, 2));
+    assert(!burial.said(burial_bits, BurialQuest::kKashya, 81) && burial.state == 2 && burial.log == 0 && quest::bit(burial_bits, 2, 2));
     burial.talk_closed(burial_bits, BurialQuest::kKashya);
     assert(burial.log == 1 && burial.talk(burial_bits, 155)[0].string == 86 && !burial.alert(burial_bits, BurialQuest::kKashya));
     burial.enter(burial_bits, 1, 3);                                                  // out of town: state 3, bit 3 (log 1)
-    assert(burial.state == 3 && qbit(burial_bits, 2, 3) && burial.talk(burial_bits, BurialQuest::kKashya)[0].string == 87);
+    assert(burial.state == 3 && quest::bit(burial_bits, 2, 3) && burial.talk(burial_bits, BurialQuest::kKashya)[0].string == 87);
     burial.enter(burial_bits, 3, BurialQuest::kBurial);
-    assert(burial.log == 2 && qbit(burial_bits, 2, 4));
+    assert(burial.log == 2 && quest::bit(burial_bits, 2, 4));
     BurialQuest burial_again;
     burial_again.join(burial_bits);
     assert(burial_again.state == 3 && burial_again.log == 2);
-    assert(burial.killed(burial_bits, true) && burial.state == 4 && qbit(burial_bits, 2, 13) && qbit(burial_bits, 2, 1) && !qbit(burial_bits, 2, 14));
+    assert(burial.killed(burial_bits, true) && burial.state == 4 && quest::bit(burial_bits, 2, 13) && quest::bit(burial_bits, 2, 1) && !quest::bit(burial_bits, 2, 14));
     for (int i = 0; i < 14; ++i) burial.tick();
     assert(burial.log == 2);
     burial.tick();
     assert(burial.log == 3 && burial.alert(burial_bits, BurialQuest::kKashya) && burial.talk(burial_bits, BurialQuest::kKashya)[0].string == 92);
     assert(burial.talk(burial_bits, BurialQuest::kKashya)[0].greet && burial.talk(burial_bits, 147)[0].string == 95);
-    assert(burial.said(burial_bits, BurialQuest::kKashya, 92) && qbit(burial_bits, 2, 0) && !qbit(burial_bits, 2, 1) && burial.state == 5 && burial.log == 0xd);
+    assert(burial.said(burial_bits, BurialQuest::kKashya, 92) && quest::bit(burial_bits, 2, 0) && !quest::bit(burial_bits, 2, 1) && burial.state == 5 && burial.log == 0xd);
     assert(!burial.said(burial_bits, BurialQuest::kKashya, 92) && !burial.alert(burial_bits, BurialQuest::kKashya) && burial.chain());
     assert(burial.talk(burial_bits, 155)[0].string == 96 && !burial.talk(burial_bits, BurialQuest::kKashya)[0].greet);   // block 4 while in town
     burial.enter(burial_bits, 1, 2);
@@ -119,7 +119,7 @@ int main() {
     // Killed far from the player: someone else's kill, no reward.
     QuestBits far_bits{};
     BurialQuest reach;
-    assert(!reach.killed(far_bits, false) && qbit(far_bits, 2, 14) && !qbit(far_bits, 2, 1) && reach.talk(far_bits, BurialQuest::kKashya).empty());
+    assert(!reach.killed(far_bits, false) && quest::bit(far_bits, 2, 14) && !quest::bit(far_bits, 2, 1) && reach.talk(far_bits, BurialQuest::kKashya).empty());
     assert(quest_name(183) == 3719 && quest_name(64) == 3714 && quest_name(185) == 0);
 
     // The Forgotten Tower: the tome read first (log 1); the Tower (log 4),
@@ -129,18 +129,18 @@ int main() {
     TowerQuest tower;
     assert(tower.talk(tower_bits, 150).empty() && !tower.alert(tower_bits, 150));
     tower.read_tome(tower_bits);
-    assert(tower.state == 2 && tower.log == 1 && tower.tome_early && qbit(tower_bits, 5, 2));
+    assert(tower.state == 2 && tower.log == 1 && tower.tome_early && quest::bit(tower_bits, 5, 2));
     assert(tower.talk(tower_bits, 150)[0].string == 133 && !tower.talk(tower_bits, 150)[0].greet);
     tower.enter(tower_bits, 1, 3);                                                   // out of town: state 3, no mark
-    assert(tower.state == 3 && !qbit(tower_bits, 5, 3) && tower.talk(tower_bits, 147)[0].string == 139);
+    assert(tower.state == 3 && !quest::bit(tower_bits, 5, 3) && tower.talk(tower_bits, 147)[0].string == 139);
     tower.enter(tower_bits, 6, TowerQuest::kTower);
-    assert(tower.log == 4 && qbit(tower_bits, 5, 6));
+    assert(tower.log == 4 && quest::bit(tower_bits, 5, 6));
     TowerQuest tower_again;
     tower_again.join(tower_bits);
     assert(tower_again.state == 3 && tower_again.log == 4);
     tower.enter(tower_bits, 24, TowerQuest::kCellar);
-    assert(tower.state == 3 && tower.log == 2 && qbit(tower_bits, 5, 4));
-    assert(tower.killed(tower_bits, true) && qbit(tower_bits, 5, 0) && qbit(tower_bits, 5, 13) && tower.state == 5);
+    assert(tower.state == 3 && tower.log == 2 && quest::bit(tower_bits, 5, 4));
+    assert(tower.killed(tower_bits, true) && quest::bit(tower_bits, 5, 0) && quest::bit(tower_bits, 5, 13) && tower.state == 5);
     assert(!tower.killed(tower_bits, true));                                         // once
     for (int i = 0; i < 6; ++i) tower.tick();
     assert(tower.log == 2);
@@ -156,8 +156,8 @@ int main() {
     QuestBits away_bits{};
     TowerQuest away;
     away.enter(away_bits, 6, TowerQuest::kTower);
-    assert(away.state == 2 && away.log == 3 && qbit(away_bits, 5, 2));
-    assert(!away.killed(away_bits, false) && qbit(away_bits, 5, 14) && !qbit(away_bits, 5, 0) && away.talk(away_bits, 150).empty());
+    assert(away.state == 2 && away.log == 3 && quest::bit(away_bits, 5, 2));
+    assert(!away.killed(away_bits, false) && quest::bit(away_bits, 5, 14) && !quest::bit(away_bits, 5, 0) && away.talk(away_bits, 150).empty());
     // Tools of the Trade: the chain opens it; Charsi gives it; out of
     // town; the stand refuses below clvl 8, then drops the malus once;
     // Charsi takes it back; the imbue's used once.
@@ -167,28 +167,28 @@ int main() {
     assert(tools.state == 0 && tools.talk(tools_bits, ToolsQuest::kCharsi, false, 1).empty() && !tools.alert(tools_bits, ToolsQuest::kCharsi, false, 1));
     assert(!tools.open() && tools.state == 1 && tools.alert(tools_bits, ToolsQuest::kCharsi, false, 1));
     assert(tools.talk(tools_bits, ToolsQuest::kCharsi, false, 1)[0].string == 146 && tools.talk(tools_bits, ToolsQuest::kCharsi, false, 1)[0].greet);
-    assert(!tools.said(tools_bits, ToolsQuest::kCharsi, 146, false) && tools.state == 2 && !qbit(tools_bits, 3, 2));
+    assert(!tools.said(tools_bits, ToolsQuest::kCharsi, 146, false) && tools.state == 2 && !quest::bit(tools_bits, 3, 2));
     tools.talk_closed(tools_bits, ToolsQuest::kCharsi);
-    assert(qbit(tools_bits, 3, 2) && tools.log == 1 && tools.talk(tools_bits, 265, false, 1)[0].string == 147);
+    assert(quest::bit(tools_bits, 3, 2) && tools.log == 1 && tools.talk(tools_bits, 265, false, 1)[0].string == 147);
     tools.enter(tools_bits, 2);                                                      // not from town
     assert(tools.state == 2);
     tools.enter(tools_bits, 1);
-    assert(tools.state == 3 && qbit(tools_bits, 3, 3) && tools.talk(tools_bits, ToolsQuest::kCharsi, false, 1)[0].string == 157);
+    assert(tools.state == 3 && quest::bit(tools_bits, 3, 3) && tools.talk(tools_bits, ToolsQuest::kCharsi, false, 1)[0].string == 157);
     assert(tools.operate(tools_bits, 7) == ToolsQuest::Stand::refuse && tools.state == 3);
     assert(tools.operate(tools_bits, 8) == ToolsQuest::Stand::drop && tools.state == 4 && tools.log == 1);
     assert(tools.operate(tools_bits, 8) == ToolsQuest::Stand::none);
     assert(tools.talk(tools_bits, ToolsQuest::kCharsi, false, 8).empty());          // state 4: nothing till it's in hand
-    assert(tools.picked_up(tools_bits) && qbit(tools_bits, 3, 6) && tools.log == 2 && !tools.picked_up(tools_bits));
+    assert(tools.picked_up(tools_bits) && quest::bit(tools_bits, 3, 6) && tools.log == 2 && !tools.picked_up(tools_bits));
     assert(tools.log_state(tools_bits, true, 8) == 2);
     assert(tools.talk(tools_bits, ToolsQuest::kCharsi, true, 7).empty() && !tools.alert(tools_bits, ToolsQuest::kCharsi, true, 7));
     assert(tools.alert(tools_bits, ToolsQuest::kCharsi, true, 8) && tools.talk(tools_bits, ToolsQuest::kCharsi, true, 8)[0].string == 163);
     assert(tools.talk(tools_bits, 150, true, 8)[0].string == 162);
     assert(!tools.said(tools_bits, ToolsQuest::kCharsi, 163, false));                 // not holding it
-    assert(tools.said(tools_bits, ToolsQuest::kCharsi, 163, true) && tools.state == 5 && qbit(tools_bits, 3, 1) && qbit(tools_bits, 3, 13));
+    assert(tools.said(tools_bits, ToolsQuest::kCharsi, 163, true) && tools.state == 5 && quest::bit(tools_bits, 3, 1) && quest::bit(tools_bits, 3, 13));
     tools.talk_closed(tools_bits, ToolsQuest::kCharsi);
     assert(tools.log == 0xd && tools.log_state(tools_bits, false, 8) == 10 && tools.open());   // passes the chain on
     tools.imbued(tools_bits);
-    assert(qbit(tools_bits, 3, 0) && !qbit(tools_bits, 3, 1) && tools.log_state(tools_bits, false, 8) == 0xd);
+    assert(quest::bit(tools_bits, 3, 0) && !quest::bit(tools_bits, 3, 1) && tools.log_state(tools_bits, false, 8) == 0xd);
     assert(!tools.alert(tools_bits, ToolsQuest::kCharsi, false, 8) && tools.talk(tools_bits, 150, false, 8).empty());
     // A later game: off; the stand says no.
     ToolsQuest later;
@@ -206,9 +206,9 @@ int main() {
     assert(cain.talk(cain_bits, CainQuest::kAkara, false)[0].greet && cain.talk(cain_bits, 150, false).empty());
     cain.said(cain_bits, CainQuest::kAkara, 97, false);
     cain.talk_closed(cain_bits, CainQuest::kAkara);
-    assert(cain.state == 2 && cain.log == 1 && qbit(cain_bits, 4, 2) && cain.talk(cain_bits, 150, false)[0].string == 98);
+    assert(cain.state == 2 && cain.log == 1 && quest::bit(cain_bits, 4, 2) && cain.talk(cain_bits, 150, false)[0].string == 98);
     cain.enter(cain_bits, 1, 2);
-    assert(cain.state == 3 && qbit(cain_bits, 4, 3) && cain.talk(cain_bits, CainQuest::kAkara, false)[0].string == 104);
+    assert(cain.state == 3 && quest::bit(cain_bits, 4, 3) && cain.talk(cain_bits, CainQuest::kAkara, false)[0].string == 104);
     assert(cain.tree(cain_bits, false) && cain.state == 4 && cain.log == 2 && !cain.tree(cain_bits, false));
     assert(cain.alert(cain_bits, CainQuest::kAkara, true) && !cain.alert(cain_bits, CainQuest::kAkara, false));
     assert(cain.talk(cain_bits, CainQuest::kAkara, true)[0].string == 112 && cain.talk(cain_bits, 150, false)[0].string == 105);
@@ -224,9 +224,9 @@ int main() {
     assert(cain.stone(cain_bits, cain.order[0], false, true) == CainQuest::Stone::none);            // no bkd
     assert(cain.stone(cain_bits, cain.order[1], true, true) == CainQuest::Stone::none);             // out of order
     for (int i = 0; i < 4; ++i) assert(cain.stone(cain_bits, cain.order[std::size_t(i)], true, true) == CainQuest::Stone::lit);
-    assert(cain.stone(cain_bits, cain.order[4], true, true) == CainQuest::Stone::portal && cain.log == 4 && qbit(cain_bits, 4, 4));
+    assert(cain.stone(cain_bits, cain.order[4], true, true) == CainQuest::Stone::portal && cain.log == 4 && quest::bit(cain_bits, 4, 4));
     assert(cain.stone(cain_bits, cain.order[4], true, true) == CainQuest::Stone::none);
-    assert(cain.gibbet(cain_bits, true) && qbit(cain_bits, 4, 1) && qbit(cain_bits, 4, 13) && !cain.gibbet(cain_bits, true));
+    assert(cain.gibbet(cain_bits, true) && quest::bit(cain_bits, 4, 1) && quest::bit(cain_bits, 4, 13) && !cain.gibbet(cain_bits, true));
     cain.rescued(true);                                      // Tristram Cain walks to his portal: not due yet
     assert(cain.log == 6 && !cain.camp_due && !cain.enter(cain_bits, CainQuest::kTristram, 1));
     CainQuest no_room;                                       // his spawn failed: straight to the camp
@@ -238,7 +238,7 @@ int main() {
     cain.said(cain_bits, CainQuest::kCampCain, 123, false);
     assert(!cain.alert(cain_bits, CainQuest::kCampCain) && !cain.talk(cain_bits, CainQuest::kCampCain, false)[0].greet);
     assert(cain.alert(cain_bits, CainQuest::kAkara) && cain.talk(cain_bits, CainQuest::kAkara, false)[0].string == 118);
-    assert(cain.said(cain_bits, CainQuest::kAkara, 118, false) == CainQuest::Said::ring && qbit(cain_bits, 4, 0) && !qbit(cain_bits, 4, 1));
+    assert(cain.said(cain_bits, CainQuest::kAkara, 118, false) == CainQuest::Said::ring && quest::bit(cain_bits, 4, 0) && !quest::bit(cain_bits, 4, 1));
     assert(cain.state == 6 && cain.log == 0xd && cain.rescued_flag);
     assert(cain.said(cain_bits, CainQuest::kAkara, 118, false) == CainQuest::Said::none);
 
@@ -249,7 +249,7 @@ int main() {
     late.join(late_bits, false, false);
     late.open();
     late.enter(late_bits, 1, d2d::rules::level_ids::kLutGholein);
-    assert(late.state == 7 && late.log == 5 && qbit(late_bits, 4, 14) && late.missed && late.camp_due);
+    assert(late.state == 7 && late.log == 5 && quest::bit(late_bits, 4, 14) && late.missed && late.camp_due);
     assert(late.enter(late_bits, d2d::rules::level_ids::kLutGholein, 1) && late.talk(late_bits, CainQuest::kCampCain, false)[0].string == 125);
     late.said(late_bits, CainQuest::kCampCain, 125, false);
     assert(late.talk(late_bits, CainQuest::kCampCain, false)[0].string == 123);    // game.exe's: rec+0x1c, not list B yet
@@ -262,12 +262,12 @@ int main() {
     // The log state sent for a record without its own (FUN_00543f90).
     QuestBits log_bits{};
     assert(quest_log(log_bits, 1, 3, 2, 4) == 2 && quest_log(log_bits, 1, 5, 13, 4) == 12);
-    qset(log_bits, 1, 13);
+    quest::set(log_bits, 1, 13);
     assert(quest_log(log_bits, 1, 5, 13, 4) == 13);
-    qset(log_bits, 1, 14);
+    quest::set(log_bits, 1, 14);
     assert(quest_log(log_bits, 1, 3, 2, 4) == 12);
     assert(quest_log(log_bits, 4, 5, 6, 6) == 12 && quest_log(log_bits, 4, 6, 13, 6) == 12);   // Cain: missed the rescue
-    qset(log_bits, 4, 13);
+    quest::set(log_bits, 4, 13);
     assert(quest_log(log_bits, 4, 5, 6, 6) == 6);
 
     // The log (FUN_004a1950): hidden till there's something to say.
@@ -282,22 +282,22 @@ int main() {
     assert(text.string == 3738 && text.count == 5);
     log_state.den_left = 1;
     assert(quest_text(text_bits, 1, log_state).string == 3739);
-    qset(text_bits, 1, 13); qset(text_bits, 1, 1);                                     // the reward's due: state 4 + 1
+    quest::set(text_bits, 1, 13); quest::set(text_bits, 1, 1);                                     // the reward's due: state 4 + 1
     text = quest_text(text_bits, 1, log_state);
     assert(text.string == 3740 && text.speech == 64 && text.count == -1);
-    qset(text_bits, 1, 1, false); qset(text_bits, 1, 0);                              // done in this game: the animation
+    quest::set(text_bits, 1, 1, false); quest::set(text_bits, 1, 0);                              // done in this game: the animation
     text = quest_text(text_bits, 1, log_state);
     assert(text.string == 3726 && text.speech == 76 && text.shown == 0);
-    qset(text_bits, 1, 12);
+    quest::set(text_bits, 1, 12);
     assert(quest_text(text_bits, 1, log_state).shown == 1);
-    qset(text_bits, 1, 13, false);                                                    // done in a game before
+    quest::set(text_bits, 1, 13, false);                                                    // done in a game before
     text = quest_text(text_bits, 1, log_state);
     assert(text.string == 3728 && text.speech == 76);
     log_state.log[2] = 2;
     assert(quest_text(text_bits, 2, log_state).string == 3742 && quest_text(text_bits, 2, log_state).speech == 81);
-    qset(text_bits, 6, 13); qset(text_bits, 6, 1);                                     // Andariel's reward due: state 10
+    quest::set(text_bits, 6, 13); quest::set(text_bits, 6, 1);                                     // Andariel's reward due: state 10
     assert(quest_text(text_bits, 6, log_state).string == 3760 && quest_text(text_bits, 6, log_state).speech == 166);
-    log_state.log[3] = 0xd; qset(text_bits, 3, 13);                                    // Tools: no reward state, the server's 13
+    log_state.log[3] = 0xd; quest::set(text_bits, 3, 13);                                    // Tools: no reward state, the server's 13
     text = quest_text(text_bits, 3, log_state);
     assert(text.string == 3726 && text.speech == 146 && text.shown == 0);
     log_state.log[4] = 12;                                                             // another player's: 3727 reads 3729
@@ -308,19 +308,19 @@ int main() {
     {   // The Seven Tombs' own case (record 0x723a64): quest 14's bit 3 / 4, the Summoner's done at log state 1.
         QuestBits tomb_bits{};
         QuestState tomb_state{};
-        qset(tomb_bits, 14, 3);
+        quest::set(tomb_bits, 14, 3);
         text = quest_text(tomb_bits, 14, tomb_state);
         assert(text.string == 965 && text.speech == 302 && text.shown == 3 && text.state == 5 && !text.marks);
-        qset(tomb_bits, 14, 3, false); qset(tomb_bits, 14, 4);
+        quest::set(tomb_bits, 14, 3, false); quest::set(tomb_bits, 14, 4);
         assert(quest_text(tomb_bits, 14, tomb_state).string == 966 && quest_text(tomb_bits, 14, tomb_state).state == 6);
-        tomb_state.log[14] = 1; qset(tomb_bits, 12, 0);
+        tomb_state.log[14] = 1; quest::set(tomb_bits, 12, 0);
         assert(quest_text(tomb_bits, 14, tomb_state).string == 961 && quest_text(tomb_bits, 14, tomb_state).speech == 396);
-        qset(tomb_bits, 14, 13);                                                       // in this game: the general path
+        quest::set(tomb_bits, 14, 13);                                                       // in this game: the general path
         assert(quest_text(tomb_bits, 14, tomb_state).state != 7);
     }
-    qset(text_bits, 5, 1); qset(text_bits, 5, 15);                                     // closed with the reward due: state 10, none
+    quest::set(text_bits, 5, 1); quest::set(text_bits, 5, 15);                                     // closed with the reward due: state 10, none
     assert(quest_text(text_bits, 5, log_state).shown == 2);
-    qset(text_bits, 2, 1); qset(text_bits, 2, 15);
+    quest::set(text_bits, 2, 1); quest::set(text_bits, 2, 15);
     assert(quest_text(text_bits, 2, log_state).string == 3743);
     // The state the picker keeps (0x7bf380) and whether its change is news.
     text = quest_text(text_bits, 2, log_state);
@@ -332,9 +332,9 @@ int main() {
     // The log's tabs (FUN_004a2220) and the quest it opens on (FUN_004a3220).
     QuestBits act_bits{};
     assert(quest_act_open(act_bits, 0, false) && !quest_act_open(act_bits, 1, true) && quest_log_act(act_bits, 3) == 0);
-    qset(act_bits, 7, 0); qset(act_bits, 15, 0);
+    quest::set(act_bits, 7, 0); quest::set(act_bits, 15, 0);
     assert(quest_log_act(act_bits, 3) == 2 && quest_act_open(act_bits, 2, false));
-    qset(act_bits, 23, 0); qset(act_bits, 26, 0);
+    quest::set(act_bits, 23, 0); quest::set(act_bits, 26, 0);
     assert(quest_act_open(act_bits, 4, true) && !quest_act_open(act_bits, 4, false) && quest_log_act(act_bits, 4) == 4);
     const std::vector<QuestLogPick> tab = { { 0, 1, false }, { 1, 3, false }, { 4, 3, true }, { 2, 0, false } };
     assert(quest_log_pick(tab, -1, -1) == 4);                                          // news first, in the table's order
@@ -369,13 +369,13 @@ int main() {
     fresh.tools.state = 5;                                                             // the malus back (FUN_00591490)
     fresh.run(3);
     assert(fresh.andy.start_in == 20);
-    qset(chain_bits, 1, 0);
+    quest::set(chain_bits, 1, 0);
     assert(Game(chain_bits).burial.state == 1 && Game(chain_bits).cain.state == 0);
-    qset(chain_bits, 2, 15);
+    quest::set(chain_bits, 2, 15);
     assert(Game(chain_bits).cain.state == 1 && Game(chain_bits).tools.state == 0);
-    qset(chain_bits, 4, 0);
+    quest::set(chain_bits, 4, 0);
     assert(Game(chain_bits).tools.state == 1 && Game(chain_bits).andy.start_in == 0);
-    qset(chain_bits, 3, 0);
+    quest::set(chain_bits, 3, 0);
     Game late_game(chain_bits);
     assert(late_game.andy.start_in == 20);
     for (int i = 0; i < 20; ++i) late_game.andy.tick();
@@ -388,14 +388,14 @@ int main() {
     QuestBits act2{}, game{};
     auto spots = palace_spots(act2, game);
     assert(spots.outside && spots.guard && !spots.palace);
-    qset(act2, 12, 13);
-    qset(game, 9, 13);
+    quest::set(act2, 12, 13);
+    quest::set(game, 9, 13);
     spots = palace_spots(act2, game);
     assert(!spots.outside && spots.palace && spots.palace_west);
-    qset(act2, 14, 2);
+    quest::set(act2, 14, 2);
     spots = palace_spots(act2, game);
     assert(!spots.outside && spots.palace && !spots.palace_west);
-    qset(act2, 14, 13);
+    quest::set(act2, 14, 13);
     assert(!palace_spots(act2, game).guard);
 
     // Act 2's opening: Jerhyn greets with his "!" until heard, which is
@@ -403,7 +403,7 @@ int main() {
     QuestBits opening{}, opening_game{};
     assert(ActTwoOpening::alert(opening, ActTwoOpening::kJerhyn) && ActTwoOpening::talk(opening, ActTwoOpening::kJerhyn).size() == 1);
     ActTwoOpening::said(opening, opening_game, ActTwoOpening::kJerhyn, ActTwoOpening::kGreeting);
-    assert(qbit(opening, 8, 0) && qbit(opening_game, 8, 13) && !ActTwoOpening::alert(opening, ActTwoOpening::kJerhyn));
+    assert(quest::bit(opening, 8, 0) && quest::bit(opening_game, 8, 13) && !ActTwoOpening::alert(opening, ActTwoOpening::kJerhyn));
     assert(palace_spots(QuestBits{}, opening_game).palace);
 
     // Radament's Lair: Atma's "!" from the start; her 304 heard (talk shut)
@@ -415,21 +415,21 @@ int main() {
     assert(radament.alert(lair, RadamentQuest::kAtma) && radament.talk(lair, RadamentQuest::kAtma)[0].string == 304);
     radament.said(lair, lair_game, RadamentQuest::kAtma, RadamentQuest::kInit);
     radament.talk_closed(lair, RadamentQuest::kAtma);
-    assert(radament.state == 2 && radament.log == 1 && qbit(lair, 9, 2));
+    assert(radament.state == 2 && radament.log == 1 && quest::bit(lair, 9, 2));
     radament.enter(lair, level_ids::kLutGholein);
-    assert(radament.state == 3 && qbit(lair, 9, 3));
+    assert(radament.state == 3 && quest::bit(lair, 9, 3));
     const auto kill = radament.killed(lair, lair_game, true, false);
-    assert(kill.books == 1 && kill.took_part && qbit(lair, 9, 13) && qbit(lair, 9, 1) && qbit(lair, 9, 5) && qbit(lair_game, 9, 13));
+    assert(kill.books == 1 && kill.took_part && quest::bit(lair, 9, 13) && quest::bit(lair, 9, 1) && quest::bit(lair, 9, 5) && quest::bit(lair_game, 9, 13));
     for (int i = 0; i < 12; ++i) radament.tick();
     assert(radament.log == 3 && radament.alert(lair, RadamentQuest::kAtma) && radament.talk(lair, RadamentQuest::kAtma)[0].string == 334);
     radament.said(lair, lair_game, RadamentQuest::kAtma, RadamentQuest::kSuccess);
-    assert(radament.state == 5 && radament.log == 0xd && qbit(lair, 9, 0) && !qbit(lair, 9, 1));
-    assert(RadamentQuest::read_book(lair) && !qbit(lair, 9, 5) && !RadamentQuest::read_book(lair));
+    assert(radament.state == 5 && radament.log == 0xd && quest::bit(lair, 9, 0) && !quest::bit(lair, 9, 1));
+    assert(RadamentQuest::read_book(lair) && !quest::bit(lair, 9, 5) && !RadamentQuest::read_book(lair));
     QuestBits lost = lair;                    // done, the book unread and gone: done again later
-    qset(lost, 9, 5);
+    quest::set(lost, 9, 5);
     RadamentQuest relost;
     relost.join(lost, lair_game, false);
-    assert(!relost.open && !qbit(lost, 9, 0) && !qbit(lost, 9, 5));
+    assert(!relost.open && !quest::bit(lost, 9, 0) && !quest::bit(lost, 9, 5));
 
     // The Tainted Sun: the Lost City starts the timer; dark, Drognan tells
     // it, out of town, the temple, the altar (credit, an amulet), the log's
@@ -441,31 +441,31 @@ int main() {
     assert(!tainted.enter(level_ids::kLutGholein, level_ids::kRockyWaste) && tainted.enter(43, TaintedSunQuest::kLostCity));
     tainted.dark_in = 3;
     for (int i = 0; i < 4; ++i) tainted.tick(sun);
-    assert(tainted.dark && tainted.state == 1 && tainted.log == 1 && qbit(sun, 11, 2));
+    assert(tainted.dark && tainted.state == 1 && tainted.log == 1 && quest::bit(sun, 11, 2));
     assert(tainted.alert(sun, TaintedSunQuest::kDrognan) && tainted.talk(sun, TaintedSunQuest::kDrognan)[0].string == 348);
     tainted.said(sun, sun_game, TaintedSunQuest::kDrognan, TaintedSunQuest::kTold);
-    assert(tainted.state == 2 && tainted.log == 2 && qbit(sun, 11, 3));
+    assert(tainted.state == 2 && tainted.log == 2 && quest::bit(sun, 11, 3));
     tainted.enter(level_ids::kLutGholein, level_ids::kRockyWaste);
     assert(tainted.state == 3);
     tainted.altar_seen();
     const auto altar = tainted.use_altar(sun, sun_game, false, false);
-    assert(altar.used && altar.amulets == 1 && altar.took_part && !tainted.dark && tainted.state == 4 && qbit(sun, 11, 1) && qbit(sun_game, 11, 13));
+    assert(altar.used && altar.amulets == 1 && altar.took_part && !tainted.dark && tainted.state == 4 && quest::bit(sun, 11, 1) && quest::bit(sun_game, 11, 13));
     assert(!tainted.use_altar(sun, sun_game, false, false).used && tainted.use_altar(sun, sun_game, true, false).refused);
     for (int i = 0; i < 10; ++i) tainted.tick(sun);
     assert(tainted.log == 3 && tainted.talk(sun, 176)[0].string == 368);
     tainted.said(sun, sun_game, 176, 368);
-    assert(tainted.state == 5 && tainted.log == 0xd && qbit(sun, 11, 0) && !qbit(sun, 11, 1));
+    assert(tainted.state == 5 && tainted.log == 0xd && quest::bit(sun, 11, 0) && !quest::bit(sun, 11, 1));
 
     // The Horadric Staff: Cain greets with the first part not shown (the
     // Cube, then the scroll, the amulet, the shaft); the scroll read goes;
     // the log follows what's carried; the chests give each part once.
     QuestBits horadric{};
-    qset(horadric, 7, 0);                     // Act 1 over: the log shows it
+    quest::set(horadric, 7, 0);                     // Act 1 over: the log shows it
     HoradricStaffQuest staff;
     HoradricStaffQuest::Items carried{ .scroll = true };
     assert(staff.log_state(horadric, carried, false) == 1 && HoradricStaffQuest::alert(horadric, HoradricStaffQuest::kCain, carried));
     assert(staff.talk(horadric, HoradricStaffQuest::kCain, carried)[0].string == 335 && staff.talk(horadric, HoradricStaffQuest::kCain, carried)[0].greet);
-    assert(staff.said(horadric, HoradricStaffQuest::kCain, 335) && qbit(horadric, 10, 3));
+    assert(staff.said(horadric, HoradricStaffQuest::kCain, 335) && quest::bit(horadric, 10, 3));
     carried = { .shaft = true, .cube = true };
     assert(staff.talk(horadric, HoradricStaffQuest::kCain, carried)[0].string == 338);
     assert(!staff.said(horadric, HoradricStaffQuest::kCain, 338) && staff.talk(horadric, HoradricStaffQuest::kCain, carried)[0].string == 337);
@@ -476,7 +476,7 @@ int main() {
     assert(staff.chest(HoradricStaffQuest::kCubeChest, horadric, {}) == "box" && staff.chest(HoradricStaffQuest::kCubeChest, horadric, carried).empty());
     assert(staff.log_state(horadric, {}, false) == 2);
     staff.join(horadric, { .cube = true }, false);
-    assert(!qbit(horadric, 10, 5) && qbit(horadric, 10, 6));   // the shaft's gone: not shown any more
+    assert(!quest::bit(horadric, 10, 5) && quest::bit(horadric, 10, 6));   // the shaft's gone: not shown any more
 
     // The Arcane Sanctuary: the staff made opens it; Drognan, Jerhyn, the
     // Sanctuary, the journal (done for a player there), its 396 in the
@@ -489,29 +489,29 @@ int main() {
     assert(arcane.talk(sanctuary, ArcaneQuest::kGuard, roll)[0].string == 186 && arcane.alert(sanctuary, ArcaneQuest::kGuard));
     arcane.said(sanctuary, sanctuary_game, ArcaneQuest::kDrognan, ArcaneQuest::kToJerhyn, 0);
     arcane.talk_closed(sanctuary, ArcaneQuest::kDrognan);
-    assert(arcane.state == 2 && arcane.log == 2 && arcane.guard_in && qbit(sanctuary, 12, 2) && arcane.talk(sanctuary, ArcaneQuest::kGuard, roll)[0].string == 188);
+    assert(arcane.state == 2 && arcane.log == 2 && arcane.guard_in && quest::bit(sanctuary, 12, 2) && arcane.talk(sanctuary, ArcaneQuest::kGuard, roll)[0].string == 188);
     arcane.said(sanctuary, sanctuary_game, ArcaneQuest::kJerhyn, ArcaneQuest::kToPalace, 0);
-    assert(arcane.state == 3 && arcane.log == 3 && qbit(sanctuary, 12, 3));
+    assert(arcane.state == 3 && arcane.log == 3 && quest::bit(sanctuary, 12, 3));
     arcane.enter(sanctuary, 54, ArcaneQuest::kSanctuary);
-    assert(arcane.state == 4 && arcane.log == 4 && qbit(sanctuary, 12, 5));
+    assert(arcane.state == 4 && arcane.log == 4 && quest::bit(sanctuary, 12, 5));
     arcane.journal(sanctuary, 7, true);
-    assert(arcane.state == 5 && qbit(sanctuary, 12, 0) && qbit(sanctuary, 12, 1) && qbit(sanctuary, 12, 13) && !qbit(sanctuary, 12, 5));
+    assert(arcane.state == 5 && quest::bit(sanctuary, 12, 0) && quest::bit(sanctuary, 12, 1) && quest::bit(sanctuary, 12, 13) && !quest::bit(sanctuary, 12, 5));
     assert(!arcane.said(sanctuary, sanctuary_game, -1, ArcaneQuest::kJournal, 3) && arcane.log == 5);
-    assert(arcane.said(sanctuary, sanctuary_game, -1, ArcaneQuest::kJournal, 7) && qbit(sanctuary_game, 12, 13));
+    assert(arcane.said(sanctuary, sanctuary_game, -1, ArcaneQuest::kJournal, 7) && quest::bit(sanctuary_game, 12, 13));
     assert(!arcane.said(sanctuary, sanctuary_game, -1, ArcaneQuest::kJournal, 7));
     arcane.said(sanctuary, sanctuary_game, 176, 406, 0);
-    assert(!qbit(sanctuary, 12, 1) && arcane.rewarded);
+    assert(!quest::bit(sanctuary, 12, 1) && arcane.rewarded);
 
     // The Summoner: going for the player opens it; his death credits a
     // player by him; three ticks on, log 4; the town's thanks are done.
     QuestBits summoning{}, summoning_game{};
     SummonerQuest summoner;
     summoner.engaged(summoning);
-    assert(summoner.state == 1 && summoner.log == 2 && qbit(summoning, 13, 2) && summoner.talk(summoning, 176)[0].string == 414);
-    assert(summoner.killed(summoning, true) && qbit(summoning, 13, 13) && qbit(summoning, 13, 1) && summoner.state == 2);
+    assert(summoner.state == 1 && summoner.log == 2 && quest::bit(summoning, 13, 2) && summoner.talk(summoning, 176)[0].string == 414);
+    assert(summoner.killed(summoning, true) && quest::bit(summoning, 13, 13) && quest::bit(summoning, 13, 1) && summoner.state == 2);
     assert(!summoner.tick() && !summoner.tick() && summoner.tick() && summoner.log == 4);
     assert(SummonerQuest::alert(summoning, 176) && summoner.talk(summoning, 176)[0].string == 427 && summoner.talk(summoning, 176)[0].greet);
     summoner.said(summoning, summoning_game, 427);
-    assert(summoner.state == 3 && summoner.log == 0xd && qbit(summoning, 13, 0) && !qbit(summoning, 13, 1));
+    assert(summoner.state == 3 && summoner.log == 0xd && quest::bit(summoning, 13, 0) && !quest::bit(summoning, 13, 1));
     std::puts("ok");
 }

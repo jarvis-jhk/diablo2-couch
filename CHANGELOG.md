@@ -3,6 +3,20 @@
 Diablo 2 Couch releases (prereleases while the couch co-op is a preview). The launcher
 shows a version's section once, on the first start after an update.
 
+## v0.0.6 (2026-10-17)
+
+- Act IV, from D2Decomp: the Pandemonium Fortress, the Outer Steppes, the Plains of
+  Despair, the City of the Damned, the River of Flame and the Chaos Sanctuary with Izual,
+  the Hellforge and Diablo.
+- Act IV together: the hellgate takes the whole party to the fortress, whoever steps in;
+  the Hellforge, the seals and Tyrael's portal work as player 1's when a guest uses them,
+  and Hephasto's hammer goes into player 1's pack.
+- Diablo's death and the Act IV waypoints count for every guest's save. A boss a guest
+  kills with their own blow (Mephisto, the seal guardians, Diablo) now counts for the
+  whole party, not only for that guest.
+- Upstream's own crash reporting (Sentry) is switched off in our builds; our anonymous
+  one-line crash report stays.
+
 ## v0.0.5 (2026-10-17)
 
 - Linux: the tarball now runs on any Linux from the last years (glibc 2.28 or newer:

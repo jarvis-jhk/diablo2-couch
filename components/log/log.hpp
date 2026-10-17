@@ -18,6 +18,7 @@
 #include <ostream>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace d2d::log {
 
@@ -27,6 +28,8 @@ inline const auto g_start = std::chrono::steady_clock::now();
 inline std::ofstream g_file;
 inline std::mutex g_mutex;   // the music worker logs too
 inline std::atomic<Level> g_level = Level::info;
+using Sink = void (*)(Level, std::string_view);
+inline std::atomic<Sink> g_sink = nullptr;
 
 // ms since launch — also for "done (N ms)" timings.
 inline long long ms() {
@@ -35,6 +38,7 @@ inline long long ms() {
 }
 
 inline void set_level(Level level) { g_level = level; }
+inline void set_sink(Sink sink) { g_sink = sink; }
 inline bool enabled(Level level) { return level <= g_level.load(); }
 // "error", "warning" (or "warn"), "info", "debug", "trace".
 inline std::optional<Level> parse_level(std::string_view name) {
@@ -56,12 +60,16 @@ inline void open(const std::filesystem::path& path, bool append = false) {
 
 inline void write(Level level, const char* tag, const std::string& msg) {
     if (!enabled(level)) return;
-    std::lock_guard lock(g_mutex);
     const auto line = std::format("{:%FT%TZ} {}{}\n", std::chrono::floor<std::chrono::milliseconds>(std::chrono::system_clock::now()), tag, msg);
-    std::FILE* out = level <= Level::warning ? stderr : stdout;
-    std::fputs(line.c_str(), out);
-    std::fflush(out);
-    if (g_file) g_file << line << std::flush;
+    {
+        std::lock_guard lock(g_mutex);
+        std::FILE* out = level <= Level::warning ? stderr : stdout;
+        std::fputs(line.c_str(), out);
+        std::fflush(out);
+        if (g_file) g_file << line << std::flush;
+    }
+    if (level <= Level::warning)
+        if (const auto sink = g_sink.load()) sink(level, line);
 }
 
 template <class... A> void error(std::format_string<A...> format, A&&... args) {

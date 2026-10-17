@@ -87,9 +87,17 @@ alternative-layout versions of the same checkbox that the drawer
 enables/disables based on screen mode (classic vs LoD, char-create vs
 char-select, etc.). LoD 1.14d uses:
 - **HARDCORE** at (319, 560) — record `0x70b0b0`
-- LADDER and EXPANSION checkboxes exist in the table but are not
-  rendered on the standard char-create screen (they belong to the
-  Battle.net char-create path, which we don't have plumbed).
+- **EXPANSION CHARACTER** at (319, 540), record 0xD4, with its label
+  hitbox 0xD3 (339, 561, 200 x 32, string 0x58cb) and 0xD5, the same spot
+  drawn with `joingameclickboxgrey.dc6` (`DAT_007797c4`). On an LoD
+  install `FUN_00435580` registers all three hidden. Picking a class
+  (`FUN_00433bf0`, from 0x433f72) shows the label and sets status bit 0x20
+  every time. For classes 0..4 it shows 0xD4 ticked (`FUN_005009a0`) and
+  hides 0xD5. For Druid / Assassin (5, 6) it hides 0xD4 and shows 0xD5,
+  the locked box. So a new character is LoD unless it's a classic class
+  with the box cleared. d2d: `render_charcreate` / `handle_charcreate_click`.
+- LADDER checkboxes exist in the table but aren't rendered here (the
+  Battle.net char-create path).
 
 ## Sub-table for classes — `0x00708a00`
 

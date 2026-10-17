@@ -43,10 +43,13 @@ option(D2D_WERROR "Treat compiler warnings as errors" ON)
 if(MSVC)
     # /bigobj: d2d's translation units are large (each includes the app's
     # headers), past COFF's default section limit (C1128).
-    add_compile_options(/W4 /permissive- /bigobj)
+    add_compile_options(
+        "$<$<COMPILE_LANGUAGE:C,CXX>:/W4>"
+        "$<$<COMPILE_LANGUAGE:CXX>:/permissive->"
+        "$<$<COMPILE_LANGUAGE:C,CXX>:/bigobj>")
     add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
     if(D2D_WERROR)
-        add_compile_options(/WX)
+        add_compile_options("$<$<COMPILE_LANGUAGE:C,CXX>:/WX>")
     endif()
 else()
     add_compile_options(-Wall -Wextra -Wpedantic -Wno-missing-field-initializers)

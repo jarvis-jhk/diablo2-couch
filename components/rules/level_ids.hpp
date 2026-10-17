@@ -90,6 +90,15 @@ inline constexpr int kKurastSewersLevel1 = 92;
 inline constexpr int kDuranceOfHateLevel1 = 100;
 inline constexpr int kDuranceOfHateLevel2 = 101;
 inline constexpr int kDuranceOfHateLevel3 = 102;          // Mephisto's
+
+// Act 4.
+inline constexpr int kOuterSteppes = 104;
+inline constexpr int kPlainsOfDespair = 105;
+inline constexpr int kCityOfTheDamned = 106;
+inline constexpr int kRiverOfFlame = 107;
+inline constexpr int kChaosSanctuary = 108;
+
+// Act 5.
 inline constexpr int kBloodyFoothills = 110;
 inline constexpr int kFrigidHighlands = 111;
 inline constexpr int kArreatPlateau = 112;

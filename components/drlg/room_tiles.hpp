@@ -357,7 +357,7 @@ inline std::vector<BuiltRoom> level_room_tiles(const std::vector<Outdoor::RoomSe
                     // already rolled
                 } else {
                     d2d::rules::Rng roll{ room.seed->seed };
-                    if (plain.empty()) roll.high = room.seed->seed_high;   // a maze / preset level: the room's whole seed (FUN_00667890)
+                    roll.high = room.seed->seed_high;                    // the room's whole seed, +0x14 (FUN_00667890)
                     std::erase_if(list, [&](const Unit& unit) { return !stays(unit, data.ids, roll); });
                 }
                 std::ranges::reverse(list);             // copied into the preset's list front-first again (FUN_00667510)
@@ -582,7 +582,7 @@ inline std::vector<BuiltRoom> level_room_tiles(const std::vector<Outdoor::RoomSe
         }
         // A preset room (FUN_006667d0 then FUN_00666ac0): its (w+1)x(h+1) slice
         // of each DS1 layer, edges | 0x84, layers past the first | index << 18; walked
-        // floors (the first with FillBlanks), walls, shadow, one short where
+        // floors (the first with FillBlanks, when the row says so), walls, shadow, one short where
         // KillEdge meets the preset's own right / bottom edge.
         const int origin_x = room.x - room.seed->preset_x, origin_y = room.y - room.seed->preset_y;
         const int slice_w = room.width + 1, slice_h = room.height + 1;
@@ -614,7 +614,7 @@ inline std::vector<BuiltRoom> level_room_tiles(const std::vector<Outdoor::RoomSe
             auto words = slice(map->floors()[layer_index], false);
             for (auto& tile_word : words) tile_word |= std::uint32_t(layer_index) << 18;   // FUN_0067c590
             edges(words, 0x84);
-            walk(words, nullptr, layer_index == 0);
+            walk(words, nullptr, layer_index == 0 && pre->fill_blanks);
         }
         for (std::size_t layer_index = 0; layer_index < map->walls().size(); ++layer_index) {
             auto words = slice(map->walls()[layer_index], false);
@@ -638,6 +638,29 @@ inline std::vector<BuiltRoom> level_room_tiles(const std::vector<Outdoor::RoomSe
             edges(words, 0x84);
             walk(words, nullptr, false);
         }
+        // FUN_0066d700 / FUN_0066d440 (DrlgAnim.cpp), an Animate preset: each
+        // tile of the walls, floors, shadow (as listed so far) whose DT1 says
+        // animated (+6 & 0x100) becomes its key's rarity-0 tile, and rarity
+        // 1..n-1 (the frames) follow it onto the list.
+        if (pre->animate)
+            for (const int layer : { 0, 1, 2 }) {
+                const std::size_t listed = room.tiles.size();
+                for (std::size_t i = 0; i < listed; ++i) {
+                    const auto tile = room.tiles[i];
+                    if (tile.layer != layer || !tile.file || tile.index < 0 || !(tile.file->tiles[std::size_t(tile.index)].material & 0x100)) continue;
+                    const std::uint32_t key = tile.word;
+                    const auto frames = tile_candidates(list, tile.orient, key ? int((key >> 20) & 0x3f) : 0, key ? int((key >> 8) & 0xff) : 0);
+                    auto frame = [&](int number) {
+                        const auto found = std::ranges::find_if(frames, [&](const auto& candidate) { return candidate.first->tiles[std::size_t(candidate.second)].rarity == number; });
+                        return found == frames.end() ? std::pair<const Dt1File*, int>{ nullptr, -1 } : *found;
+                    };
+                    std::tie(room.tiles[i].file, room.tiles[i].index) = frame(0);
+                    for (int number = 1; number < int(frames.size()); ++number) {
+                        const auto [file, index] = frame(number);
+                        room.tiles.push_back({ layer, tile.x, tile.y, tile.orient, file, index, key });
+                    }
+                }
+            }
         if (pre->logicals)
             logic_areas(rooms, room_index, own, nearby, map->walls().empty() ? Words{} : slice(map->walls()[0], true),
                         [&] { auto words = map->floors().empty() ? Words(std::size_t(slice_w * slice_h)) : slice(map->floors()[0], false); edges(words, 0x84); return words; }(), next_label, step < up_count);

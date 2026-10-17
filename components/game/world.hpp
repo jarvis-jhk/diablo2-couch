@@ -26,6 +26,7 @@
 #include <object_ids.hpp>
 #include <quests.hpp>
 #include <quests_act3.hpp>
+#include <quests_act4.hpp>
 #include <rules.hpp>
 #include <sequences.hpp>
 
@@ -57,8 +58,10 @@ struct OpenUI { enum Kind { stash, waypoint, talk, trade, hire } kind = stash; i
 // An object's message for the player (S->C 0x27 mode 2: the Moldy Tome's
 // 127): the speech box plays it, and the client answers it heard.
 struct Speech { int npc = -1; int string = 0; };
+// A quest's log state sent again (S->C 0x5d, no flags): the Quest Log button.
+struct QuestNews { int quest = 0; };
 }  // namespace ev
-using Event = std::variant<ev::LevelChanged, ev::OpenUI, ev::Speech>;
+using Event = std::variant<ev::LevelChanged, ev::OpenUI, ev::Speech, ev::QuestNews>;
 
 // What a client is told after each tick (the S -> C side, network.md):
 // everything it draws and clicks on. In-process these are copies; a TCP
@@ -227,6 +230,16 @@ struct World {
     d2d::rules::KhalimQuest khalim;
     d2d::rules::BlackenedTempleQuest temple;
     d2d::rules::GuardianQuest guardian;    // its +0xc 2: Mephisto dead (the hellgate, the bridge)
+    d2d::rules::IzualQuest izual;          // Act 4's (quests_act4.hpp)
+    d2d::rules::HellforgeQuest hellforge;
+    d2d::rules::TerrorQuest terror;
+    std::uint32_t izual_ghost_at = 0;      // a4q1's 3-tick timer (FUN_005b3e60): his ghost
+    std::uint32_t diablo_at = 0;           // a4q2's release (FUN_005b4be0): Diablo 10 ticks on
+    std::uint32_t diablo_dead_at = 0;      // a4q2's +0x18, classic: the 90 / 95 s end (FUN_005b4be0)
+    bool fortress_warp_done = false;       // a4q2's +5: the 90 s step
+    bool end_movie = false;                // the client's DAT_007a0604: ACT04END and the endgame screen on leaving
+    bool game_closed = false;              // classic, 95 s on (FUN_00530590), or 90 s without bit 13 (C->S 0x69)
+    bool had_soulstone = false;            // the Hellforge's item event (LAB_005b5a90): the soulstone picked up
     [[nodiscard]] d2d::rules::KhalimQuest::Parts khalim_parts() const;
     bool had_gidbinn = false;
     std::uint32_t gidbinn_timer = 0;       // a3q3's 7 ticks from the altar's use (FUN_00543f10 -> FUN_005b9a30)
@@ -254,18 +267,25 @@ struct World {
     void act1_log(d2d::rules::QuestLogStates& log, const d2d::rules::QuestBits& bits) const;
     void act2_log(d2d::rules::QuestLogStates& log, const d2d::rules::QuestBits& bits) const;
     void act3_log(d2d::rules::QuestLogStates& log, const d2d::rules::QuestBits& bits) const;
+    void act4_log(d2d::rules::QuestLogStates& log, const d2d::rules::QuestBits& bits) const;
     // A new game's join (FUN_00546270): each record's join, the chains.
     void act1_join();
     void act2_join();
     void act3_join();
+    void act4_join();
+    void act4_chain();                     // the records' +0xf0 down a4q1 -> a4q3 -> a4q2
+    bool act4_operate(int npc_index, std::uint32_t now_ms);   // the forge, the seals, Tyrael's portal
+    void diablo_release(std::uint32_t now_ms);   // FUN_005b5230: the sanctuary cleared, Diablo due
     // The player changed level, from `from`.
     void act1_enter(const Level& from);
     void act2_enter(const Level& from);
     void act3_enter(const Level& from);
+    void act4_enter(const Level& from);
     // The NPC's quest messages, in talk order.
     void act1_talk(std::vector<d2d::rules::QuestMsg>& out, int hc_idx);
     void act2_talk(std::vector<d2d::rules::QuestMsg>& out, int hc_idx, bool fresh);
     void act3_talk(std::vector<d2d::rules::QuestMsg>& out, int hc_idx);
+    void act4_talk(std::vector<d2d::rules::QuestMsg>& out, int hc_idx);
     // The NPC's talk window closed.
     void act1_talk_closed(int hc_idx);
     void act2_talk_closed(int hc_idx);
@@ -274,6 +294,7 @@ struct World {
     void act1_said(int hc_idx, int message_string);
     void act2_said(int hc_idx, int message_string);
     void act3_said(int hc_idx, int message_string);
+    void act4_said(int hc_idx, int message_string);
     // A frame of the day clock (40 ms).
     void act1_tick();
     void act2_tick();
@@ -281,13 +302,16 @@ struct World {
     bool act1_alert(int hc_idx);
     bool act2_alert(int hc_idx);
     bool act3_alert(int hc_idx);
+    bool act4_alert(int hc_idx);
     // A monster's death (its quest death hooks).
     void act1_kill(const Fight::Kill& kill, std::uint32_t now_ms);
     void act2_kill(const Fight::Kill& kill, std::uint32_t now_ms);
     void act3_kill(const Fight::Kill& kill, std::uint32_t now_ms);
+    void act4_kill(const Fight::Kill& kill, std::uint32_t now_ms);
     // A World tick, after the kills.
     void act2_update();
     void act3_update(std::uint32_t now_ms);
+    void act4_update(std::uint32_t now_ms);
     // Every item of the character has a unit id (new ones get theirs).
     void item_ids();
 
@@ -358,7 +382,7 @@ struct World {
         using namespace d2d::rules::operate_fn;
         return std::ranges::contains(std::array{ kCasket, kShrine, kUrn, kChest, kBarrel, kExplodingBarrel, kCorpse, kArmorStand, kWeaponRack, kWell, kBookshelf, kTrapObject,
                                                  kCubeChest, kScrollChest, kShaftChest, kTeleportPad, kLamTome, kHellgate, kGidbinnAltar, kKhalimHeart, kKhalimEye, kKhalimBrain,
-                                                 kSewerLever, kSewerStairs, kCompellingOrb }, operate_fn)
+                                                 kSewerLever, kSewerStairs, kCompellingOrb, kHellforge, kSeal, kSealInfector, kSealDeSeis, kSealVizier, kLastPortal }, operate_fn)
             || is_door(operate_fn);
     }
     static bool is_door(int operate_fn) {
@@ -554,12 +578,17 @@ struct World {
     // `couch_pads`: teleport pads taken (the party comes along, not the leash).
     // `couch_for_host` / `couch_quest_items`: a guest's tick leaves the quest
     // objects it uses (their indices) and the quest items it reaches (their
-    // ground ids) to the host, who carries the party's quests.
+    // ground ids) to the host, who carries the party's quests. `couch_kills`:
+    // the monsters a guest's own blow killed, for the host's quest hooks
+    // (couch_kill), so Mephisto, the seal bosses or Diablo killed by a guest
+    // count for the party, not only in that guest's quest bits.
     bool couch_guest = false;
     std::vector<UnitState*> couch_crowd;
     int couch_frames = 0;
     int couch_pads = 0;
     std::vector<int> couch_for_host, couch_quest_items;
+    std::vector<Fight::Kill> couch_kills;
+    void couch_kill(const Fight::Kill& kill, std::uint32_t now_ms);
     // Whether the OperateFn is a quest's (its effect reads the user's quest
     // bits or what it carries).
     static bool quest_object(int operate_fn);

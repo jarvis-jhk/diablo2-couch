@@ -1,0 +1,63 @@
+name: Coverity Scan
+
+on:
+  # A merged PR updates main, so this also scans every PR merge.
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  coverity:
+    # Fork: upstream's Coverity project and token; nothing to scan with here.
+    if: github.repository == 'psi29a/d2decomped'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y cmake ninja-build build-essential pkg-config libcurl4-openssl-dev \
+            libsdl3-dev libopenal-dev zlib1g-dev libbz2-dev libstorm-dev qt6-base-dev libgl1-mesa-dev
+
+      - name: Download Coverity Build Tool
+        run: |
+          : "${COVERITY_TOKEN:?Set the COVERITY_SCAN_TOKEN repository secret}"
+          curl -sS -L --fail \
+            --form token="$COVERITY_TOKEN" \
+            --form project="psi29a/d2decomped" \
+            -o cov-analysis-linux64.tar.gz \
+            https://scan.coverity.com/download/linux64
+          mkdir cov-analysis
+          tar xzf cov-analysis-linux64.tar.gz --strip-components=1 -C cov-analysis
+          echo "$PWD/cov-analysis/bin" >> "$GITHUB_PATH"
+        env:
+          COVERITY_TOKEN: ${{ secrets.COVERITY_SCAN_TOKEN }}
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
+
+      - name: Build with cov-build
+        run: cov-build --dir cov-int cmake --build build --config RelWithDebInfo -- -k 0
+
+      - name: Package results
+        run: tar czf d2decomped.tgz cov-int
+
+      - name: Upload to Coverity Scan
+        run: |
+          curl -sS --fail \
+            --form token="$COVERITY_TOKEN" \
+            --form email="psi29a@gmail.com" \
+            --form file=@d2decomped.tgz \
+            --form version="$GITHUB_SHA" \
+            --form description="main build" \
+            "https://scan.coverity.com/builds?project=psi29a%2Fd2decomped"
+        env:
+          COVERITY_TOKEN: ${{ secrets.COVERITY_SCAN_TOKEN }}

@@ -848,6 +848,70 @@ Guardian's report. `tests/quests_d2d.py` plays them all. The plain casts
 (S1 / A1 / A2: heals, lightning, teleport, Hydra) and the will-o-wisps'
 dance are in too (monster-ai.md). Act 3 is done; next: Act 4.
 
+## Road to Act 4 (from 2026-10-14, branch `act4`)
+
+Traced first, all of it, before any port (2026-10-14). Same road as Acts 2
+and 3: the levels diffed against game.exe, the town, the monsters, the quests.
+
+**Step 1 — the levels** (drlg.md "Act 4's layout", "Act 4's outdoors",
+"Act 4's River of Flame"; the oracle already builds 103..108):
+1. The layout (FUN_00678a20): two chains as act 2's; the Outer Steppes'
+   own placer (FUN_00676c00) and its 0x400000 / 0x800000 flag.
+2. Pandemonium Fortress (103): one preset (797 Fortress.ds1); d2d just
+   doesn't load act 4's presets yet.
+3. The Mesa (104..106, LevelType 27): borders in column 3 (799..), the
+   FortMesa entry, border LvlSub base 799, FUN_0067e6a0's anywhere list.
+4. The Chaos Sanctuary (108): a fixed 5x5 of 24x24 presets.
+5. The River of Flame (107, maze type 28): grow, then FUN_00673320 (Warp
+   Mesa below, BridgeLava above, two bridges, the forge swap, the LavaX fill
+   on eight sides, the shift under the sanctuary).
+6. Then population (`diff_drlg.py monsters`, `game`), act 4's NPC thinks
+   (`npcs.py` level 103), `ACT=4 sweep.sh`.
+
+*Done (2026-10-16):* the layout 2000/2000; 103..108 rooms, tiles, units,
+monsters, object groups as game.exe's (`ACT=4 sweep.sh`). New on the way:
+animated presets keep every frame (DrlgAnim.cpp), FillBlanks is the row's
+flag, outdoor preset units roll on the room's whole seed, the River of
+Flame's pass (FUN_00673320) and its file rotation, the knights' variant
+draw, InitFns 34 / 46 (trapped souls) / 58. The hellgate takes the player
+to the fortress (its start: the first spawn tile, FUN_0066ac40);
+`quests_d2d.py ... 4`; the fortress's NPCs think as game.exe's
+(`diff_drlg.py 1-20 103 npcs` 20/20). Left: nightmare / hell population
+(fails in Act 1 too: an older gap).
+
+**Step 2 — the monsters** (monster-ai.md "Act 4's MonAIs", skills.md "Act
+4's monster skills"): VileMother, VileDog, FingerMage, Regurgitator, the
+three knights, Megademon, Izual, Diablo (his 17-way chooser). Seven already
+run in `mon_ais.py`'s harness; VileMother (search type 0xc, the lay),
+Regurgitator and OblivionKnight (their search callbacks) and Diablo (his
+target / action choosers) need hooks. Skills: srvst 49 / 53 / 54, srvdo 91,
+100..104, 108, 112, 148, 152.
+
+*Done (2026-10-16):* all twelve thinks (TrappedSoul too: the souls InitFn
+46 makes) as game.exe's, `mon_ais.py` → `tests/mon_ais4_cases.inc`, wired
+in `ai.cpp`; a live run walks, swings and casts on 104..108. Skills cast:
+MonCurseCast, DiabCold, DiabLight (as the breath), the spider / knight /
+bone spirit missiles, RegurgitatorEat, Bone Armor, Nest (the lay), and
+roughly: DiabRun (as Charge), DiabWall (a fan), DiabPrison (four
+boneprison1). Left as notes: armor absorb, the knights' missile variant,
+Diablo's target score, the target's skills / states.
+
+**Step 3 — the quests** (quests-act4.md): the opening, Izual (his ghost),
+the Hellforge (Hephasto's hammer, the soulstone, the gems and rune), the
+seals and their three bosses, Diablo's release (the sanctuary cleared) and
+death; the end: classic 90 s on, the game ends; LoD Tyrael's portal (Act 5
+isn't built: it stops there). The hellgate opens the fortress.
+
+*Done (2026-10-16):* `rules/quests_act4.hpp` (Act4Opening, IzualQuest,
+HellforgeQuest, TerrorQuest), `world_quests_act4.cpp` at the World's hooks
+and the quest objects (the forge, the five seals and their three
+superuniques, Diablo's release and spawn at object 255, Tyrael's last
+portal 566). `tests/quests_d2d.py ... 4` plays all four from a new
+character. Left as notes: the quest log's +0xb values (inferred), the
+classic ending (90 s, the credits), the seal flash's event (the boss comes
+at once), the gems at once on loot's rng, the burning souls' chest drop,
+Act 5 past the portal.
+
 ## Checkpoint 2026-10-14 (later): housekeeping, fast act checks
 
 Fast checks, one act at a time or all three side by side:

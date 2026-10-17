@@ -197,6 +197,7 @@ def act_of(lid):
 def layout_dump(e, seed, lid):
     """The act's outdoor rectangles (act 2: levels 40..46) and Lut Gholein's
     LvlPrest file, as drlg-dump ... layout prints them; nothing is built."""
+    if lid >= 103: return act4_layout_dump(e, seed)
     if lid >= 75: return act3_layout_dump(e, seed)
     act = alloc_act(e, 1, seed, 0)            # act 2 for any level below 75
     out = []
@@ -207,6 +208,17 @@ def layout_dump(e, seed, lid):
     town = find_level(e, act, 40)
     out.append(f"town file {e.s32(e.r32(town + 0x14) + 4)}")
     out.append(f"tombs {e.r32(act + 0x94)} {e.r32(act + 0x484)}")
+    return "\n".join(out)
+
+
+def act4_layout_dump(e, seed):
+    """Act 4's rectangles (103..106, 108, FUN_00678a20), as drlg-dump ... layout prints them."""
+    act = alloc_act(e, 3, seed, 0)
+    out = []
+    for lid in (103, 104, 105, 106, 108):
+        l = find_level(e, act, lid)
+        x, y, w, h = (e.s32(l + 0x1c + 4 * i) for i in range(4))
+        out.append(f"level {lid} at {x},{y} size {w}x{h}")
     return "\n".join(out)
 
 

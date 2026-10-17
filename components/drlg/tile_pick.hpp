@@ -58,22 +58,26 @@ inline std::vector<const Dt1File*> room_dt1_list(std::uint32_t mask, const RoomD
 // sequence, DT1 by DT1 in list order, each DT1's in reverse file order
 // (its hash bucket list is built by inserting at the front); the first
 // whose running rarity reaches rand(total) + 1.
+// The candidates for a key (FUN_00604ae0): up to 40, the room's DT1s in
+// list order, each one's tiles in reverse file order.
+inline std::vector<std::pair<const Dt1File*, int>> tile_candidates(const std::vector<const Dt1File*>& list, int orient, int style, int seq) {
+    std::vector<std::pair<const Dt1File*, int>> candidates;
+    for (const auto* file : list) {
+        for (int i = int(file->tiles.size()) - 1; i >= 0 && candidates.size() < 40; --i) {
+            const auto& tile = file->tiles[std::size_t(i)];
+            if (tile.orient == orient && tile.style == style && tile.seq == seq) candidates.emplace_back(file, i);
+        }
+        if (candidates.size() >= 40) break;
+    }
+    return candidates;
+}
+
 inline std::pair<const Dt1File*, int> pick_tile(const std::vector<const Dt1File*>& list, d2d::rules::Rng& rng, int orient,
                                            std::uint32_t word) {
     const int style = word ? int((word >> 20) & 0x3f) : 0, seq = word ? int((word >> 8) & 0xff) : 0;
-    std::vector<std::pair<const Dt1File*, int>> candidates;
-    auto gather = [&](int want_orient, int want_style, int want_sequence) {
-        for (const auto* file : list) {
-            for (int i = int(file->tiles.size()) - 1; i >= 0 && candidates.size() < 40; --i) {
-                const auto& tile = file->tiles[std::size_t(i)];
-                if (tile.orient == want_orient && tile.style == want_style && tile.seq == want_sequence) candidates.emplace_back(file, i);
-            }
-            if (candidates.size() >= 40) break;
-        }
-    };
-    gather(orient, style, seq);
+    auto candidates = tile_candidates(list, orient, style, seq);
     if (candidates.empty()) {
-        gather(10, 0, 0);
+        candidates = tile_candidates(list, 10, 0, 0);
         return candidates.empty() ? std::pair<const Dt1File*, int>{ nullptr, -1 } : candidates.front();
     }
     int total = 0;

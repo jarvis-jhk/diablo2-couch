@@ -74,7 +74,7 @@ auto World::act2_talk(std::vector<d2d::rules::QuestMsg>& out, int hc_idx, bool f
                               return std::uint32_t(guard_line - 187);
                           }), std::back_inserter(out));
         std::ranges::copy(summoner.talk(quests(), hc_idx), std::back_inserter(out));
-        std::ranges::copy(tombs.talk(quests(), hc_idx, d2d::rules::qbit(game_bits, d2d::rules::SummonerQuest::kQuest, 13)), std::back_inserter(out));
+        std::ranges::copy(tombs.talk(quests(), hc_idx, d2d::rules::quest::bit(game_bits, d2d::rules::SummonerQuest::kQuest, 13)), std::back_inserter(out));
     }
 
 auto World::act2_talk_closed(int hc_idx) -> void {
@@ -121,7 +121,7 @@ auto World::act2_tick() -> void {
                     tombs.tyrael_gone = true;
                     d2d::log::info("The Seven Tombs: Tyrael leaves");
                 }
-        if (summoner.tick() && d2d::rules::qbit(quests(), d2d::rules::SummonerQuest::kQuest, 13) && level->id == d2d::rules::SummonerQuest::kSanctuary)
+        if (summoner.tick() && d2d::rules::quest::bit(quests(), d2d::rules::SummonerQuest::kQuest, 13) && level->id == d2d::rules::SummonerQuest::kSanctuary)
             class_cue("act2_complete_summoner", day_at);   // voice 0x33
         // The act's sky (S->C 0x53, FUN_0059a100 / FUN_0059a170): dark
         // while the Tainted Sun has it out and the player's in Act 2; a

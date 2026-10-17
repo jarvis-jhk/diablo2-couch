@@ -295,3 +295,28 @@
 - Upstream main now builds Act IV (cf873d8 levels + hellgate, 0fcaf4e quests, 5244c2b/bd25656
   monsters and Diablo, 202cc87 ending), not merged here yet. The Act IV item's block was
   cleared so the next quota worker merges upstream and takes it.
+
+## 2026-10-17 — Act IV couch (combined item diablo2-act-iv-couch)
+- Merged upstream fd86f34 (23 commits): Act IV built (levels, hellgate, Izual, Hellforge,
+  seals, Diablo, classic ending), Diablo's target pick, opt-in Sentry crash reporting,
+  Coverity on main. Conflicts: apps/CMakeLists (both kept), d2d CMakeLists (both defines,
+  sentry linked), main.cpp (our session mark, then upstream's SentrySession), world.cpp (act4
+  hooks host-only like acts 2/3), fight.cpp (Diablo's player score moved into side_pair(),
+  so every hero's Foe carries it).
+- Sentry: upstream's DSN (their Sentry org) blanked in apps/launcher/CMakeLists.txt, so the
+  launcher's crash-report box stays disabled and d2d never gets SENTRY_DSN; frames and
+  breadcrumbs would break our anonymous-only rule. sentry-native is still linked (smaller
+  merge diff). CI's symbol upload skips without SENTRY_AUTH_TOKEN (we have none).
+- lend(): the Act IV records and timers (izual, hellforge, terror, izual_ghost_at,
+  diablo_at, diablo_dead_at, fortress_warp_done, end_movie, game_closed, had_soulstone).
+- Fixed for every act: a guest's own blow ran the quest kill hooks with the GUEST's bits and
+  the lent records, so Mephisto killed by a guest marked the host's record done without the
+  host's word 22 (hellgate shut for player 1), and Diablo likewise. Now a guest's tick hands
+  its kills to the host (World::couch_kills -> Party -> host.couch_kill), and step 4 shares.
+- quest_object: Hellforge, the five seals, Tyrael's portal (hellgate already there).
+  progress.hpp shares words 26 (Terror's End) and 28 (Act V opened); 25 (Izual's skill
+  points) and 27 (Hellforge soulstone/gems) stay player 1's. Classic Diablo's open_act(4)
+  reaches guests via share_progression. test_couch_progress extended; negative control
+  (28 dropped from the list) fails the new case. Act IV waypoints: share_waypoints, as before.
+- Not verified here (no MPQs): the hellgate crossing with guests, the seals/Hellforge used by
+  a guest, Diablo's kill in a guest save. Jan's test.

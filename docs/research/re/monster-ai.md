@@ -259,6 +259,90 @@ d2d (`ai.cpp`): a think always has a target; no pending think event is seen; com
 - **Plain casts.** A skill whose Sk mode is a plain SC (the Summoner's) runs FUN_0056f7f0 at the mode's action frame: its do-func, then its srvmissile (+0x46) if it has one. `ai.cpp`: a srvmissile at the target (Fire Ball, Glacial Spike) carrying the skill's element at its level (the missile row names the Skill: FUN_0064b860); a nova (22, FUN_005c9b50 → FUN_0056d400: 64 srvmissilea out to range + LevRange × level + calc1; Frost Nova); a fire wall (24, the Countess's, its maker's SubMissile1).
 - **In d2d.** `ai.cpp think`: the searches over the monsters within 80 subtiles; Duriel's aura through Aura Enchanted's (`Monster::aura`); a walk at a kin; S3 / S4. A skill act plays its sequence (above); a charge or an SC skill without one stands. Left out: states 0x5a / 0x5b, overlays, regen (stat 0x4a), FUN_005fd470 (always usable), Radament's wider reach, a wait counted from the mode's end; one free-spot search, its landing move onto itself a stand. The Vulture's take-off (FUN_005f2eb0: flags 0xe off, its 0x100 / 0x1000 lifted, pattern 5, path mask 0) and landing (FUN_005f2fc0: fails when down already (pattern 1) or no free spot (FUN_00554ea0), else flags 0xe, a 0x100 plus, pattern 1, mask 0x3c01): `Monster::aloft` (untargetable, out of the crowd, flies over anything). A vulture landed by a pillar with its target still and in another room keeps trying "keep 9 off" and stands: checked 2026-10-12, game.exe's toward (0xd) and wall (0xf) pathers on the same grid find no point either (the keep's spot lies past the pillar), so it's game.exe's behaviour too. "In a group" (FUN_0058f0d0) is an owner (AI control +0x28 / +0x2c, FUN_0058f030: a boss's minions, a flagged MonStats party), not a pack: d2d a minion.
 
+Act 4's MonAIs (levels 103..108, same table). Traced 2026-10-14; all eleven
+thinks proven 2026-10-16: `mon_ais.py` (5000 runs each, `--dump
+tests/mon_ais4_cases.inc`) against `rules::mon_think` / `other_think` in
+test_monsters, wired in `ai.cpp`.
+aipN below is MonStats aipN for the difficulty (+0x56 + 6(N−1) + 2·diff).
+
+| AI | # | think | does |
+|---|---|---|---|
+| VileMother | 68 | FUN_005fa010 | spawns (+0x14 count) while under aip1: not a player's pet (FUN_006259b0), aip3 %: counts its young within 25 (FUN_005dd0b0 search type 0xc, class FUN_0054da60) and under aip2 lays one (FUN_005f9e30: from the direction to the target (FUN_00621dc0 → FUN_0063e7a0), up to eight tries, d = that direction then d + 1 …: the step of {6, 4, 2, 2, 2, 0, 6, 6}[d & 7] (FUN_0063e7e0) × 3 subtiles out, where Skill1 (Nest) fits (FUN_005fd350): Skill1 at that point). In melee aip4 % A1, else stands aip7. Out of it (count < aip1) aip5 % walks in, else aip6 % circles 4, else stands 15 |
+| VileDog | 69 | FUN_005fa280 | first think stands 5; in melee aip1 % A1 else stands aip2; out aip3 % walks in, else stands 10 |
+| FingerMage | 70 | FUN_005fa380 | flee state (+0x14 1, +0x18 tries): hit (FUN_005dd2b0) resets it; in melee → A1, else Skill1 (Spider) within aip5. Fleeing: life over aip3 %, 25 %, or tries over aip6 ends it; else within 14 backs off 14 (pace (Run·100/Velocity − 100) ≤ 120), else stands 15. No group (FUN_0058f0d0) and life under aip4 %: flees (back off 9). Out of melee: past aip5, within aip7 walks in, else stands 15; else aip2 % Skill1, else state 0x54 on → walk in, off → stands aip8. In melee aip1 % A1, else aip2 % Skill1, else circles 5 |
+| Regurgitator | 71 | FUN_005fa710 | a corpse state machine (+0x14): 0/1 look for a corpse within aip6 (squared, ctx +4; FUN_005fa690: a dead monster, not 0x200-flagged, has a corpse, not a pet, in a room); 2 walk to it (approach, up to 5 tries, then wander 8); 3 Skill1 (Eat, srvdo 108) at it → 4; 4 out of melee S2 (mode 5) → state 5, in melee back off 8; 5 back off 16. Fighting: a corpse in reach (≤ 9 squared and aip2 %, or aip4 %) → eat; in melee aip1 % A1, else stands 15; out aip3 % walks in (flags 0); a corpse and aip5 % → eat; else stands 8 |
+| DoomKnight | 72 | FUN_005faa90 | in melee aip1 % A1 else stands aip2; out aip3 % runs in (7) else stands aip4 |
+| AbyssKnight | 73 | FUN_005fab80 | Skill2 (Bone Armor) when its state is off and life under aip1 %, aip2 %; in melee aip3 % A1 else stands aip4; within aip5 the fire timer (+0x14) set to aip6; Skill1 (Missile) when the timer's 0 and the target isn't a player's corpse-lit (unit +0x14 +0xe < 4), timer = aip6; else counts down; aip7 % runs in (pace rand & 1 + 6); within aip8 circles 3; else stands 15 |
+| OblivionKnight | 74 | FUN_005faf00 | its search (FUN_005fae40, within 2500 squared: class 0x136 monsters it sees, FUN_00650d70, not pets; nearest, and nearest under 40 % life); within aip1: Skill4's curse (Decrepify; `0 < id`) when the target's state (skill +0x82) is off, else a walk (4) to the knight found when it's farther from the target (squared, FUN_005b0bd0(knight, target)) than the target's distance squared, else back off 10 (pace 50), else Skill3 (Bone Spirit). The second target (FUN_005ddc30) within aip2: Skill6 (MonCurseCast) past its cooldown (+0x14 < frame, aip4 %), cooldown aip3; else aip5 %: Skill3 (aip6 %) or Skill1 at it. Past aip8, aip7 % about the target 6; else 70 % stands 10, 30 % circles 3 |
+| Megademon | 89 | FUN_005e0c80 | Venom Lords and Infector: Skill1 (Inferno) while its state 0xc is off and the target within Skill1's level (FUN_006442a0, at least 1), out of melee: aip1 % when the cooldown (+0x14 frame) passed, cooldown aip6 frames; in melee: state 0xc cleared, aip2 % Inferno (cooldown), else aip3 % A1, else aip4 % circles 3, else stands 5. Out: aip3 % walks in, else stands 10 |
+| Izual | 55 | FUN_005f89b0 | first think (+0x14 0 → 1) FUN_005b4390 (a4q1: his greeting sent to every player, `FUN_00544300(FUN_005b3940)`); a pending stand (+0x18) first. In melee: swings (+0x1c) left or aip1 %: A1; else Skill1 (Frost Nova) aip4 %, stand aip5, swings aip6; else stands aidel. Out: within 10 Frost Nova aip3 %; aip2 % walks in; within 10 stands aidel; else keeps 6..9 (FUN_005de6d0 → FUN_005de4e0 2) |
+| Diablo | 51 | FUN_005e9170 | his kept point (FUN_0058eef0 kind 10) set to his own spot when he has none (FUN_0058ef40); target by FUN_005e8f20 (players in its room's area, scored FUN_005e8530); action by FUN_005e8810 (below); a Skill7 (Prison) first when the target's out of state (skill +0x80) and usable. Actions: 1 wander about (pace 20), 2 A1, 3 A2, 4 S4, 5 Skill1 (Lightning; state 0xc on → off), 6 Skill3 (Fire), 7 Skill2 (Cold), 8 Skill4 (Wall), 9 Skill7 (Prison), 10 Skill5 (Run), 12 circles 4, 13 Skill6 (Prime Firewall), 14 back off from the target (pace 50, ½ its size, two tries, then stand 2), 15 Skill7 at the player by its leader word, 16 wander 5 (stuck: FUN_0064d910 mask 0x40), else stands 12 / 8 / 4 by difficulty |
+| Diablo (other) | 51 | FUN_005e8480 | state 0xc off, back to its think (FUN_005b0e00), the target's spot kept as its leader word, stands 1 |
+
+Diablo's chooser (FUN_005e8810): +0x14 set wins. No target: stuck (FUN_0064d910
+at its spot, size 2, mask 0x40) → 16, else `rand(1000) > 0` → 4 (S4) /
+11 (stand). With a target: 17 weights, by case (base rows, then nudges):
+in melee and a line (FUN_00622c40): {0,0,40,70,0,40,24,40,15,…}; under 20 %
+life weight 2 = 50; state 0xb on zeroes 7 and 8; cold res (stat 0x29) above
+fire (0x27): 6 −10, else +10; no line (FUN_005dd290) zeroes 5 and 6; his
+leader in the Chaos Sanctuary within 85 (FUN_006417d0) → 15 = 10. Line
+but not melee: {0,0,0,0,0,25,25,0,15,20,10,0,20,…}; the target's distance
+(FUN_005dc380) past 25: 8 −5, 10 = 20, 5 = 0; res nudges 6 and 8; under 2
+players around (`param_5`) 6 −10, past 3 +5; past 60 frames (`param_4`) 9
++10; few players (FUN_00573930) zero 9; casting state (Decrepify 0x3b /
+0x38, Amplify 0x33 level > 3, 0x1b level > 7 on the target's left or right
+skill: `local_c`) and the target 85+ off (`local_8`): 1 = 0, 12 = 10, 10 =
+0, 13 = 15, 9 ≥ 10; 105+ off: 9 = 20, 14 = 60; leader 15 = 15. Neither:
+{0,0,0,0,5,0,25,0,25,40,0,0,25,…}, under 2 players 8 −5, 6 = 0, 1 = 25, 9 = 0;
+the same casting nudges (13 = 15, 13+1 = 25, 9 ≥ 20); 105+ off 14 = 60;
+leader 15 = 20. Then a usable Prison (FUN_005fd470 skill 199: `FUN_005b34c0`
+on the target in test mode, flag 1, each of 0x73d4f0's four spots able to take
+its bone, `FUN_005b2a00`: request +0x24 bit 0 a dry run, radius −1 the
+exact subtile, which must lie in the target's room's rect (both callers,
+FUN_005fd470 and the cast FUN_005cd5d0, pass FUN_00620bb0(target) as
+FUN_005b3270's EDX: the param block's [1], PtInRect on FUN_00619730's
+rect), pass `FUN_005fd350` (it only refuses BaseIds 0xce, 0xe4, 0x12a, 0x14e
+and 0x210, so never a bone) and `FUN_0064d9b0` (the class's MonStats2 size
+and kind mask); each try draws three times on the room's seed; the cast places
+them the same way, (1, 1) first or none) zeroes 9. So he picks Prison only
+when the target can't be fully caged (d2d: `fits_on`, 2026-10-16); the
+leader's Prison not usable zeroes 15. Pick: `rand(sum)` on the unit seed
+(power of two: mask), the first index whose running sum passes it; none → 11.
+His MonAI row is `{1, 0, FUN_005e9170, FUN_005e8480}`: search type 1
+(FUN_005de890), so with nothing within 0x23 (aidist is blank) the think
+doesn't run and he stands; FUN_005e8f20's whole-act player pick (filter
+FUN_005e8eb0: same act, under 0x3fc) only runs once that search found
+someone. Run (act 10) is in reach only inside that 0x23, with a clear line
+and the target not far from his point (2026-10-16: at 6 cells d2d picks it and
+sets off; at 15 cells neither thinks).
+The port (`rules::mon_think` "Diablo") holds the exact index map, proven
+on the dumped runs. Its distances: the target to his point
+(FUN_005dc480, less the target's size / 2 + 1: "far" past 0x55, "very
+far" past 0x69), him to the target (FUN_005dc380, less his size: past 25),
+the target's leader to his point (FUN_006417f0: under 0x55 with the leader
+in the Chaos Sanctuary), each (max · 2 + min) / 2. FUN_00573930 (two stack
+words) answers the players about him at +8.
+
+His target (FUN_005e8f20, 2026-10-16): the best scored (FUN_005e8530) of
+the game's players passing FUN_005e8eb0 (same act byte +0x18, FUN_005dc530
+under 0x3fc); it returns how many it looked at (the chooser's
+players_looked) and the best score. A second list (units of his act) can
+stand in for the best player when that one is out of reach and has no path
+(not kept in d2d). The score of a player, C division throughout:
+`(300 if life % (FUN_00621f20) < 20) + ((damageresist 0x24 + magicresist
+0x25 x 2) x 4 + lightning 0x29 + fire 0x27 + cold 0x2b only in reach) / 15
++ (reach 100 (FUN_00622c40), else a clear line 75 (FUN_005dd290:
+FUN_00622aa0 mask 4)) + 100 when he is past 0x55 from his point and the
+player inside it (FUN_005dc480)) x 5 + ((left level x attackrank + right
+level x attackrank) / 4 + 200 with state 0xb + (maxdamage 0x16 + fire /
+lightning / magic / cold max 0x31 / 0x33 / 0x35 / 0x37 + poison max 0x3a
+>> 8) / 2) x 2`, all / 22, 0 → 1; a monster whose MonStats +0x4e is under 2
+scores 0. attackrank is Skills.txt's (bin +0x18e, matched on every row).
+The levels are each hand's own (FUN_006442a0(unit, skill, 1)), as the
+chooser's casting test (Fire Wall over 3, 0x1b over 7) reads them.
+`rules::diablo_score`, proven on 400 cases (tools/emu/diablo_score.py,
+tests/diablo_score_cases.inc).
+
 ## Doors — FUN_005b0f50
 
 Driver step 1. With MonStats flags byte +0xc & 8 (opendoors, DAT_006ce274):

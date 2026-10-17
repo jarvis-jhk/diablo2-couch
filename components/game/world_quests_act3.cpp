@@ -35,7 +35,7 @@ auto World::act3_log(d2d::rules::QuestLogStates& log, const d2d::rules::QuestBit
     }
 
 auto World::act3_join() -> void {
-        fight.spawning.orb_smashed = d2d::rules::qbit(quests(), 0x12, 0);   // a3q5's join (FUN_005bb480): Khalim's Will done
+        fight.spawning.orb_smashed = d2d::rules::quest::bit(quests(), 0x12, 0);   // a3q5's join (FUN_005bb480): Khalim's Will done
         d2d::rules::HratliGreeting::join(quests(), game_bits);
         lam_esen = {};
         lam_esen.join(quests(), game_bits, carries(d2d::rules::LamEsenQuest::kTome));
@@ -56,9 +56,9 @@ auto World::act3_join() -> void {
 
 auto World::act3_enter(const Level& from) -> void {
         lam_esen.enter(quests(), from.id, level->id);
-        guardian.enter(quests(), from.id, level->id, d2d::rules::qbit(game_bits, d2d::rules::GuardianQuest::kQuest, 13));
+        guardian.enter(quests(), from.id, level->id, d2d::rules::quest::bit(game_bits, d2d::rules::GuardianQuest::kQuest, 13));
         khalim.enter(level->id);
-        temple.enter(quests(), from.id, level->id, d2d::rules::qbit(game_bits, d2d::rules::BlackenedTempleQuest::kQuest, 13));
+        temple.enter(quests(), from.id, level->id, d2d::rules::quest::bit(game_bits, d2d::rules::BlackenedTempleQuest::kQuest, 13));
         blade.enter(quests(), from.id, level->id, carries(d2d::rules::BladeQuest::kGidbinn));
     }
 
@@ -95,8 +95,8 @@ auto World::act3_said(int hc_idx, int message_string) -> void {
         // Khalim's Will (FUN_005b8060): Cain's bits; the Blackened Temple
         // (FUN_005bb210): Cain's done, Khalim's parts gone once his Will's done.
         khalim.said(quests(), hc_idx, message_string);
-        guardian.said(quests(), hc_idx, message_string, d2d::rules::qbit(game_bits, d2d::rules::GuardianQuest::kQuest, 13));
-        if (temple.said(quests(), game_bits, hc_idx, message_string, d2d::rules::qbit(game_bits, d2d::rules::BlackenedTempleQuest::kQuest, 13))) {
+        guardian.said(quests(), hc_idx, message_string, d2d::rules::quest::bit(game_bits, d2d::rules::GuardianQuest::kQuest, 13));
+        if (temple.said(quests(), game_bits, hc_idx, message_string, d2d::rules::quest::bit(game_bits, d2d::rules::BlackenedTempleQuest::kQuest, 13))) {
             using K = d2d::rules::KhalimQuest;
             for (const char* part : { K::kEyeCode, K::kHeartCode, K::kBrainCode, K::kFlailCode, K::kWillCode }) while (carries(part)) take_carried(part);
             d2d::log::info("The Blackened Temple: done, Khalim's parts taken");
@@ -138,7 +138,7 @@ auto World::act3_kill(const Fight::Kill& kill, std::uint32_t now_ms) -> void {
         if (kill.type == d2d::rules::monster_ids::kMephisto && !hosted_quests) mephisto_died(kill, now_ms);
         if (!hosted_quests && std::ranges::contains(d2d::rules::BlackenedTempleQuest::kCouncil, kill.super)) {   // FUN_005bbc00
             using K = d2d::rules::KhalimQuest;
-            const auto drops = temple.council_died(quests(), game_bits, d2d::rules::level_act(level->id) == 2, d2d::rules::qbit(quests(), K::kQuest, 0),
+            const auto drops = temple.council_died(quests(), game_bits, d2d::rules::level_act(level->id) == 2, d2d::rules::quest::bit(quests(), K::kQuest, 0),
                                                    carries(K::kFlailCode) || carries(K::kWillCode), carries(d2d::rules::BlackenedTempleQuest::kCube));
             if (drops.flail) loot.put({ .code = K::kFlailCode }, kill.x, kill.y, kill.level, fight.spawning.game, now_ms);
             if (drops.cube) loot.put({ .code = d2d::rules::BlackenedTempleQuest::kCube }, kill.x, kill.y, kill.level, fight.spawning.game, now_ms);
@@ -156,7 +156,7 @@ auto World::act3_kill(const Fight::Kill& kill, std::uint32_t now_ms) -> void {
     }
 
 auto World::act3_update(std::uint32_t now_ms) -> void {
-        if (d2d::rules::qbit(quests(), d2d::rules::BlackenedTempleQuest::kQuest, 0)) guardian.chain();   // a3q5's +0xf0
+        if (d2d::rules::quest::bit(quests(), d2d::rules::BlackenedTempleQuest::kQuest, 0)) guardian.chain();   // a3q5's +0xf0
         mephisto_bridge(now_ms);
         // The Golden Bird: the first boss made in act 3 carries it (FUN_00544e80:
         // not an NPC, not class 0x197); its items picked up (FUN_005ba6a0).

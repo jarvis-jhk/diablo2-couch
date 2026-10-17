@@ -146,6 +146,8 @@ struct ObjectRooms {
             if (spawns) leader = int(spawns->size());
             monster(int(game_data.mon_bin[0x16e]), x, y, 0);
         }
+        std::vector<std::array<int, 3>> souls;
+        if (obj(id, "InitFn") == 46) souls = trapped_souls(x, y);
         if (obj(id, operated || broken ? "HasCollision2" : "HasCollision0")) stamp(x, y, obj(id, "SizeX"), obj(id, "SizeY"), bits);
         if (level.npcs.size() > before) {
             auto& npc = level.npcs.back();
@@ -153,8 +155,54 @@ struct ObjectRooms {
             npc.room = int(index);
         }
         if (obj(id, "InitFn") == 28) piles(gold, x, y);
-        if (group) out->made.push_back({ id, x, y });
+        if (group) {
+            out->made.push_back({ id, x, y });
+            for (const auto& [soul, soul_x, soul_y] : souls) out->made.push_back({ soul, soul_x, soul_y });   // as objgroups.py lists them
+        }
         return level.npcs.size() > before ? level.npcs.back().shrine : 0;
+    }
+
+    // InitFn 46 (FUN_005506d0, object 369, the trapped soul placeholder):
+    // ((w·h) >> 7)·30 >> 8 souls for its room, up to 12 tries on the object
+    // seed: a spot rand(w − 4), rand(h − 4) in, where fits_wide(3, 3) takes
+    // it, a soul (odd: 404, else 403) at the placeholder's own spot (mode 1,
+    // that spot only); then on from that random spot, hop k (k from 1) going
+    // on while rand(k / 2) is 0: up to max(left, 4) · 3 hops of (rand % 5 +
+    // 5) · 2 subtiles in direction rand & 7 (0x731b7c / 0x731b9c) until
+    // fits_wide takes one, a soul there; none found ends the try (after
+    // the loop head's rand(k / 2) once more).
+    std::vector<std::array<int, 3>> trapped_souls(int at_x, int at_y) {
+        std::vector<std::array<int, 3>> souls;
+        static constexpr std::array<int, 8> kDx = { -1, 0, 1, -1, 1, -1, 0, 1 }, kDy = { -1, -1, -1, 0, 0, 1, 1, 1 };
+        int left = ((room.h * room.w) >> 7) * 30 >> 8;
+        auto soul = [&](int x, int y) {
+            const int hc_idx = rgn.next() & 1 ? 0x194 : 0x193;
+            if (spawns) leader = int(spawns->size());
+            last_made.reset();
+            monster(int(game_data.mon_bin[std::size_t(hc_idx)]), x, y, 0);
+            if (last_made) { --left; souls.push_back({ hc_idx, last_spot.first, last_spot.second }); }
+        };
+        for (int tries = 12; left > 0 && tries > 0; --tries) {
+            int x = room.x + rgn(room.w - 4), y = room.y + rgn(room.h - 4);
+            if (!fits_wide(x, y, 3, 3)) continue;
+            soul(at_x, at_y);
+            for (int hop = 1;; ++hop) {
+                if (hop >> 1 > 0 && rgn(hop >> 1) != 0) break;
+                bool found = false;
+                for (int step = 0, most = std::max(left, 4) * 3; step < most && !found; ++step) {
+                    const int dir = int(rgn.next() & 7);
+                    x += int(rgn.next() % 5 + 5) * kDx[std::size_t(dir)] * 2;
+                    y += int(rgn.next() % 5 + 5) * kDy[std::size_t(dir)] * 2;
+                    found = fits_wide(x, y, 3, 3);
+                }
+                if (!found) {                                   // back to the loop's head: its draw, then out
+                    if (hop >> 1 > 0) rgn(hop >> 1);
+                    break;
+                }
+                soul(x, y);
+            }
+        }
+        return souls;
     }
 
     // FUN_0054f8c0 (InitFn 28), replaying add_object's rolls: 1..9 piles,
@@ -498,6 +546,7 @@ struct ObjectRooms {
             sets = &region.components.back();
         }
         if (type_at(type)) (void)d2d::rules::monster_look(sets, types[std::size_t(type)].choices, own);
+        (void)d2d::rules::monster_variant(type, own);
         own.next();
         // FUN_005d6b60: an oninit MonEquip row rolls its slot and makes its item (2 game steps).
         // ponytail: acts 1-3's only oninit row is Blood Raven's bow (MonEquip.txt's other, flyingscimitar, is later); read MonEquip.txt for more.
@@ -764,9 +813,9 @@ struct ObjectRooms {
                 // units.hpp) Natalya (0x129), else within 3, till word 0x16 has bit 13.
                 // ponytail: their quest records' "made" bits aren't kept: a room comes up once.
                 const int init = obj(unit.id, "InitFn");
-                const bool hratli_moved = d2d::rules::qbit(game_quests, 0x10, 13);
+                const bool hratli_moved = d2d::rules::quest::bit(game_quests, 0x10, 13);
                 if ((init == 49 && !hratli_moved) || (init == 50 && hratli_moved)) monster_or_npc(0xfd, unit, 0, false);
-                if (init == 52 && !d2d::rules::qbit(game_quests, 0x16, 13)) monster_or_npc(0x129, unit, 3, false);
+                if (init == 52 && !d2d::rules::quest::bit(game_quests, 0x16, 13)) monster_or_npc(0x129, unit, 3, false);
                 // InitFn 43 (FUN_005bd1f0, a3q7, object 368 by the jungle's head): the Dark
                 // Wanderer (0x170) 7 subtiles east of it, its spot only; a3q7's init (FUN_005bd300)
                 // leaves him due in every game.

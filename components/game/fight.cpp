@@ -676,7 +676,8 @@ auto Fight::land(std::size_t monster_index, const d2d::rules::Blow& blow, bool b
         if (const auto* curse = target.curse.skill >= 0 ? game_data->skills.get(target.curse.skill) : nullptr; by_player && curse && curse->auratarget == "lifetap")
             character.stats.values[kLife] = std::min(character.stats.values[kMaxLife], character.stats.values[kLife]
                                          + ((std::int64_t(blow.damage) * calc(*curse, curse->calc[0], target.curse.level) / 100) << 8));
-        if (hurt(*game_data, target, blow.damage, now_ms)) { killed(monster_index, now_ms); return; }
+        const int taken = soak(target, d2d::rules::resisted(blow.phys, target_of(monster_index).res[0]), blow.damage);
+        if (hurt(*game_data, target, taken, now_ms)) { killed(monster_index, now_ms); return; }
         // Knockback (result flag 8): a monster with GH and KB modes
         // (MonStats2, FUN_0046c140 bits 3 / 13; else it's a GH) goes into
         // KB (FUN_005a77d0): path type 8, 5 subtiles on from the attacker,
@@ -3985,6 +3986,19 @@ auto Fight::side_pair(std::uint32_t now_ms) -> std::vector<Foe> {
                                     merc && merc->unit.walking, merc_fighter() } };
         foes[0].running = owner_mode == 3;                   // RN (World: walking with run on and stamina)
         foes[0].life_pct = int(std::int64_t(character.stats.get(d2d::d2s::kLife)) * 100 / std::max<std::int64_t>(character.stats.get(d2d::d2s::kMaxLife), 1));
+        {                                                    // Diablo's score of the player (FUN_005e8530)
+            const auto stat = [&](int id) { return int(psum[std::size_t(id)]); };
+            auto& pick = foes[0].pick;
+            pick.damage_resist = stat(0x24); pick.magic_resist = stat(0x25); pick.fire_resist = stat(0x27); pick.light_resist = stat(0x29); pick.cold_resist = stat(0x2b);
+            pick.max_damage = stat(0x16) + stat(0x31) + stat(0x33) + stat(0x35) + stat(0x37) + (stat(0x3a) >> 8);
+            pick.state_b = now_ms < chilled;
+            const auto hand = [&](std::uint32_t id, int& out_id, int& out_level, int& out_rank) {
+                const auto* skill = game_data->skills.get(int(id));
+                out_id = skill ? skill->id : -1; out_level = skill && skill_level ? skill_level(skill->id) : skill ? 1 : 0; out_rank = skill ? skill->attack_rank : 0;
+            };
+            hand(character.header.left_skill, pick.left_skill, pick.left_level, pick.left_rank);
+            hand(character.header.right_skill, pick.right_skill, pick.right_level, pick.right_rank);
+        }
         foes[1].pet = true;                                  // the merc: its MonStats class's size
         foes[1].life_pct = merc ? int(std::int64_t(merc->hit_points) * 100 / std::max(merc_max_life(), 1)) : 0;
         if (const int row = merc_npc ? game_data->monsters.row(merc_npc->id) : -1; row >= 0)
@@ -4030,7 +4044,7 @@ auto Fight::world(bool in_moor, std::uint32_t now_ms, float elapsed, const Crowd
                     }
             }
             // FUN_0065c310(pcdata +0x10 + diff * 4, 0x15, 0): the zealots' spare (a pet's owner's, FUN_0058f090).
-            const bool a3q5 = d2d::rules::qbit(character.header.quests[std::size_t(std::clamp(character.header.active_difficulty(), 0, 2))], 0x15, 0);
+            const bool a3q5 = d2d::rules::quest::bit(character.header.quests[std::size_t(std::clamp(character.header.active_difficulty(), 0, 2))], 0x15, 0);
             for (auto& foe : foes) foe.a3q5_done = a3q5;
             // With Confuse or Attract about, every monster is a foe too, after
             // the player's list (lists 8 / 9, FUN_005dd0b0 mode 5's units),
@@ -4060,7 +4074,7 @@ auto Fight::world(bool in_moor, std::uint32_t now_ms, float elapsed, const Crowd
             }
             const auto cursed = [&](const Monster& monster) { return monster.curse.skill >= 0 && now_ms < monster.curse.until; };
             for (std::size_t i = sides; i < foes.size(); ++i)
-                if (const auto monster_index = i - sides; hurt(*game_data, monsters[monster_index], foes[i].damage, now_ms))
+                if (const auto monster_index = i - sides; hurt(*game_data, monsters[monster_index], soak(monsters[monster_index], foes[i].physical, foes[i].damage), now_ms))
                     killed(monster_index, now_ms, cursed(monsters[monster_index]) || std::ranges::any_of(foes[i].melee_by, cursed, [](const Monster* attacker) -> const Monster& { return *attacker; }));
             if (foes[0].blessed) wisp_blessing = { foes[0].blessed, now_ms + 0x1a5e00u * 40 };   // FUN_006251f0: 0x1a5e00 frames
             foes.resize(sides);

@@ -30,6 +30,7 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QProcess>
+#include <QProcessEnvironment>
 #include <QProgressDialog>
 #include <QProgressBar>
 #include <QPainter>
@@ -532,6 +533,31 @@ public:
                 QMessageBox::warning(this, tr("Settings"), tr("Could not write %1").arg(from_path(cfg)));
         });
 
+        crashReports_ = new QCheckBox(
+            tr("Automatically send crash reports and the last game frame to Sentry"), this);
+        crashReports_->setEnabled(*d2::kSentryDsn != '\0');
+        crashReports_->setToolTip(tr(
+            "When enabled, a crash report may include a crash dump, hardware and OS details, the GPU model when "
+            "reported by its driver, graphics backend, recent warning/error messages, optional notes, and the "
+            "latest 800x600 game frame captured about once per second. The image shows only the game framebuffer, "
+            "not your desktop, and may include names or other visible game information. Crash dumps may contain "
+            "sensitive data from the game's memory. These items are sent to Sentry only if the game crashes. "
+            "You can turn this off at any time."));
+        connect(crashReports_, &QCheckBox::toggled, this, [this](bool enabled) {
+            QSettings settings;
+            settings.setValue("privacy/sendCrashReports", enabled);
+            settings.sync();
+            crashNotes_->setEnabled(enabled);
+            if (settings.status() != QSettings::NoError) {
+                QMessageBox::warning(this, tr("Crash reports"),
+                                     tr("Could not save the crash-reporting preference."));
+            }
+        });
+        crashNotes_ = new QLineEdit(this);
+        crashNotes_->setMaxLength(2048);
+        crashNotes_->setPlaceholderText(tr("Optional context for this run; sent only if it crashes"));
+        crashNotes_->setEnabled(crashReports_->isChecked());
+
         launch_ = new QPushButton(tr("Launch"), this);
         launch_->setDefault(true);
         connect(launch_, &QPushButton::clicked, this, &MainWindow::launch);
@@ -583,6 +609,8 @@ public:
         btnRow->addSpacing(12);   // macOS clips the checkbox label against the default button
         btnRow->addWidget(launch_);
         layout->addLayout(btnRow);
+        layout->addWidget(crashReports_);
+        layout->addWidget(crashNotes_);
         layout->addStretch();
 
         auto* footer = new QHBoxLayout;
@@ -592,7 +620,7 @@ public:
         layout->addLayout(footer);
 
         setFixedWidth(kWindowWidth);
-        resize(kWindowWidth, 460);
+        resize(kWindowWidth, 490);
 
         loadSettings();
         refresh();
@@ -620,6 +648,9 @@ private:
         const QSignalBlocker quiet(fullscreen_);   // loading isn't a change to write back
         fullscreen_->setChecked(cfg["fullscreen"] == "1");
         source_ = settings.value("game/source", "manual").toString();
+        const QSignalBlocker crashReportsQuiet(crashReports_);
+        crashReports_->setChecked(settings.value("privacy/sendCrashReports", false).toBool());
+        crashNotes_->setEnabled(crashReports_->isEnabled() && crashReports_->isChecked());
     }
     void saveSettings() const {
         QSettings settings;
@@ -816,7 +847,17 @@ private:
     void launch() {
         if (!persist()) return;
         const QString engine = engineBinaryPath();
-        if (!QProcess::startDetached(engine, {}, QFileInfo(engine).absolutePath())) {
+        QProcess process;
+        process.setProgram(engine);
+        process.setWorkingDirectory(QFileInfo(engine).absolutePath());
+        if (crashReports_->isChecked() && *d2::kSentryDsn != '\0') {
+            process.setArguments({ "--send-crash-reports" });
+            auto environment = QProcessEnvironment::systemEnvironment();
+            environment.insert("SENTRY_DSN", QString::fromUtf8(d2::kSentryDsn));
+            environment.insert("D2D_CRASH_NOTES", crashNotes_->text());
+            process.setProcessEnvironment(environment);
+        }
+        if (!process.startDetached()) {
             QMessageBox::warning(this, tr("Launch"), tr("Could not start %1").arg(engine));
             return;
         }
@@ -1009,6 +1050,8 @@ private:
     QPushButton* fetchBins_{};
     QPushButton* launch_{};
     QCheckBox* fullscreen_{};
+    QCheckBox* crashReports_{};
+    QLineEdit* crashNotes_{};
     QPushButton* upgrade_{};
     QString latest_url_;
     Q_OBJECT

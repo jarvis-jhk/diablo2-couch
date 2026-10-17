@@ -743,6 +743,16 @@ void add_object(const GameData& game_data, const d2d::txt::Table& objects, const
     // ponytail: only its seed steps; the piles (FUN_00559300) aren't dropped and it stays NU (a dummy: nothing draws it).
     if (objects.get(row, "InitFn") == "28")
         for (int piles = rgn(9) + 1; piles > 0; --piles) { rgn.next(); rgn.next(); }
+    // Act 4's (quests-act4.md "Act 4's other objects"): the hell brazier (InitFn 34, FUN_005500f0)
+    // lights (mode 1) on an odd step of the object seed; the skeleton spawns (26) take mode 1;
+    // the hellfires (22, FUN_0054fb40) mode 2 when objects.txt's +0x141 is set and +0x13f isn't.
+    const char* init_mode = nullptr;
+    if (objects.get(row, "InitFn") == "34" && (rgn.next() & 1)) init_mode = "OP";
+    if (objects.get(row, "InitFn") == "26") init_mode = "OP";
+    // The fissures (InitFn 58, FUN_0054fdb0): a step, their first eruption (event 8) that % 250 + 25 frames on.
+    // ponytail: the eruptions themselves aren't played.
+    if (objects.get(row, "InitFn") == "58") rgn.next();
+    if (objects.get(row, "InitFn") == "22" && objects.get(row, "Mode2") == "1" && objects.get(row, "Mode0") != "1") init_mode = "ON";
     npc.preoperated = objects.get(row, "PreOperate") == "1" && rgn(14) == 0;
     npc.base_w = "hth";
     for (std::size_t mode = 0; mode < 8; ++mode) npc.lit[mode] = std::uint8_t(std::atoi(std::string(objects.get(row, "Lit" + std::to_string(mode))).c_str()));
@@ -753,8 +763,11 @@ void add_object(const GameData& game_data, const d2d::txt::Table& objects, const
                  && npc.operate_fn != d2d::rules::operate_fn::kCubeChest && npc.operate_fn != d2d::rules::operate_fn::kScrollChest
                  && npc.operate_fn != d2d::rules::operate_fn::kShaftChest   // the Horadric Staff's chests: shut till opened (InitFns 31..33 do nothing)
                  && (npc.operate_fn != d2d::rules::operate_fn::kWaypoint || d2d::rules::level_ids::is_town(into.id))   // waypoints: on in towns (InitFn 17)
-                 && oid != d2d::rules::object_ids::kHellgate);   // the hellgate: a3q6's mode, 0 till Mephisto's dead (InitFn 44)
-    npc.mode   = lit_mode ? "ON" : "NU";
+                 && oid != d2d::rules::object_ids::kHellgate   // the hellgate: a3q6's mode, 0 till Mephisto's dead (InitFn 44)
+                 && npc.operate_fn != d2d::rules::operate_fn::kHellforge   // the Hellforge: a4q3's mode, 0 till the soulstone's set (InitFn 48)
+                 && npc.operate_fn != d2d::rules::operate_fn::kSeal && npc.operate_fn != d2d::rules::operate_fn::kSealInfector   // the seals: shut (InitFn 56)
+                 && npc.operate_fn != d2d::rules::operate_fn::kSealDeSeis && npc.operate_fn != d2d::rules::operate_fn::kSealVizier);
+    npc.mode   = init_mode && !npc.preoperated ? init_mode : lit_mode ? "ON" : "NU";
     // Hover name when selectable in its start mode (Selectable0 = NU,
     // 2 = ON): objects.txt Name through the string tables.
     if (objects.get(row, lit_mode ? "Selectable2" : "Selectable0") == "1") {
@@ -1116,6 +1129,12 @@ std::size_t set_level_tiles(Level& level, const d2d::drlg::OutdoorAssets& assets
             if (spawn.index == 11 && level.portal_spot.first < 0) level.portal_spot = spot;
             if (spawn.index < 12 && level.spawn_at[std::size_t(spawn.index)].first < 0) level.spawn_at[std::size_t(spawn.index)] = spot;
         }
+    // FUN_0066ac40 with no tile of the start's group (0..4) counts none and
+    // stops at the list's first tile: the Pandemonium Fortress starts at its
+    // town-portal tile (style 33), its only one.
+    for (const auto& room : built)
+        for (const auto& spawn : room.spawns)
+            if (level.start.first < 0) level.start = { (float(spawn.x) * 5 + 3 + 0.5f) / 5, (float(spawn.y) * 5 + 3 + 0.5f) / 5 };
     for (const auto& room : built)
         for (const auto& unit : room.units) {
             level.units.push_back({ unit.type, unit.id, unit.mode, unit.x + room.x * 5, unit.y + room.y * 5, unit.flags, unit.path, unit.actions });
@@ -1232,6 +1251,9 @@ bool build_maze(const GameData& game_data, d2d::mpq::Stack& mpqs, d2d::drlg::Out
         const auto [court_x, court_y] = d2d::drlg::level_origin(assets.levels, *court);
         rect = { court_x, court_y, d2d::drlg::to_int(assets.levels.get(*court, "SizeX")), d2d::drlg::to_int(assets.levels.get(*court, "SizeY")) };
     }
+    if (level.id == d2d::rules::level_ids::kRiverOfFlame)   // FUN_00673320 hangs it under the Chaos Sanctuary
+        for (const auto& placement : game_data.act4_layout)
+            if (placement.level == d2d::rules::level_ids::kChaosSanctuary) rect = { placement.x, placement.y, placement.width, placement.height };
     auto made = preset_level ? d2d::drlg::generate_preset(assets.data, level.id, size_x, size_y, seed, notes, court_file)
                              : d2d::drlg::generate_maze(assets.data, maze, level.id, size_x, size_y, seed, 0, notes, court_file, &rect);
     int width = 0, height = 0;

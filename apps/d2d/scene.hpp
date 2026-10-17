@@ -51,6 +51,7 @@ struct Scene : GameData {
     d2d::dc6::Sprite      medium_sel_button;  // MediumSelButtonBlank.dc6 — char-create OK/EXIT chrome (per FUN_004326f0)
     d2d::dc6::Sprite      textbox;            // textbox.dc6 — name-entry chrome (single 169×26 frame)
     d2d::dc6::Sprite      clickbox;           // clickbox.dc6 — Hardcore checkbox chrome (2 frames × 15×16, unchecked/checked)
+    d2d::dc6::Sprite      clickbox_grey;      // joingameclickboxgrey.dc6 — the locked Expansion box (record 0xD5: Druid, Assassin)
     // Character-select screen assets (RE FUN_004359d0, handle 0x00779734).
     // Slot chrome is 2-frame 256+16 wide × 93 tall (matches WideButton
     // composite pattern). BG is 12-frame 4×3 grid of ≤256×256 tiles.

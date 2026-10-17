@@ -53,8 +53,8 @@ def act_of(e, g, lid, act=0):
 def dump(e, seed, lid, difficulty=0):
     """One line per room with monsters, in population order: `mon <x>,<y>: <class>@<x>,<y>[m<mode>]/<leader> ...`,
     level-relative tiles for the room and subtiles for the monsters; <leader> is the index (in the line) of
-    the first monster its placement made: a preset unit (FUN_00555910), a group (FUN_0054df80) or a boss
-    and its company (FUN_005a43e0 from FUN_0054ec90). NPCs (MonStats npc: Flavie, Tyrael ...) are left out, as d2d's
+    the first monster its placement made: a preset unit (FUN_00555910), a group (FUN_0054df80), a boss
+    and its company (FUN_005a43e0 from FUN_0054ec90), or a trapped soul (FUN_005b2f20 from InitFn 46, alone). NPCs (MonStats npc: Flavie, Tyrael ...) are left out, as d2d's
     population leaves them to the level's NPCs.
     An act boss (FUN_005b1cf0 from FUN_005b2a00) adds `!<mods>` (the MonUMods it gave, `.`-joined) and `h`
     for its stat 0x76 (half freeze)."""
@@ -83,9 +83,10 @@ def dump(e, seed, lid, difficulty=0):
             made.append((mu.reg_read(UC_X86_REG_EDX), e.s32(sp + 4) - x0, e.s32(sp + 8) - y0, e.s32(sp + 0x14), lead[0], ""))
     def on_group(mu, addr, size, _):
         ret = e.r32(mu.reg_read(UC_X86_REG_ESP))
+        if addr == 0x5b2f20 and not 0x5506d0 <= ret < 0x550a30: return   # FUN_005b2f20: only InitFn 46's souls, each alone
         if addr != 0x5a43e0 or 0x54ec90 <= ret < 0x54ef42: lead[0] = len(made)
     hooks = [e.mu.hook_add(UC_HOOK_CODE, on_make, begin=0x555230, end=0x555230)]
-    hooks += [e.mu.hook_add(UC_HOOK_CODE, on_group, begin=a, end=a) for a in (0x555910, 0x54df80, 0x5a43e0)]
+    hooks += [e.mu.hook_add(UC_HOOK_CODE, on_group, begin=a, end=a) for a in (0x555910, 0x54df80, 0x5a43e0, 0x5b2f20)]
     hooks += [e.mu.hook_add(UC_HOOK_CODE, on_boss, begin=a, end=a) for a in (0x5b2edf, 0x5b2ee4)]
     hooks.append(e.mu.hook_add(UC_HOOK_CODE, on_stat, begin=0x639db0, end=0x639db0))
     rooms = set()

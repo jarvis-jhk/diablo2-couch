@@ -19,11 +19,12 @@ modules:
     buildsystem: simple
     build-commands:
       - >-
-        cmake -S project -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+        cmake -S project -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
         -DCMAKE_INSTALL_PREFIX=/app -DCMAKE_PREFIX_PATH=/app
         -DD2D_FLATPAK=ON -DD2D_BUILD_TOOLS=OFF -DD2D_BUILD_TESTS=OFF
         -DD2D_BUNDLED_STORMLIB=ON
         -DFETCHCONTENT_SOURCE_DIR_CLI11=$PWD/project/third_party/cli11
+        -DFETCHCONTENT_SOURCE_DIR_SENTRY_NATIVE=$PWD/project/third_party/sentry-native
         -DFETCHCONTENT_SOURCE_DIR_STORMLIB=$PWD/project/third_party/stormlib
         -DD2D_FFMPEG_SOURCE_DIR=$PWD/project/third_party/ffmpeg
       - cmake --build build --parallel 4
@@ -32,6 +33,30 @@ modules:
       - type: dir
         path: ../../build/flatpak-source
         dest: project
+      - type: archive
+        url: https://github.com/getsentry/sentry-native/archive/fb2a04d4a9ca78d83c9cc5d10e33cfac79eed77f.tar.gz
+        sha256: 6dea69ab9ee440386f576364bb6982f38a7f13763aa2bbd586e17db5037934c3
+        dest: project/third_party/sentry-native
+      - type: archive
+        url: https://github.com/getsentry/crashpad/archive/493151b224a6536bcedc3467d042863a063addc4.tar.gz
+        sha256: 8c1238234c4607c52425f70d26047a77f2af84c4d9565a15483268b0422327f5
+        dest: project/third_party/sentry-native/external/crashpad
+      - type: archive
+        url: https://github.com/getsentry/chromium-linux-syscall-support/archive/ed31caa60f20a4f6569883b2d752ef7522de51e0.tar.gz
+        sha256: d9eda91c50360d66a306c42d1bfa0a7cbb937d8383486e17202880eee5c249e2
+        dest: project/third_party/sentry-native/external/third_party/lss
+      - type: archive
+        url: https://github.com/getsentry/chromium-linux-syscall-support/archive/9719c1e1e676814c456b55f5f070eabad6709d31.tar.gz
+        sha256: a858367f0de0fd22a22172c562d750c29edb43f586cb6ff94be1941b77656bf3
+        dest: project/third_party/sentry-native/external/crashpad/third_party/lss/lss
+      - type: archive
+        url: https://github.com/getsentry/mini_chromium/archive/2f5c168fa462cf3836c4a7801b4f4955496d975d.tar.gz
+        sha256: 00f60d55f810dd66a64cf882cb8f4d241809e9e14c24baaaa96031b66ca79ac4
+        dest: project/third_party/sentry-native/external/crashpad/third_party/mini_chromium/mini_chromium
+      - type: archive
+        url: https://github.com/getsentry/chromium-zlib/archive/fef58692c1d7bec94c4ed3d030a45a1832a9615d.tar.gz
+        sha256: d49b88d645b17ccbad19406f95cd495527784b104b8fba1347a2475b08346224
+        dest: project/third_party/sentry-native/external/crashpad/third_party/zlib/zlib
       - type: archive
         url: https://github.com/CLIUtils/CLI11/archive/refs/tags/v2.6.2.tar.gz
         sha256: c6ea6b2e5608b3ea8617999bd5f47420c71b2ebdb8dc4767c1034d1da5785711

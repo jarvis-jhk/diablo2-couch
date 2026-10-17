@@ -115,6 +115,33 @@ EOF
 `nc -U` speaks AF_UNIX. On macOS `nc` is BSD `netcat`; on Linux use
 `ncat -U` from nmap-ncat if the packaged `nc` is missing.
 
+## Testing Sentry crash reporting
+
+For an intentional end-to-end crash test, start d2d with crash reporting
+enabled, set `SENTRY_DSN` to the project's DSN, and explicitly enable the
+crash-test command:
+
+```
+SENTRY_DSN='https://<public-key>@<sentry-host>/<project-id>' \
+  d2d --send-crash-reports --enable-crash-test --devctl /tmp/d2d-crash-test.sock
+```
+
+Crash dumps may contain sensitive in-memory data, and crash reports include
+the most recently captured game frame. This test sends a report to the
+configured Sentry project; run it only if you accept that upload.
+
+Then, from another terminal, send the exact confirmation:
+
+```
+printf 'crash-test CONFIRM_CRASH\n' | nc -U /tmp/d2d-crash-test.sock
+```
+
+This deliberately terminates d2d; only use it when losing the current game
+session is acceptable. The verb is disabled unless both opt-in flags are
+provided, requires successful Sentry initialization, and requires the
+confirmation token.
+The event is tagged `crash_test=true` so it can be filtered from real crashes.
+
 ## Prior art
 
 Same shape as the third-eye control channel

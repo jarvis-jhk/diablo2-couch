@@ -25,16 +25,19 @@ inline constexpr std::size_t kQuestLogCount = 41;
 inline constexpr std::size_t kQuestFlagCount = QuestBits{}.size() / 2;
 using QuestLogStates = std::array<std::uint8_t, kQuestLogCount>;
 using QuestGameFlags = std::array<std::uint16_t, kQuestFlagCount>;
-[[nodiscard]] inline bool qbit(const QuestBits& quest_bits, int quest, int bit) {
+// Quest word `quest`'s flag `bit`: tested, set or cleared.
+namespace quest {
+[[nodiscard]] inline bool bit(const QuestBits& quest_bits, int quest, int bit) {
     const int bit_index = quest * 16 + bit;
     return quest_bits[std::size_t(bit_index >> 3)] >> (bit_index & 7) & 1;
 }
-inline void qset(QuestBits& quest_bits, int quest, int bit, bool set = true) {
+inline void set(QuestBits& quest_bits, int quest, int bit, bool set = true) {
     const int bit_index = quest * 16 + bit;
     const auto mask = std::uint8_t(1u << (bit_index & 7));
     auto& byte = quest_bits[std::size_t(bit_index >> 3)];
     byte = std::uint8_t(set ? byte | mask : byte & ~mask);
 }
+}  // namespace quest
 // Akara's reset of the stat and skill points (the Den of Evil's reward):
 // its flags are quest 41's (0 used, 1 open, 13 opened late).
 inline constexpr int kRespecQuest = 41;
@@ -48,7 +51,7 @@ struct QuestMsg { int string = 0; bool greet = false; };
 // has no log function of its own (+0xe8 0, FUN_00543f90): `done` is the
 // record's +0xd, the state it's over from; 12 reads "another player's".
 [[nodiscard]] inline int quest_log(const QuestBits& quest_bits, int quest, int state, int log, int done) {
-    const bool b13 = qbit(quest_bits, quest, 13), b14 = qbit(quest_bits, quest, 14);
+    const bool b13 = quest::bit(quest_bits, quest, 13), b14 = quest::bit(quest_bits, quest, 14);
     if (state < done) return b14 || (quest == 4 && log == 6 && !b13) ? 12 : log;
     if (b13) return log;
     if (quest == 4 && b14) return state == 6 ? 12 : log;
@@ -67,16 +70,16 @@ struct DenQuest {
 
     // A player's bits for the state (LAB_0058fc90).
     void mark(QuestBits& quest_bits) const {
-        if (qbit(quest_bits, kQuest, 0) || qbit(quest_bits, kQuest, 1)) return;
-        if (state == 2) qset(quest_bits, kQuest, 2);
-        if (state == 3) qset(quest_bits, kQuest, log == 1 ? 3 : 4);
+        if (quest::bit(quest_bits, kQuest, 0) || quest::bit(quest_bits, kQuest, 1)) return;
+        if (state == 2) quest::set(quest_bits, kQuest, 2);
+        if (state == 3) quest::set(quest_bits, kQuest, log == 1 ? 3 : 4);
     }
     // The player joins: the state from their flags (LAB_00590690).
     void join(const QuestBits& quest_bits) {
-        if (qbit(quest_bits, kQuest, 0) || qbit(quest_bits, kQuest, 15)) { active = false; return; }
-        if (qbit(quest_bits, kQuest, 4)) { log = 2; state = 3; }
-        else if (qbit(quest_bits, kQuest, 3)) { state = 3; log = 1; }
-        else if (qbit(quest_bits, kQuest, 2)) { state = 2; log = 1; }
+        if (quest::bit(quest_bits, kQuest, 0) || quest::bit(quest_bits, kQuest, 15)) { active = false; return; }
+        if (quest::bit(quest_bits, kQuest, 4)) { log = 2; state = 3; }
+        else if (quest::bit(quest_bits, kQuest, 3)) { state = 3; log = 1; }
+        else if (quest::bit(quest_bits, kQuest, 2)) { state = 2; log = 1; }
     }
     // The chain reached it (+0xf0, FUN_00590620). True: it passes on to
     // quest 2's (+0x10).
@@ -104,8 +107,8 @@ struct DenQuest {
     };
     [[nodiscard]] std::vector<QuestMsg> talk(const QuestBits& quest_bits, int npc) const {
         int block = 3;
-        if (!qbit(quest_bits, kQuest, 1)) {
-            if (qbit(quest_bits, kQuest, 0) || (state > 3 && !qbit(quest_bits, kQuest, 13))) return {};
+        if (!quest::bit(quest_bits, kQuest, 1)) {
+            if (quest::bit(quest_bits, kQuest, 0) || (state > 3 && !quest::bit(quest_bits, kQuest, 13))) return {};
             block = state - 1;                    // 0x736cd0: -1, 0, 1, 2, 3, 4
             if (block < 0 || block > 4) return {};
         }
@@ -117,8 +120,8 @@ struct DenQuest {
     // head (FUN_005905b0, asked per NPC by FUN_00544590): Akara, before
     // she's given it or while the reward is due.
     [[nodiscard]] bool alert(const QuestBits& quest_bits, int npc) const {
-        if (npc != kAkara || qbit(quest_bits, kQuest, 0)) return false;
-        return (state == 1 && !qbit(quest_bits, kQuest, 1)) || qbit(quest_bits, kQuest, 1);
+        if (npc != kAkara || quest::bit(quest_bits, kQuest, 0)) return false;
+        return (state == 1 && !quest::bit(quest_bits, kQuest, 1)) || quest::bit(quest_bits, kQuest, 1);
     }
     // A monster died; `remaining` are the Den's left (level +0x2cc - +0x2d0)
     // (FUN_00590260). 0: cleared — the reward's due (FUN_005455f0, bits 13
@@ -131,7 +134,7 @@ struct DenQuest {
             return remaining < 6 ? Kill::few : Kill::none;
         }
         state = 4;
-        if (!qbit(quest_bits, kQuest, 0) && !qbit(quest_bits, kQuest, 1)) { qset(quest_bits, kQuest, 13); qset(quest_bits, kQuest, 1); }
+        if (!quest::bit(quest_bits, kQuest, 0) && !quest::bit(quest_bits, kQuest, 1)) { quest::set(quest_bits, kQuest, 13); quest::set(quest_bits, kQuest, 1); }
         return Kill::cleared;
     }
     // The player heard `string` from `npc` (FUN_0058fdd0, packet 0x31).
@@ -141,13 +144,13 @@ struct DenQuest {
     bool said(QuestBits& quest_bits, int npc, int string) {
         if (npc != kAkara) return false;
         if (string == 64) { state = 2; mark(quest_bits); return false; }
-        if (string != 76 || !qbit(quest_bits, kQuest, 1)) return false;
-        if (qbit(quest_bits, kQuest, 13) && state != 5) { state = 5; log = 0xd; }
-        qset(quest_bits, kQuest, 0);
-        qset(quest_bits, kQuest, 1, false);
-        qset(quest_bits, kRespecQuest, 13);
-        qset(quest_bits, kRespecQuest, 1);
-        for (int bit = 2; bit < 12; ++bit) qset(quest_bits, kQuest, bit, false);
+        if (string != 76 || !quest::bit(quest_bits, kQuest, 1)) return false;
+        if (quest::bit(quest_bits, kQuest, 13) && state != 5) { state = 5; log = 0xd; }
+        quest::set(quest_bits, kQuest, 0);
+        quest::set(quest_bits, kQuest, 1, false);
+        quest::set(quest_bits, kRespecQuest, 13);
+        quest::set(quest_bits, kRespecQuest, 1);
+        for (int bit = 2; bit < 12; ++bit) quest::set(quest_bits, kQuest, bit, false);
         return true;
     }
 };
@@ -169,17 +172,17 @@ struct BurialQuest {
 
     // A player's bits for the state (LAB_00590890).
     void mark(QuestBits& quest_bits) const {
-        if (qbit(quest_bits, kQuest, 0) || qbit(quest_bits, kQuest, 1)) return;
-        if (state == 2) qset(quest_bits, kQuest, 2);
-        if (state == 3) qset(quest_bits, kQuest, log == 1 ? 3 : 4);
+        if (quest::bit(quest_bits, kQuest, 0) || quest::bit(quest_bits, kQuest, 1)) return;
+        if (state == 2) quest::set(quest_bits, kQuest, 2);
+        if (state == 3) quest::set(quest_bits, kQuest, log == 1 ? 3 : 4);
     }
     // The player joins (LAB_00591180); a done or closed quest is shut for
     // the game (FUN_00546270 → FUN_00544410).
     void join(const QuestBits& quest_bits) {
-        if (qbit(quest_bits, kQuest, 0) || qbit(quest_bits, kQuest, 15)) { open = false; return; }
-        if (qbit(quest_bits, kQuest, 4)) { log = 2; state = 3; }
-        else if (qbit(quest_bits, kQuest, 3)) { state = 3; log = 1; }
-        else if (qbit(quest_bits, kQuest, 2)) { state = 2; log = 1; }
+        if (quest::bit(quest_bits, kQuest, 0) || quest::bit(quest_bits, kQuest, 15)) { open = false; return; }
+        if (quest::bit(quest_bits, kQuest, 4)) { log = 2; state = 3; }
+        else if (quest::bit(quest_bits, kQuest, 3)) { state = 3; log = 1; }
+        else if (quest::bit(quest_bits, kQuest, 2)) { state = 2; log = 1; }
     }
     // The chain reaches it (FUN_005910f0): the Den's done or closed. True:
     // it passes on to quest 4's (+0x10).
@@ -205,9 +208,9 @@ struct BurialQuest {
     };
     [[nodiscard]] std::vector<QuestMsg> talk(const QuestBits& quest_bits, int npc) const {
         int block = -1;
-        if (qbit(quest_bits, kQuest, 1)) block = 3;
+        if (quest::bit(quest_bits, kQuest, 1)) block = 3;
         else if (rewarded) block = 4;
-        else if (state >= 1 && state <= 3 && !qbit(quest_bits, kQuest, 0)) block = state - 1;
+        else if (state >= 1 && state <= 3 && !quest::bit(quest_bits, kQuest, 0)) block = state - 1;
         std::vector<QuestMsg> out;
         if (block >= 0)
             for (const auto& entry : kBlocks[block]) if (entry.npc == npc) out.push_back({ entry.string, entry.greet });
@@ -215,8 +218,8 @@ struct BurialQuest {
     }
     // The balloon over `npc` (FUN_00591080).
     [[nodiscard]] bool alert(const QuestBits& quest_bits, int npc) const {
-        if (npc != kKashya || qbit(quest_bits, kQuest, 0)) return false;
-        return (state == 1 && !qbit(quest_bits, kQuest, 1)) || qbit(quest_bits, kQuest, 1);
+        if (npc != kKashya || quest::bit(quest_bits, kQuest, 0)) return false;
+        return (state == 1 && !quest::bit(quest_bits, kQuest, 1)) || quest::bit(quest_bits, kQuest, 1);
     }
     // The player heard `string` from `npc` (FUN_00590980). True: Kashya's
     // reward — done, and a free hireling (FUN_00579180). The state going
@@ -224,10 +227,10 @@ struct BurialQuest {
     bool said(QuestBits& quest_bits, int npc, int string) {
         if (npc != kKashya) return false;
         if (string == 81) { pending = true; state = 2; mark(quest_bits); return false; }
-        if (string != 92 || !qbit(quest_bits, kQuest, 1)) return false;
-        if (qbit(quest_bits, kQuest, 13) && state != 5) { log = 0xd; state = 5; }
-        qset(quest_bits, kQuest, 0);
-        qset(quest_bits, kQuest, 1, false);
+        if (string != 92 || !quest::bit(quest_bits, kQuest, 1)) return false;
+        if (quest::bit(quest_bits, kQuest, 13) && state != 5) { log = 0xd; state = 5; }
+        quest::set(quest_bits, kQuest, 0);
+        quest::set(quest_bits, kQuest, 1, false);
         rewarded = true;
         return true;
     }
@@ -247,7 +250,7 @@ struct BurialQuest {
         }
         if (from != 1) return;
         rewarded = false;                         // FUN_00545310
-        if (state == 2 && !qbit(quest_bits, kQuest, 0) && !qbit(quest_bits, kQuest, 1)) { state = 3; mark(quest_bits); }
+        if (state == 2 && !quest::bit(quest_bits, kQuest, 0) && !quest::bit(quest_bits, kQuest, 1)) { state = 3; mark(quest_bits); }
     }
     // Blood Raven died (FUN_00590ec0). True: the player's kill for it
     // (FUN_00590c40, bits 13 and 1) — the class's act1_complete_burial
@@ -255,9 +258,9 @@ struct BurialQuest {
     bool killed(QuestBits& quest_bits, bool nearby) {
         if (!open) return false;
         state = 4;
-        const bool first = !qbit(quest_bits, kQuest, 0) && !qbit(quest_bits, kQuest, 1);
-        if (first && nearby) { qset(quest_bits, kQuest, 13); qset(quest_bits, kQuest, 1); }
-        else if (first) qset(quest_bits, kQuest, 14);             // LAB_00590dd0
+        const bool first = !quest::bit(quest_bits, kQuest, 0) && !quest::bit(quest_bits, kQuest, 1);
+        if (first && nearby) { quest::set(quest_bits, kQuest, 13); quest::set(quest_bits, kQuest, 1); }
+        else if (first) quest::set(quest_bits, kQuest, 14);             // LAB_00590dd0
         log_in = 15;
         pending = false;                          // +0xa8 = 0
         return first && nearby;
@@ -282,16 +285,16 @@ struct AndyQuest {
 
     // A player's bits for the state (0x595bd0).
     void mark(QuestBits& quest_bits) const {
-        if (qbit(quest_bits, kQuest, 0) || qbit(quest_bits, kQuest, 1)) return;
-        if (state == 2) qset(quest_bits, kQuest, 2);
-        if (state == 3) qset(quest_bits, kQuest, log == 1 ? 3 : 4);
+        if (quest::bit(quest_bits, kQuest, 0) || quest::bit(quest_bits, kQuest, 1)) return;
+        if (state == 2) quest::set(quest_bits, kQuest, 2);
+        if (state == 3) quest::set(quest_bits, kQuest, log == 1 ? 3 : 4);
     }
     // The player joins (0x596900).
     void join(const QuestBits& quest_bits) {
-        if (qbit(quest_bits, kQuest, 0) || qbit(quest_bits, kQuest, 15)) { active = false; return; }
-        if (qbit(quest_bits, kQuest, 4)) { log = 2; state = 3; }
-        else if (qbit(quest_bits, kQuest, 3)) { state = 3; log = 1; }
-        else if (qbit(quest_bits, kQuest, 2)) { state = 2; log = 1; }
+        if (quest::bit(quest_bits, kQuest, 0) || quest::bit(quest_bits, kQuest, 15)) { active = false; return; }
+        if (quest::bit(quest_bits, kQuest, 4)) { log = 2; state = 3; }
+        else if (quest::bit(quest_bits, kQuest, 3)) { state = 3; log = 1; }
+        else if (quest::bit(quest_bits, kQuest, 2)) { state = 2; log = 1; }
     }
     // The chain reached it (+0xf0, FUN_005968e0): the start timer runs. It
     // passes on no further (+0x10 is 0x25, the next act's).
@@ -321,12 +324,12 @@ struct AndyQuest {
         { { kKashya, 181, false }, { kCain, 184, false }, { 154, 180, false }, { 147, 182, false }, { kWarriv, 183, false }, { kAkara, 179, false } },
     };
     [[nodiscard]] std::vector<QuestMsg> talk(const QuestBits& quest_bits, int npc) const {
-        const bool bit0 = qbit(quest_bits, kQuest, 0), b13 = qbit(quest_bits, kQuest, 13);
+        const bool bit0 = quest::bit(quest_bits, kQuest, 0), b13 = quest::bit(quest_bits, kQuest, 13);
         const bool listed = (npc == kCain && cain) || (npc == kAkara && akara) || (npc == kKashya && kashya);
         const bool cak = npc == kCain || npc == kAkara || npc == kKashya;
         int block = -1;
         if (listed) block = 3;
-        else if (qbit(quest_bits, kQuest, 1)) block = cak ? 4 : 3;
+        else if (quest::bit(quest_bits, kQuest, 1)) block = cak ? 4 : 3;
         else if (rewarded) block = 4;
         else if (state == 1 && npc == kCain && !bit0) block = 0;
         else if (state != 0 && !(bit0 && !b13) && !(state >= 4 && !b13) && !(bit0 && b13)) block = state - 1;
@@ -337,7 +340,7 @@ struct AndyQuest {
     }
     // The balloon over `npc` (FUN_005967f0).
     [[nodiscard]] bool alert(const QuestBits& quest_bits, int npc) const {
-        const bool bit0 = qbit(quest_bits, kQuest, 0), bit1 = qbit(quest_bits, kQuest, 1);
+        const bool bit0 = quest::bit(quest_bits, kQuest, 0), bit1 = quest::bit(quest_bits, kQuest, 1);
         if (npc == kCain) return cain || (!bit0 && state == 1 && !bit1);
         if (npc == kWarriv) return !bit0 && bit1;
         return (npc == kAkara && akara) || (npc == kKashya && kashya);
@@ -349,10 +352,10 @@ struct AndyQuest {
         if (npc == kCain && string == 184) cain = false;
         if (npc == kAkara && string == 179) akara = false;
         if (npc == kKashya && string == 181) kashya = false;
-        if (npc != kWarriv || string != 183 || !qbit(quest_bits, kQuest, 1)) return false;
-        if (qbit(quest_bits, kQuest, 13)) { log = 0xd; state = 5; }
-        qset(quest_bits, kQuest, 1, false);
-        qset(quest_bits, kQuest, 0);
+        if (npc != kWarriv || string != 183 || !quest::bit(quest_bits, kQuest, 1)) return false;
+        if (quest::bit(quest_bits, kQuest, 13)) { log = 0xd; state = 5; }
+        quest::set(quest_bits, kQuest, 1, false);
+        quest::set(quest_bits, kQuest, 0);
         rewarded = true;
         return true;
     }
@@ -364,7 +367,7 @@ struct AndyQuest {
     void enter(QuestBits& quest_bits, int from, int dest) {
         if (dest < 34 || dest > 37) {
             if (state == 4 && dest == level_ids::kLutGholein) state = 5;
-            else if (from == 1 && state == 2 && !qbit(quest_bits, kQuest, 0) && !qbit(quest_bits, kQuest, 1)) { state = 3; mark(quest_bits); }
+            else if (from == 1 && state == 2 && !quest::bit(quest_bits, kQuest, 0) && !quest::bit(quest_bits, kQuest, 1)) { state = 3; mark(quest_bits); }
             return;
         }
         if (state <= 2) state = 3;
@@ -377,9 +380,9 @@ struct AndyQuest {
     // level (FUN_00596260: the lists).
     // ponytail: a merc's kill counts as the player's.
     bool killed(QuestBits& quest_bits, bool in_lair) {
-        const bool first = !qbit(quest_bits, kQuest, 0) && !qbit(quest_bits, kQuest, 1);
-        if (first) { qset(quest_bits, kQuest, 13); qset(quest_bits, kQuest, 1); }
-        if (in_lair && !qbit(quest_bits, kQuest, 0) && !qbit(quest_bits, kQuest, 15)) cain = akara = kashya = true;
+        const bool first = !quest::bit(quest_bits, kQuest, 0) && !quest::bit(quest_bits, kQuest, 1);
+        if (first) { quest::set(quest_bits, kQuest, 13); quest::set(quest_bits, kQuest, 1); }
+        if (in_lair && !quest::bit(quest_bits, kQuest, 0) && !quest::bit(quest_bits, kQuest, 15)) cain = akara = kashya = true;
         after_kill = 1;
         state = 4;
         return first;
@@ -407,12 +410,12 @@ struct PalaceSpots {
     bool palace_west = false;          // the palace spot is x - 10 (else x + 15)
 };
 [[nodiscard]] inline PalaceSpots palace_spots(const QuestBits& quest_bits, const QuestBits& game_bits) {
-    bool tombs_early = !qbit(quest_bits, 14, 0) && !qbit(quest_bits, 14, 15);
-    for (int bit = 1; bit <= 11; ++bit) tombs_early = tombs_early && !qbit(quest_bits, 14, bit);
+    bool tombs_early = !quest::bit(quest_bits, 14, 0) && !quest::bit(quest_bits, 14, 15);
+    for (int bit = 1; bit <= 11; ++bit) tombs_early = tombs_early && !quest::bit(quest_bits, 14, bit);
     PalaceSpots spots;
-    spots.outside = !qbit(game_bits, 8, 13) && !qbit(quest_bits, 12, 13) && tombs_early;
-    spots.guard = !qbit(quest_bits, 14, 13);
-    spots.palace = !(!qbit(game_bits, 8, 13) && !qbit(game_bits, 9, 13) && tombs_early);
+    spots.outside = !quest::bit(game_bits, 8, 13) && !quest::bit(quest_bits, 12, 13) && tombs_early;
+    spots.guard = !quest::bit(quest_bits, 14, 13);
+    spots.palace = !(!quest::bit(game_bits, 8, 13) && !quest::bit(game_bits, 9, 13) && tombs_early);
     spots.palace_west = tombs_early;
     return spots;
 }
@@ -426,17 +429,17 @@ struct PalaceSpots {
 struct ActTwoOpening {
     static constexpr int kQuest = 8, kJerhyn = monster_ids::kJerhyn, kGreeting = 253;
     static void join(const QuestBits& quest_bits, QuestBits& game_bits) {
-        if (qbit(quest_bits, kQuest, 0)) qset(game_bits, kQuest, 13);
+        if (quest::bit(quest_bits, kQuest, 0)) quest::set(game_bits, kQuest, 13);
     }
     [[nodiscard]] static std::vector<QuestMsg> talk(const QuestBits& quest_bits, int npc) {
-        if (npc == kJerhyn && !qbit(quest_bits, kQuest, 0)) return { { kGreeting, true } };
+        if (npc == kJerhyn && !quest::bit(quest_bits, kQuest, 0)) return { { kGreeting, true } };
         return {};
     }
-    [[nodiscard]] static bool alert(const QuestBits& quest_bits, int npc) { return npc == kJerhyn && !qbit(quest_bits, kQuest, 0); }
+    [[nodiscard]] static bool alert(const QuestBits& quest_bits, int npc) { return npc == kJerhyn && !quest::bit(quest_bits, kQuest, 0); }
     static void said(QuestBits& quest_bits, QuestBits& game_bits, int npc, int string) {
         if (npc != kJerhyn || string != kGreeting) return;
-        qset(quest_bits, kQuest, 0);
-        qset(game_bits, kQuest, 13);
+        quest::set(quest_bits, kQuest, 0);
+        quest::set(game_bits, kQuest, 13);
     }
 };
 
@@ -460,24 +463,24 @@ struct RadamentQuest {
 
     // A player's bits for the state (LAB_005989e0).
     void mark(QuestBits& quest_bits) const {
-        if (qbit(quest_bits, kQuest, 0) || qbit(quest_bits, kQuest, 1)) return;
-        if (state == 2) qset(quest_bits, kQuest, 2);
-        if (state == 3) qset(quest_bits, kQuest, log == 1 ? 3 : 4);
+        if (quest::bit(quest_bits, kQuest, 0) || quest::bit(quest_bits, kQuest, 1)) return;
+        if (state == 2) quest::set(quest_bits, kQuest, 2);
+        if (state == 3) quest::set(quest_bits, kQuest, log == 1 ? 3 : 4);
     }
     // The player joins (FUN_00599230). Done with the book due but gone: the
     // quest's bits go, to be done again in a later game.
     void join(QuestBits& quest_bits, QuestBits& game_bits, bool has_book) {
-        if (qbit(quest_bits, kQuest, 0)) {
-            if (qbit(quest_bits, kQuest, 5) && !has_book)
-                for (const int bit : { 0, 1, 15, 5 }) qset(quest_bits, kQuest, bit, false);
-            qset(game_bits, kQuest, 13);
+        if (quest::bit(quest_bits, kQuest, 0)) {
+            if (quest::bit(quest_bits, kQuest, 5) && !has_book)
+                for (const int bit : { 0, 1, 15, 5 }) quest::set(quest_bits, kQuest, bit, false);
+            quest::set(game_bits, kQuest, 13);
             open = false; state = 0;
             return;
         }
-        if (qbit(quest_bits, kQuest, 15)) { reward_closed = qbit(quest_bits, kQuest, 1); state = 0; open = false; return; }
-        if (qbit(quest_bits, kQuest, 4)) { log = 2; state = 3; }
-        else if (qbit(quest_bits, kQuest, 3)) { state = 3; log = 1; }
-        else if (qbit(quest_bits, kQuest, 2)) { state = 2; log = 1; }
+        if (quest::bit(quest_bits, kQuest, 15)) { reward_closed = quest::bit(quest_bits, kQuest, 1); state = 0; open = false; return; }
+        if (quest::bit(quest_bits, kQuest, 4)) { log = 2; state = 3; }
+        else if (quest::bit(quest_bits, kQuest, 3)) { state = 3; log = 1; }
+        else if (quest::bit(quest_bits, kQuest, 2)) { state = 2; log = 1; }
     }
     [[nodiscard]] int log_state(const QuestBits& quest_bits) const { return quest_log(quest_bits, kQuest, state, log, 4); }
     void tick() {
@@ -499,9 +502,9 @@ struct RadamentQuest {
     };
     [[nodiscard]] std::vector<QuestMsg> talk(const QuestBits& quest_bits, int npc) const {
         int block = -1;
-        if (qbit(quest_bits, kQuest, 1)) block = 3;
+        if (quest::bit(quest_bits, kQuest, 1)) block = 3;
         else if (rewarded) block = 4;
-        else if (!qbit(quest_bits, kQuest, 0) && state != 0 && (state < 4 || qbit(quest_bits, kQuest, 13))) block = state - 1;
+        else if (!quest::bit(quest_bits, kQuest, 0) && state != 0 && (state < 4 || quest::bit(quest_bits, kQuest, 13))) block = state - 1;
         std::vector<QuestMsg> out;
         if (block >= 0 && block <= 4)
             for (const auto& entry : kBlocks[block]) if (entry.npc == npc) out.push_back({ entry.string, entry.greet });
@@ -509,21 +512,21 @@ struct RadamentQuest {
     }
     // Atma's "!" (FUN_00598910).
     [[nodiscard]] bool alert(const QuestBits& quest_bits, int npc) const {
-        if (npc != kAtma || qbit(quest_bits, kQuest, 0)) return false;
-        return (open && state == 1 && !qbit(quest_bits, kQuest, 15)) || qbit(quest_bits, kQuest, 1);
+        if (npc != kAtma || quest::bit(quest_bits, kQuest, 0)) return false;
+        return (open && state == 1 && !quest::bit(quest_bits, kQuest, 15)) || quest::bit(quest_bits, kQuest, 1);
     }
     // The player heard `string` from `npc` (FUN_00598a70). Atma's thanks with
     // the reward due: done (the book was the reward).
     void said(QuestBits& quest_bits, QuestBits& game_bits, int npc, int string) {
         if (npc != kAtma) return;
         if (string == kInit) { pending = true; state = 2; mark(quest_bits); return; }
-        if (string != kSuccess || !qbit(quest_bits, kQuest, 1)) return;
-        if (qbit(quest_bits, kQuest, 13)) {
+        if (string != kSuccess || !quest::bit(quest_bits, kQuest, 1)) return;
+        if (quest::bit(quest_bits, kQuest, 13)) {
             if (state != 5) { log = 0xd; pending = false; state = 5; }
-            if (!open) qset(game_bits, kQuest, 13);
+            if (!open) quest::set(game_bits, kQuest, 13);
         }
-        qset(quest_bits, kQuest, 0);
-        qset(quest_bits, kQuest, 1, false);
+        quest::set(quest_bits, kQuest, 0);
+        quest::set(quest_bits, kQuest, 1, false);
         rewarded = true;
     }
     // The talk with `npc` closed (LAB_00598990).
@@ -536,7 +539,7 @@ struct RadamentQuest {
     void enter(QuestBits& quest_bits, int from) {
         if (from != level_ids::kLutGholein) return;
         rewarded = false;                         // FUN_00545310
-        if (state == 2 && !qbit(quest_bits, kQuest, 0) && !qbit(quest_bits, kQuest, 1)) { state = 3; mark(quest_bits); }
+        if (state == 2 && !quest::bit(quest_bits, kQuest, 0) && !quest::bit(quest_bits, kQuest, 1)) { state = 3; mark(quest_bits); }
     }
     // Radament died (FUN_00599020). The books to drop at him (one each for a
     // player due one without one, LAB_00598fa0); `took_part` (FUN_00598e20:
@@ -546,19 +549,19 @@ struct RadamentQuest {
     Kill killed(QuestBits& quest_bits, QuestBits& game_bits, bool nearby, bool has_book) {
         if (!open) return {};
         state = 4;
-        qset(game_bits, kQuest, 13);
+        quest::set(game_bits, kQuest, 13);
         pending = false;                          // +0xa8 = 0
-        const bool first = !qbit(quest_bits, kQuest, 0) && !qbit(quest_bits, kQuest, 1);
-        if (first && nearby) for (const int bit : { 13, 1, 5 }) qset(quest_bits, kQuest, bit);
-        else if (first) qset(quest_bits, kQuest, 14);   // LAB_00598dc0
+        const bool first = !quest::bit(quest_bits, kQuest, 0) && !quest::bit(quest_bits, kQuest, 1);
+        if (first && nearby) for (const int bit : { 13, 1, 5 }) quest::set(quest_bits, kQuest, bit);
+        else if (first) quest::set(quest_bits, kQuest, 14);   // LAB_00598dc0
         if (log_in == 0) log_in = 12;
-        return { qbit(quest_bits, kQuest, 5) && !has_book ? 1 : 0, qbit(quest_bits, kQuest, 13) };
+        return { quest::bit(quest_bits, kQuest, 5) && !has_book ? 1 : 0, quest::bit(quest_bits, kQuest, 13) };
     }
     // The Book of Skill read (0x55cd31 / 0x55e3d0): only while bit 5 is set;
     // it clears, and a skill point (stat 5).
     static bool read_book(QuestBits& quest_bits) {
-        if (!qbit(quest_bits, kQuest, 5)) return false;
-        qset(quest_bits, kQuest, 5, false);
+        if (!quest::bit(quest_bits, kQuest, 5)) return false;
+        quest::set(quest_bits, kQuest, 5, false);
         return true;
     }
 };
@@ -585,22 +588,22 @@ struct HoradricStaffQuest {
     // The player joins (FUN_0059e850): parts no longer carried are no
     // longer shown, unless all three are, the staff's made or placed.
     void join(QuestBits& quest_bits, const Items& items, bool staff_placed) {
-        if (qbit(quest_bits, kQuest, 0) || qbit(quest_bits, kQuest, 15)) open = false;
-        if (qbit(quest_bits, kQuest, 0) || staff_placed || items.staff || (items.shaft && items.cube && items.amulet)) return;
-        if (!items.shaft) qset(quest_bits, kQuest, 5, false);
-        if (!items.cube) qset(quest_bits, kQuest, 6, false);
-        if (!items.amulet) qset(quest_bits, kQuest, 4, false);
+        if (quest::bit(quest_bits, kQuest, 0) || quest::bit(quest_bits, kQuest, 15)) open = false;
+        if (quest::bit(quest_bits, kQuest, 0) || staff_placed || items.staff || (items.shaft && items.cube && items.amulet)) return;
+        if (!items.shaft) quest::set(quest_bits, kQuest, 5, false);
+        if (!items.cube) quest::set(quest_bits, kQuest, 6, false);
+        if (!items.amulet) quest::set(quest_bits, kQuest, 4, false);
     }
     // What Cain has to say of what's carried (FUN_00599590): a part not
     // shown yet is news (blocks 0..4), else the last one shown (5..9).
     struct Pick { bool news = false; int block = -1; };
     [[nodiscard]] static Pick pick(const QuestBits& quest_bits, const Items& items) {
-        if (items.staff) return qbit(quest_bits, kQuest, 10) ? Pick{ false, 5 } : Pick{ true, 4 };
+        if (items.staff) return quest::bit(quest_bits, kQuest, 10) ? Pick{ false, 5 } : Pick{ true, 4 };
         Pick out;
-        if (items.cube) { if (!qbit(quest_bits, kQuest, 6)) return { true, 3 }; out.block = 9; }
-        if (items.scroll) { if (!qbit(quest_bits, kQuest, 3)) return { true, 0 }; out.block = 6; }
-        if (items.amulet) { if (!qbit(quest_bits, kQuest, 4)) return { true, 1 }; out.block = 7; }
-        if (items.shaft) { if (!qbit(quest_bits, kQuest, 5)) return { true, 2 }; out.block = 8; }
+        if (items.cube) { if (!quest::bit(quest_bits, kQuest, 6)) return { true, 3 }; out.block = 9; }
+        if (items.scroll) { if (!quest::bit(quest_bits, kQuest, 3)) return { true, 0 }; out.block = 6; }
+        if (items.amulet) { if (!quest::bit(quest_bits, kQuest, 4)) return { true, 1 }; out.block = 7; }
+        if (items.shaft) { if (!quest::bit(quest_bits, kQuest, 5)) return { true, 2 }; out.block = 8; }
         return out;
     }
     // Cain's lines (FUN_00599910): blocks at 0x739918, one each; 0..4
@@ -609,37 +612,37 @@ struct HoradricStaffQuest {
     [[nodiscard]] std::vector<QuestMsg> talk(const QuestBits& quest_bits, int npc, const Items& items) const {
         if (npc != kCain) return {};
         int block = 4;
-        if (!qbit(quest_bits, kQuest, 1)) {
+        if (!quest::bit(quest_bits, kQuest, 1)) {
             const auto found = pick(quest_bits, items);
             if (found.news && found.block >= 0) block = found.block;
             else if (rewarded) block = 5;
-            else if (qbit(quest_bits, kQuest, 0)) return {};
-            else if (found.block < 0) { if (!qbit(quest_bits, kQuest, 3)) return {}; block = 6; }
+            else if (quest::bit(quest_bits, kQuest, 0)) return {};
+            else if (found.block < 0) { if (!quest::bit(quest_bits, kQuest, 3)) return {}; block = 6; }
             else block = found.block;
         }
         return { { kLines[std::size_t(block)], block < 5 } };
     }
     // Cain's "!" (FUN_005996c0): the reward due, or a part to show.
     [[nodiscard]] static bool alert(const QuestBits& quest_bits, int npc, const Items& items) {
-        return npc == kCain && (qbit(quest_bits, kQuest, 1) || pick(quest_bits, items).news);
+        return npc == kCain && (quest::bit(quest_bits, kQuest, 1) || pick(quest_bits, items).news);
     }
     // The player heard `string` from Cain (FUN_005997f0). True: he read the
     // scroll, which goes (FUN_00544160 -> FUN_005440a0).
     bool said(QuestBits& quest_bits, int npc, int string) {
         if (npc != kCain) return false;
         switch (string) {
-        case 335: qset(quest_bits, kQuest, 3); return true;
-        case 336: qset(quest_bits, kQuest, 4); break;
-        case 337: qset(quest_bits, kQuest, 5); break;
-        case 338: qset(quest_bits, kQuest, 6); break;
+        case 335: quest::set(quest_bits, kQuest, 3); return true;
+        case 336: quest::set(quest_bits, kQuest, 4); break;
+        case 337: quest::set(quest_bits, kQuest, 5); break;
+        case 338: quest::set(quest_bits, kQuest, 6); break;
         case 339:
-            qset(quest_bits, kQuest, 1, false);
+            quest::set(quest_bits, kQuest, 1, false);
             rewarded = true;
-            for (const int bit : { 10, 4, 6, 5 }) qset(quest_bits, kQuest, bit);
+            for (const int bit : { 10, 4, 6, 5 }) quest::set(quest_bits, kQuest, bit);
             break;
         default: return false;
         }
-        qset(quest_bits, kQuest, 3);
+        quest::set(quest_bits, kQuest, 3);
         return false;
     }
     // The log (+0xe8, FUN_0059e630): nothing till Act 1's over; the parts
@@ -647,9 +650,9 @@ struct HoradricStaffQuest {
     // its chest, the amulet after the altar); once done 5 / 6 till the
     // Seven Tombs, then 11 / 13.
     [[nodiscard]] int log_state(const QuestBits& quest_bits, const Items& items, bool altar_used) const {
-        auto bit = [&](int index) { return qbit(quest_bits, kQuest, index); };
-        if (!qbit(quest_bits, 7, 0)) return 0;
-        if (bit(0) || bit(1)) return !qbit(quest_bits, 14, 0) ? (bit(10) ? 5 : 6) : bit(13) ? 13 : 11;
+        auto bit = [&](int index) { return quest::bit(quest_bits, kQuest, index); };
+        if (!quest::bit(quest_bits, 7, 0)) return 0;
+        if (bit(0) || bit(1)) return !quest::bit(quest_bits, 14, 0) ? (bit(10) ? 5 : 6) : bit(13) ? 13 : 11;
         if (items.shaft && items.cube && items.amulet) return bit(6) ? 3 : bit(3) ? 2 : 4;
         if (items.staff) return bit(10) ? 5 : 6;
         if (items.scroll && !bit(3)) return 1;
@@ -665,9 +668,9 @@ struct HoradricStaffQuest {
     // class forced magic (FUN_00585b90, EDX 4) and rand(5) + 5 gold piles
     // on the quest seed.
     [[nodiscard]] std::string chest(int operate_fn, const QuestBits& quest_bits, const Items& items) {
-        if (operate_fn == kScrollChest) return !qbit(quest_bits, kQuest, 0) && !qbit(quest_bits, kQuest, 3) ? "tr1" : "";
+        if (operate_fn == kScrollChest) return !quest::bit(quest_bits, kQuest, 0) && !quest::bit(quest_bits, kQuest, 3) ? "tr1" : "";
         if (operate_fn == kShaftChest) {
-            if (qbit(quest_bits, kQuest, 0) || items.shaft || items.staff) return "";
+            if (quest::bit(quest_bits, kQuest, 0) || items.shaft || items.staff) return "";
             shaft_dropped = true;
             return "msf";
         }
@@ -704,11 +707,11 @@ struct ArcaneQuest {
 
     // A player's bits for the state (LAB_0059adb0).
     void mark(QuestBits& quest_bits) const {
-        if (qbit(quest_bits, kQuest, 0) || qbit(quest_bits, kQuest, 1)) return;
-        if (state == 2) qset(quest_bits, kQuest, 2);
-        if (state == 3) qset(quest_bits, kQuest, 3);
-        if (state == 4 && (log == 2 || log == 3)) qset(quest_bits, kQuest, 4);
-        if (state == 4 && log == 4) qset(quest_bits, kQuest, 5);
+        if (quest::bit(quest_bits, kQuest, 0) || quest::bit(quest_bits, kQuest, 1)) return;
+        if (state == 2) quest::set(quest_bits, kQuest, 2);
+        if (state == 3) quest::set(quest_bits, kQuest, 3);
+        if (state == 4 && (log == 2 || log == 3)) quest::set(quest_bits, kQuest, 4);
+        if (state == 4 && log == 4) quest::set(quest_bits, kQuest, 5);
     }
     // The guard stands aside (FUN_0059aef0).
     void let_in(QuestBits& quest_bits) {
@@ -727,10 +730,10 @@ struct ArcaneQuest {
     }
     // The player joins (FUN_0059b530).
     void join(const QuestBits& quest_bits, QuestBits& game_bits, bool has_staff) {
-        auto bit = [&](int index) { return qbit(quest_bits, kQuest, index); };
+        auto bit = [&](int index) { return quest::bit(quest_bits, kQuest, index); };
         if (bit(0) || bit(15)) open = false;
-        if (qbit(quest_bits, 11, 0)) { guard_in = true; guard_state = 2; }
-        if (bit(0) || bit(1)) { qset(game_bits, kQuest, 13); guard_state = 2; guard_in = true; return; }
+        if (quest::bit(quest_bits, 11, 0)) { guard_in = true; guard_state = 2; }
+        if (bit(0) || bit(1)) { quest::set(game_bits, kQuest, 13); guard_state = 2; guard_in = true; return; }
         if (has_staff) { log = 1; state = 1; }
         bool under_way = true;
         if (bit(5)) { log = 4; state = 4; }
@@ -738,7 +741,7 @@ struct ArcaneQuest {
         else if (bit(3)) { log = 3; state = 3; }
         else if (bit(2)) { log = 2; state = 2; }
         else under_way = false;
-        if (under_way || qbit(quest_bits, 10, 0)) { guard_state = 2; guard_in = true; }
+        if (under_way || quest::bit(quest_bits, 10, 0)) { guard_state = 2; guard_in = true; }
     }
     [[nodiscard]] int log_state(const QuestBits& quest_bits) const { return quest_log(quest_bits, kQuest, state, log, 5); }
     // What `npc` says (FUN_0059b1c0): blocks at 0x73a638 by the state
@@ -762,9 +765,9 @@ struct ArcaneQuest {
     [[nodiscard]] std::vector<QuestMsg> talk(const QuestBits& quest_bits, int npc, Roll&& roll) const {
         if (npc == kGuard) return { { guard_in ? 187 + int(roll() % 3) : 186, true } };
         int block = -1;
-        if (qbit(quest_bits, kQuest, 1)) block = 4;
+        if (quest::bit(quest_bits, kQuest, 1)) block = 4;
         else if (rewarded) block = 5;
-        else if (state != 0 && open && !qbit(quest_bits, kQuest, 0) && !(state > 4 && !qbit(quest_bits, kQuest, 13))) block = state - 1;
+        else if (state != 0 && open && !quest::bit(quest_bits, kQuest, 0) && !(state > 4 && !quest::bit(quest_bits, kQuest, 13))) block = state - 1;
         std::vector<QuestMsg> out;
         if (block >= 0 && block < 6)
             for (const auto& entry : kBlocks[block]) if (entry.npc == npc) out.push_back({ entry.string, entry.greet });
@@ -772,13 +775,13 @@ struct ArcaneQuest {
     }
     // The "!" (FUN_0059aca0).
     [[nodiscard]] bool alert(const QuestBits& quest_bits, int npc) const {
-        if (qbit(quest_bits, kQuest, 0)) return false;
+        if (quest::bit(quest_bits, kQuest, 0)) return false;
         if (npc == kGuard) {
-            if (qbit(quest_bits, kQuest, 1)) return false;
-            if (guard_state == 0) return !qbit(quest_bits, kQuest, 7);
-            return guard_state == 2 && guard_new && !qbit(quest_bits, kQuest, 8);
+            if (quest::bit(quest_bits, kQuest, 1)) return false;
+            if (guard_state == 0) return !quest::bit(quest_bits, kQuest, 7);
+            return guard_state == 2 && guard_new && !quest::bit(quest_bits, kQuest, 8);
         }
-        if ((npc == kDrognan && state == 1) || (npc == kJerhyn && state == 2)) return !qbit(quest_bits, kQuest, 1);
+        if ((npc == kDrognan && state == 1) || (npc == kJerhyn && state == 2)) return !quest::bit(quest_bits, kQuest, 1);
         return false;
     }
     // The player heard `string` from `npc` (FUN_0059af50). True: the
@@ -786,19 +789,19 @@ struct ArcaneQuest {
     // (FUN_0056d130: object 60 to level 46), once; the game's bit 13.
     bool said(QuestBits& quest_bits, QuestBits& game_bits, int npc, int string, int player_room) {
         if (npc == kGuard) {
-            if (string == 186) qset(quest_bits, kQuest, 7);
-            else if (string >= 187 && string <= 189) qset(quest_bits, kQuest, 8);
+            if (string == 186) quest::set(quest_bits, kQuest, 7);
+            else if (string >= 187 && string <= 189) quest::set(quest_bits, kQuest, 8);
             return false;
         }
-        if (string >= kThanksFirst && string <= kThanksLast && qbit(quest_bits, kQuest, 1)) {
-            qset(quest_bits, kQuest, 1, false);
+        if (string >= kThanksFirst && string <= kThanksLast && quest::bit(quest_bits, kQuest, 1)) {
+            quest::set(quest_bits, kQuest, 1, false);
             rewarded = true;
         }
         if (string == kJournal) {
             if (open && log < 5) log = 5;
             if (!portal_made && player_room == journal_room && journal_room >= 0) {
                 portal_made = true;
-                qset(game_bits, kQuest, 13);
+                quest::set(game_bits, kQuest, 13);
                 return true;
             }
             return false;
@@ -823,10 +826,10 @@ struct ArcaneQuest {
             mark(quest_bits);
             return;
         }
-        if (dest == kHarem) { qset(quest_bits, kQuest, 8); qset(quest_bits, kQuest, 7); }
+        if (dest == kHarem) { quest::set(quest_bits, kQuest, 8); quest::set(quest_bits, kQuest, 7); }
         if (from == level_ids::kLutGholein) {
             rewarded = false;                     // FUN_00545310
-            if (!qbit(quest_bits, kQuest, 0) && !qbit(quest_bits, kQuest, 1) && state == 3) { state = 4; mark(quest_bits); }
+            if (!quest::bit(quest_bits, kQuest, 0) && !quest::bit(quest_bits, kQuest, 1) && state == 3) { state = 4; mark(quest_bits); }
         }
     }
     // Horazon's Journal read (OperateFn 42, FUN_0059b970): its 396 to the
@@ -837,13 +840,13 @@ struct ArcaneQuest {
         journal_room = room;
         if (!open || state == 5) return;
         state = 5;
-        if (qbit(quest_bits, kQuest, 0) || qbit(quest_bits, kQuest, 1)) return;
+        if (quest::bit(quest_bits, kQuest, 0) || quest::bit(quest_bits, kQuest, 1)) return;
         if (in_sanctuary) {
-            for (const int bit : { 13, 1, 0 }) qset(quest_bits, kQuest, bit);
-            for (int bit = 2; bit < 12; ++bit) qset(quest_bits, kQuest, bit, false);
-            qset(quest_bits, kQuest, 8);
-            qset(quest_bits, kQuest, 7);
-        } else qset(quest_bits, kQuest, 14);
+            for (const int bit : { 13, 1, 0 }) quest::set(quest_bits, kQuest, bit);
+            for (int bit = 2; bit < 12; ++bit) quest::set(quest_bits, kQuest, bit, false);
+            quest::set(quest_bits, kQuest, 8);
+            quest::set(quest_bits, kQuest, 7);
+        } else quest::set(quest_bits, kQuest, 14);
     }
 };
 
@@ -862,7 +865,7 @@ struct SummonerQuest {
     int log_in = 0;            // data+8: the death's 3-tick timer (LAB_0059bfd0)
     bool rewarded = false;
     void mark(QuestBits& quest_bits) const {   // LAB_0059bd10
-        if (!qbit(quest_bits, kQuest, 0) && !qbit(quest_bits, kQuest, 1) && state == 1) qset(quest_bits, kQuest, 2);
+        if (!quest::bit(quest_bits, kQuest, 0) && !quest::bit(quest_bits, kQuest, 1) && state == 1) quest::set(quest_bits, kQuest, 2);
     }
     void engaged(QuestBits& quest_bits) {      // FUN_0059c330
         if (!open) return;
@@ -871,8 +874,8 @@ struct SummonerQuest {
         if (log < 2) { log = 2; mark(quest_bits); }
     }
     void join(const QuestBits& quest_bits) {   // LAB_0059c220
-        if (qbit(quest_bits, kQuest, 0) || qbit(quest_bits, kQuest, 15)) { open = false; return; }
-        if (qbit(quest_bits, kQuest, 2)) { log = 2; state = 1; }
+        if (quest::bit(quest_bits, kQuest, 0) || quest::bit(quest_bits, kQuest, 15)) { open = false; return; }
+        if (quest::bit(quest_bits, kQuest, 2)) { log = 2; state = 1; }
     }
     [[nodiscard]] int log_state(const QuestBits& quest_bits) const { return quest_log(quest_bits, kQuest, state, log, 2); }
     // He died (FUN_0059c150). True: the player took part (FUN_0059be70:
@@ -882,9 +885,9 @@ struct SummonerQuest {
         if (!open) return false;
         state = 2;
         if (log_in == 0) log_in = 3;
-        const bool first = !qbit(quest_bits, kQuest, 0) && !qbit(quest_bits, kQuest, 1);
-        if (first && nearby) { qset(quest_bits, kQuest, 13); qset(quest_bits, kQuest, 1); return true; }
-        if (first) qset(quest_bits, kQuest, 14);
+        const bool first = !quest::bit(quest_bits, kQuest, 0) && !quest::bit(quest_bits, kQuest, 1);
+        if (first && nearby) { quest::set(quest_bits, kQuest, 13); quest::set(quest_bits, kQuest, 1); return true; }
+        if (first) quest::set(quest_bits, kQuest, 14);
         return false;
     }
     // A tick. True: the timer's end, when a player with bit 13 in the
@@ -907,10 +910,10 @@ struct SummonerQuest {
     // state (0x73b278: -1, 0, 1, 2).
     [[nodiscard]] std::vector<QuestMsg> talk(const QuestBits& quest_bits, int npc) const {
         int block = -1;
-        const bool b13 = qbit(quest_bits, kQuest, 13);
-        if (qbit(quest_bits, kQuest, 1)) block = 1;
+        const bool b13 = quest::bit(quest_bits, kQuest, 13);
+        if (quest::bit(quest_bits, kQuest, 1)) block = 1;
         else if (rewarded) block = 2;
-        else if (open && state != 0 && !(qbit(quest_bits, kQuest, 0) && !b13) && !(state > 1 && !b13)) block = state - 1;
+        else if (open && state != 0 && !(quest::bit(quest_bits, kQuest, 0) && !b13) && !(state > 1 && !b13)) block = state - 1;
         std::vector<QuestMsg> out;
         if (block >= 0 && block < 3)
             for (const auto& entry : kBlocks[block]) if (entry.npc == npc) out.push_back({ entry.string, entry.greet });
@@ -918,14 +921,14 @@ struct SummonerQuest {
     }
     [[nodiscard]] static bool alert(const QuestBits& quest_bits, int npc) {   // FUN_0059bb40
         static constexpr std::array<int, 10> kTown{ 176, 175, 199, 177, 202, 244, 210, 201, 200, 178 };
-        return std::ranges::find(kTown, npc) != kTown.end() && qbit(quest_bits, kQuest, 1);
+        return std::ranges::find(kTown, npc) != kTown.end() && quest::bit(quest_bits, kQuest, 1);
     }
     void said(QuestBits& quest_bits, QuestBits& game_bits, int string) {     // FUN_0059bd70
-        if (string < kThanksFirst || string > kThanksLast || !qbit(quest_bits, kQuest, 1)) return;
-        if (qbit(quest_bits, kQuest, 13)) { log = 0xd; qset(game_bits, kQuest, 13); state = 3; }
+        if (string < kThanksFirst || string > kThanksLast || !quest::bit(quest_bits, kQuest, 1)) return;
+        if (quest::bit(quest_bits, kQuest, 13)) { log = 0xd; quest::set(game_bits, kQuest, 13); state = 3; }
         rewarded = true;
-        qset(quest_bits, kQuest, 0);
-        qset(quest_bits, kQuest, 1, false);
+        quest::set(quest_bits, kQuest, 0);
+        quest::set(quest_bits, kQuest, 1, false);
     }
     void enter(int from, int dest) { if (open && dest >= level_ids::kLutGholein && from == level_ids::kLutGholein) rewarded = false; }   // LAB_0059c200
 };
@@ -965,24 +968,24 @@ struct SevenTombsQuest {
     int log_in = 0;            // Duriel's death's 8-tick timer (LAB_0059cee0)
     bool rewarded = false;
     void mark(QuestBits& quest_bits) const {    // FUN_0059c6c0
-        if (!qbit(quest_bits, kQuest, 0) && state > 1) qset(quest_bits, kQuest, 2);
+        if (!quest::bit(quest_bits, kQuest, 0) && state > 1) quest::set(quest_bits, kQuest, 2);
     }
     bool chain() { if (state == 0 && open) state = 1; return true; }   // FUN_0059d450, on to +0x10's
     void join(QuestBits& quest_bits) {           // LAB_0059d4f0
-        qset(quest_bits, 10, 9, false);
-        if (qbit(quest_bits, 10, 0)) { later = true; staff_placed = true; }
-        if (qbit(quest_bits, kQuest, 0) || qbit(quest_bits, kQuest, 15)) { open = false; return; }
-        if (qbit(quest_bits, kQuest, 2)) { log = 1; state = 2; }
-        else if (qbit(quest_bits, kQuest, 3)) { log = 5; state = 5; }
-        else if (qbit(quest_bits, kQuest, 4)) { log = 6; state = 5; }
+        quest::set(quest_bits, 10, 9, false);
+        if (quest::bit(quest_bits, 10, 0)) { later = true; staff_placed = true; }
+        if (quest::bit(quest_bits, kQuest, 0) || quest::bit(quest_bits, kQuest, 15)) { open = false; return; }
+        if (quest::bit(quest_bits, kQuest, 2)) { log = 1; state = 2; }
+        else if (quest::bit(quest_bits, kQuest, 3)) { log = 5; state = 5; }
+        else if (quest::bit(quest_bits, kQuest, 4)) { log = 6; state = 5; }
     }
     // The log (+0xe8, FUN_0059ca50).
     [[nodiscard]] int log_state(const QuestBits& quest_bits) const {
-        if (!qbit(quest_bits, 7, 0) || qbit(quest_bits, kQuest, 0)) return 0;
-        if (qbit(quest_bits, kQuest, 3)) return 5;
-        if (qbit(quest_bits, kQuest, 4)) return 6;
+        if (!quest::bit(quest_bits, 7, 0) || quest::bit(quest_bits, kQuest, 0)) return 0;
+        if (quest::bit(quest_bits, kQuest, 3)) return 5;
+        if (quest::bit(quest_bits, kQuest, 4)) return 6;
         if (!open) return 0;
-        if (qbit(quest_bits, kQuest, 5) || state < 3) return log;
+        if (quest::bit(quest_bits, kQuest, 5) || state < 3) return log;
         return 0xc;
     }
     // The player went from `from` to `dest` (FUN_0059d1c0): levels 40..74.
@@ -1033,14 +1036,14 @@ struct SevenTombsQuest {
             return out;
         };
         if (npc == kTyrael) return tyrael_talks ? lines(2) : std::vector<QuestMsg>{};
-        if (qbit(quest_bits, kQuest, 13))
-            for (const auto& [who, bit] : kTownLines) if (who == npc && !qbit(quest_bits, kQuest, bit)) return lines(6);
-        if (qbit(quest_bits, kQuest, 3)) return lines(3);
-        if (qbit(quest_bits, kQuest, 4)) return npc == kMeshif ? lines(5) : lines(4);
+        if (quest::bit(quest_bits, kQuest, 13))
+            for (const auto& [who, bit] : kTownLines) if (who == npc && !quest::bit(quest_bits, kQuest, bit)) return lines(6);
+        if (quest::bit(quest_bits, kQuest, 3)) return lines(3);
+        if (quest::bit(quest_bits, kQuest, 4)) return npc == kMeshif ? lines(5) : lines(4);
         if (rewarded) return lines(4);
         if (state == 0) return {};
-        const bool b13 = qbit(quest_bits, kQuest, 13);
-        if ((qbit(quest_bits, kQuest, 0) && !b13) || (state > 3 && !b13)) return {};
+        const bool b13 = quest::bit(quest_bits, kQuest, 13);
+        if ((quest::bit(quest_bits, kQuest, 0) && !b13) || (state > 3 && !b13)) return {};
         const int block = state - 1;
         if (block == 1 && npc == 177 && summoner_done) return {};
         if (block < 0 || block > 4) return {};
@@ -1049,13 +1052,13 @@ struct SevenTombsQuest {
     // FUN_0059d300.
     [[nodiscard]] bool alert(const QuestBits& quest_bits, int npc) const {
         if (npc == kJerhyn) {
-            if (qbit(quest_bits, kQuest, 0)) return false;
-            return (state == 1 && !qbit(quest_bits, kQuest, 3) && !qbit(quest_bits, kQuest, 4)) || qbit(quest_bits, kQuest, 3);
+            if (quest::bit(quest_bits, kQuest, 0)) return false;
+            return (state == 1 && !quest::bit(quest_bits, kQuest, 3) && !quest::bit(quest_bits, kQuest, 4)) || quest::bit(quest_bits, kQuest, 3);
         }
-        if (npc == kMeshif) return qbit(quest_bits, kQuest, 4);
+        if (npc == kMeshif) return quest::bit(quest_bits, kQuest, 4);
         if (npc == kTyrael) return open && duriel_dead && !tyrael_portal;
-        if (!qbit(quest_bits, kQuest, 13)) return false;
-        for (const auto& [who, bit] : kTownLines) if (who == npc) return !qbit(quest_bits, kQuest, bit);
+        if (!quest::bit(quest_bits, kQuest, 13)) return false;
+        for (const auto& [who, bit] : kTownLines) if (who == npc) return !quest::bit(quest_bits, kQuest, bit);
         return false;
     }
     // What hearing `string` from `npc` does (FUN_0059cb20).
@@ -1066,36 +1069,36 @@ struct SevenTombsQuest {
             if (!open || string != kTyraelLine || tyrael_portal) return out;
             out.town_portal = true;
             state = 4;
-            if (!qbit(quest_bits, kQuest, 13) && !qbit(quest_bits, kQuest, 3) && !qbit(quest_bits, kQuest, 4) && in_lair) {   // FUN_0059c860
-                qset(quest_bits, kQuest, 13);
-                qset(quest_bits, kQuest, 3);
+            if (!quest::bit(quest_bits, kQuest, 13) && !quest::bit(quest_bits, kQuest, 3) && !quest::bit(quest_bits, kQuest, 4) && in_lair) {   // FUN_0059c860
+                quest::set(quest_bits, kQuest, 13);
+                quest::set(quest_bits, kQuest, 3);
                 out.act3 = true;
             }
-            if (!qbit(quest_bits, kQuest, 0) && !qbit(quest_bits, kQuest, 3) && !qbit(quest_bits, kQuest, 4)) qset(quest_bits, kQuest, 14);   // LAB_0059c9f0
+            if (!quest::bit(quest_bits, kQuest, 0) && !quest::bit(quest_bits, kQuest, 3) && !quest::bit(quest_bits, kQuest, 4)) quest::set(quest_bits, kQuest, 14);   // LAB_0059c9f0
             tyrael_portal = true;
             tyrael_pending = true;
             return out;
         }
         if (npc == kJerhyn && string == kStart) { state = 2; jerhyn_pending = true; return out; }
         if (npc == kJerhyn && string == kReward) {
-            if (!qbit(quest_bits, kQuest, 3)) return out;
-            if (qbit(quest_bits, kQuest, 13)) state = 5;
+            if (!quest::bit(quest_bits, kQuest, 3)) return out;
+            if (quest::bit(quest_bits, kQuest, 13)) state = 5;
             reward_pending = true;
-            qset(quest_bits, kQuest, 4);
-            qset(quest_bits, kQuest, 3, false);
+            quest::set(quest_bits, kQuest, 4);
+            quest::set(quest_bits, kQuest, 3, false);
             return out;
         }
         if (npc == kMeshif && string == kMeshifLine) {
-            if (!qbit(quest_bits, kQuest, 4)) return out;
-            out.take_staff = qbit(quest_bits, 10, 0);
-            if (qbit(quest_bits, kQuest, 13)) { qset(game_bits, kQuest, 13); state = 5; log = 0xd; }
-            qset(quest_bits, kQuest, 0);
-            qset(quest_bits, kQuest, 4, false);
+            if (!quest::bit(quest_bits, kQuest, 4)) return out;
+            out.take_staff = quest::bit(quest_bits, 10, 0);
+            if (quest::bit(quest_bits, kQuest, 13)) { quest::set(game_bits, kQuest, 13); state = 5; log = 0xd; }
+            quest::set(quest_bits, kQuest, 0);
+            quest::set(quest_bits, kQuest, 4, false);
             rewarded = true;
             return out;
         }
         static constexpr std::array<std::pair<int, int>, 6> kLineBits{ { { 444, 9 }, { 445, 6 }, { 446, 7 }, { 447, 11 }, { 449, 8 }, { 452, 10 } } };
-        for (const auto& [line, bit] : kLineBits) if (string == line) qset(quest_bits, kQuest, bit);
+        for (const auto& [line, bit] : kLineBits) if (string == line) quest::set(quest_bits, kQuest, bit);
         return out;
     }
     void talk_closed(QuestBits& quest_bits, int npc) {   // LAB_0059c760
@@ -1110,7 +1113,7 @@ struct SevenTombsQuest {
     // bit 0 / 3 / 4 / 5 gets bit 5 (FUN_0059cfb0: in the Lair).
     void duriel_died(QuestBits& quest_bits, bool by_him) {
         if (open) { state = 3; if (log_in == 0) log_in = 8; }
-        if (by_him && !qbit(quest_bits, kQuest, 0) && !qbit(quest_bits, kQuest, 3) && !qbit(quest_bits, kQuest, 4)) qset(quest_bits, kQuest, 5);
+        if (by_him && !quest::bit(quest_bits, kQuest, 0) && !quest::bit(quest_bits, kQuest, 3) && !quest::bit(quest_bits, kQuest, 4)) quest::set(quest_bits, kQuest, 5);
         duriel_dead = true;
         tyrael_talks = true;
     }
@@ -1118,8 +1121,8 @@ struct SevenTombsQuest {
     // (quest 10 bits 0, 13; the staff and its parts taken), the timer to the
     // way down (FUN_0059d870) once.
     void staff_in(QuestBits& quest_bits) {
-        qset(quest_bits, 10, 0);
-        qset(quest_bits, 10, 13);
+        quest::set(quest_bits, 10, 0);
+        quest::set(quest_bits, 10, 13);
         staff_placed = true;
         if (!timer_started) { timer_started = true; open_in = 1; }
     }
@@ -1163,10 +1166,10 @@ struct TaintedSunQuest {
 
     // A player's bits for the state (LAB_0059a4f0).
     void mark(QuestBits& quest_bits) const {
-        if (qbit(quest_bits, kQuest, 0) || qbit(quest_bits, kQuest, 1)) return;
-        if (state >= 1) qset(quest_bits, kQuest, 2);
-        if (state == 2) qset(quest_bits, kQuest, 3);
-        if (state == 3) qset(quest_bits, kQuest, 4);
+        if (quest::bit(quest_bits, kQuest, 0) || quest::bit(quest_bits, kQuest, 1)) return;
+        if (state >= 1) quest::set(quest_bits, kQuest, 2);
+        if (state == 2) quest::set(quest_bits, kQuest, 3);
+        if (state == 3) quest::set(quest_bits, kQuest, 4);
     }
     // The sun goes out (FUN_0059a350): log 1, given out, the act's sky
     // dark (each player gets S->C 0x53 {5, 0, 1}, FUN_0059a100).
@@ -1177,12 +1180,12 @@ struct TaintedSunQuest {
     }
     // The player joins (FUN_0059a5d0); done or closed: shut for the game.
     void join(const QuestBits& quest_bits, QuestBits& game_bits) {
-        if (qbit(quest_bits, kQuest, 0) || qbit(quest_bits, kQuest, 15)) open = false;
-        if (qbit(quest_bits, kQuest, 0) || qbit(quest_bits, kQuest, 1)) { qset(game_bits, kQuest, 13); return; }
-        if (!qbit(quest_bits, kQuest, 2)) return;
+        if (quest::bit(quest_bits, kQuest, 0) || quest::bit(quest_bits, kQuest, 15)) open = false;
+        if (quest::bit(quest_bits, kQuest, 0) || quest::bit(quest_bits, kQuest, 1)) { quest::set(game_bits, kQuest, 13); return; }
+        if (!quest::bit(quest_bits, kQuest, 2)) return;
         darken();                                 // FUN_0059a570: their sky's dark again
-        if (qbit(quest_bits, kQuest, 4)) { log = 2; state = 3; }
-        else if (qbit(quest_bits, kQuest, 3)) { log = 2; state = 2; }
+        if (quest::bit(quest_bits, kQuest, 4)) { log = 2; state = 3; }
+        else if (quest::bit(quest_bits, kQuest, 3)) { log = 2; state = 2; }
         else { log = 1; state = 1; }
     }
     [[nodiscard]] int log_state(const QuestBits& quest_bits) const { return quest_log(quest_bits, kQuest, state, log, 4); }
@@ -1226,10 +1229,10 @@ struct TaintedSunQuest {
     };
     [[nodiscard]] std::vector<QuestMsg> talk(const QuestBits& quest_bits, int npc) const {
         int block = -1;
-        if (qbit(quest_bits, kQuest, 1)) block = 3;
-        else if (qbit(quest_bits, kQuest, 14)) return {};
+        if (quest::bit(quest_bits, kQuest, 1)) block = 3;
+        else if (quest::bit(quest_bits, kQuest, 14)) return {};
         else if (rewarded) block = 4;
-        else if (state != 0 && open && !qbit(quest_bits, kQuest, 0) && state <= 3) block = state - 1;
+        else if (state != 0 && open && !quest::bit(quest_bits, kQuest, 0) && state <= 3) block = state - 1;
         std::vector<QuestMsg> out;
         if (block >= 0)
             for (const auto& entry : kBlocks[block]) if (entry.npc == npc) out.push_back({ entry.string, entry.greet });
@@ -1239,8 +1242,8 @@ struct TaintedSunQuest {
     // Drognan while it's new.
     [[nodiscard]] bool alert(const QuestBits& quest_bits, int npc) const {
         static constexpr std::array<int, 10> kTown{ 176, 175, 198, 199, 177, 202, 244, 210, 200, 201 };
-        if (qbit(quest_bits, kQuest, 0)) return false;
-        return (qbit(quest_bits, kQuest, 1) && std::ranges::find(kTown, npc) != kTown.end()) || (npc == kDrognan && state == 1);
+        if (quest::bit(quest_bits, kQuest, 0)) return false;
+        return (quest::bit(quest_bits, kQuest, 1) && std::ranges::find(kTown, npc) != kTown.end()) || (npc == kDrognan && state == 1);
     }
     // The player heard `string` from `npc` (LAB_0059ebe0): Drognan's 348
     // tells it; any thanks (362..372) with the reward due is done.
@@ -1252,12 +1255,12 @@ struct TaintedSunQuest {
             return;
         }
         if (string < kThanksFirst || string > kThanksLast) return;
-        if (state != 5 && open && qbit(quest_bits, kQuest, 13)) { log = 0xd; state = 5; }
-        if (!qbit(quest_bits, kQuest, 1)) return;
-        qset(quest_bits, kQuest, 0);
-        qset(quest_bits, kQuest, 1, false);
+        if (state != 5 && open && quest::bit(quest_bits, kQuest, 13)) { log = 0xd; state = 5; }
+        if (!quest::bit(quest_bits, kQuest, 1)) return;
+        quest::set(quest_bits, kQuest, 0);
+        quest::set(quest_bits, kQuest, 1, false);
         rewarded = true;
-        if (!open) qset(game_bits, kQuest, 13);
+        if (!open) quest::set(game_bits, kQuest, 13);
     }
     // The altar used (OperateFn 24, FUN_0059a7e0). `refused`: the player has
     // it (bit 0 / 1) and quest 10's done or carries the Viper Amulet / the
@@ -1268,22 +1271,22 @@ struct TaintedSunQuest {
     // bit 13, the 10-tick log timer.
     struct Use { bool refused = false, used = false, took_part = false; int amulets = 0; };
     Use use_altar(QuestBits& quest_bits, QuestBits& game_bits, bool has_amulet, bool has_staff) {
-        const bool has_it = qbit(quest_bits, kQuest, 0) || qbit(quest_bits, kQuest, 1);
-        if (has_it && (qbit(quest_bits, 10, 0) || has_amulet || has_staff)) return { .refused = true };
+        const bool has_it = quest::bit(quest_bits, kQuest, 0) || quest::bit(quest_bits, kQuest, 1);
+        if (has_it && (quest::bit(quest_bits, 10, 0) || has_amulet || has_staff)) return { .refused = true };
         if (used) return {};
         used = true;
         Use out{ .used = true };
-        out.amulets = !has_amulet && !has_staff && !qbit(quest_bits, 10, 0) ? 1 : 0;
+        out.amulets = !has_amulet && !has_staff && !quest::bit(quest_bits, 10, 0) ? 1 : 0;
         if (!open) return out;
         dark = false;
         state = 4;
-        if (!qbit(quest_bits, kQuest, 0)) {
-            qset(quest_bits, kQuest, 1);
-            qset(quest_bits, kQuest, 13);
-            qset(quest_bits, kQuest, 14, false);
+        if (!quest::bit(quest_bits, kQuest, 0)) {
+            quest::set(quest_bits, kQuest, 1);
+            quest::set(quest_bits, kQuest, 13);
+            quest::set(quest_bits, kQuest, 14, false);
         }
-        out.took_part = qbit(quest_bits, kQuest, 13);   // LAB_0059a730: voice 0x34
-        qset(game_bits, kQuest, 13);
+        out.took_part = quest::bit(quest_bits, kQuest, 13);   // LAB_0059a730: voice 0x34
+        quest::set(game_bits, kQuest, 13);
         log_in = 10;
         return out;
     }
@@ -1320,23 +1323,23 @@ struct CainQuest {
     [[nodiscard]] int log_state(const QuestBits& quest_bits) const { return quest_log(quest_bits, kQuest, state, log, 6); }
     // A player's bits for the state (LAB_00592130).
     void mark(QuestBits& quest_bits) const {
-        if (qbit(quest_bits, kQuest, 0) || qbit(quest_bits, kQuest, 1)) return;
-        if (state == 2) qset(quest_bits, kQuest, 2);
-        else if (state > 2 && state < 6) qset(quest_bits, kQuest, 3);
+        if (quest::bit(quest_bits, kQuest, 0) || quest::bit(quest_bits, kQuest, 1)) return;
+        if (state == 2) quest::set(quest_bits, kQuest, 2);
+        else if (state > 2 && state < 6) quest::set(quest_bits, kQuest, 3);
     }
     // The player joins, carrying the scroll (bks) / the deciphered one (bkd) (FUN_00597030).
     void join(const QuestBits& quest_bits, bool bks, bool bkd) {
-        active = !qbit(quest_bits, kQuest, 0) && !qbit(quest_bits, kQuest, 15);
+        active = !quest::bit(quest_bits, kQuest, 0) && !quest::bit(quest_bits, kQuest, 15);
         if (!active) {
             camp_due = true;
-            if (qbit(quest_bits, kQuest, 0)) rescued_flag = true;
+            if (quest::bit(quest_bits, kQuest, 0)) rescued_flag = true;
             else closed_join = true;
             rejoined = stones_open = true;
-        } else if (qbit(quest_bits, kQuest, 4)) {
+        } else if (quest::bit(quest_bits, kQuest, 4)) {
             log = 4; state = 5;
             rejoined = deciphered = stones_open = tree_used = true;
-        } else if (qbit(quest_bits, kQuest, 3)) { state = 3; log = 1; }
-        else if (qbit(quest_bits, kQuest, 2)) { state = 2; log = 1; }
+        } else if (quest::bit(quest_bits, kQuest, 3)) { state = 3; log = 1; }
+        else if (quest::bit(quest_bits, kQuest, 2)) { state = 2; log = 1; }
         if (bkd) { state = 5; log = 3; deciphered = tree_used = true; }
         else if (bks) { state = 4; log = 2; tree_used = true; }
     }
@@ -1358,13 +1361,13 @@ struct CainQuest {
         { { kCain, 124, true } },
     };
     [[nodiscard]] std::vector<QuestMsg> talk(const QuestBits& quest_bits, int npc, bool bks) const {
-        const bool bit0 = qbit(quest_bits, kQuest, 0), bit1 = qbit(quest_bits, kQuest, 1), b13 = qbit(quest_bits, kQuest, 13), b14 = qbit(quest_bits, kQuest, 14);
+        const bool bit0 = quest::bit(quest_bits, kQuest, 0), bit1 = quest::bit(quest_bits, kQuest, 1), b13 = quest::bit(quest_bits, kQuest, 13), b14 = quest::bit(quest_bits, kQuest, 14);
         int block = -1;
         if (npc == kCampCain && !thanked && b13) block = 5;
         else if (bit1) block = npc == kCampCain && thanked ? 7 : 5;
         else if (missed) block = 6;
         else if (rewarded) block = npc == kCampCain && !thanked ? 5 : b14 ? 8 : bit0 ? 7 : -1;
-        else if (!b14 && state != 0 && !bit0 && !qbit(quest_bits, kQuest, 15)) block = bks ? 3 : state == 4 ? 2 : state <= 5 ? state - 1 : -1;
+        else if (!b14 && state != 0 && !bit0 && !quest::bit(quest_bits, kQuest, 15)) block = bks ? 3 : state == 4 ? 2 : state <= 5 ? state - 1 : -1;
         if (npc == kCain) block = 9;
         std::vector<QuestMsg> out;
         if (block >= 0)
@@ -1373,7 +1376,7 @@ struct CainQuest {
     }
     // The balloon over `npc` (FUN_00592fb0).
     [[nodiscard]] bool alert(const QuestBits& quest_bits, int npc, bool bks = false) const {
-        const bool bit0 = qbit(quest_bits, kQuest, 0), bit1 = qbit(quest_bits, kQuest, 1), b13 = qbit(quest_bits, kQuest, 13);
+        const bool bit0 = quest::bit(quest_bits, kQuest, 0), bit1 = quest::bit(quest_bits, kQuest, 1), b13 = quest::bit(quest_bits, kQuest, 13);
         if (npc == kAkara) return (state == 4 && !bit0 && !bit1 && bks) || (state == 1 && !bit0 && !bit1) || (state == 6 && b13 && !bit0) || bit1;
         return npc == kCampCain && (missed || (!thanked && b13));
     }
@@ -1396,11 +1399,11 @@ struct CainQuest {
             state = 5; log = 3;
             return Said::decipher;
         }
-        if (string != 118 || !qbit(quest_bits, kQuest, 1)) return Said::none;
-        qset(quest_bits, kQuest, 0);
-        qset(quest_bits, kQuest, 1, false);
+        if (string != 118 || !quest::bit(quest_bits, kQuest, 1)) return Said::none;
+        quest::set(quest_bits, kQuest, 0);
+        quest::set(quest_bits, kQuest, 1, false);
         rewarded = true;
-        if (qbit(quest_bits, kQuest, 13)) {
+        if (quest::bit(quest_bits, kQuest, 13)) {
             log = 0xd; state = 6;
             rescued_flag = true;
         }
@@ -1417,7 +1420,7 @@ struct CainQuest {
     // camp Cain's due in the camp (FUN_00592960).
     bool enter(QuestBits& quest_bits, int from, int dest) {
         if (dest == kTristram && !camp_cain && !resolved && state > 5) { state = 5; log = 4; mark(quest_bits); }
-        const bool fresh = !qbit(quest_bits, kQuest, 0) && !qbit(quest_bits, kQuest, 1);
+        const bool fresh = !quest::bit(quest_bits, kQuest, 0) && !quest::bit(quest_bits, kQuest, 1);
         if (from == level_ids::kRogueEncampment) {
             rewarded = missed = false;
             // ponytail: marked now, not at the next event 4 (FUN_00592e20)
@@ -1437,18 +1440,18 @@ struct CainQuest {
     // Gholein arrival's the same, with the tree's mode). FUN_00596ca0(0, 1)
     // resolves it; the players still in it missed it (FUN_00592b10).
     void rogues(QuestBits& quest_bits) {
-        if (qbit(quest_bits, kQuest, 0) || qbit(quest_bits, kQuest, 1) || resolved || state >= 6) return;
+        if (quest::bit(quest_bits, kQuest, 0) || quest::bit(quest_bits, kQuest, 1) || resolved || state >= 6) return;
         resolved = true;
         if (!camp_cain) camp_due = true;
         state = 7; log = 5;
         rescued_flag = true;
-        qset(quest_bits, kQuest, 14);
+        quest::set(quest_bits, kQuest, 14);
         missed = true;
     }
     // The Tree of Inifuss (OperateFn 12, FUN_00593af0). True: the scroll
     // (bks) drops at the tree.
     bool tree(const QuestBits& quest_bits, bool has_scroll) {
-        if (!active || state >= 6 || tree_used || qbit(quest_bits, kQuest, 0) || qbit(quest_bits, kQuest, 1) || has_scroll) return false;
+        if (!active || state >= 6 || tree_used || quest::bit(quest_bits, kQuest, 0) || quest::bit(quest_bits, kQuest, 1) || has_scroll) return false;
         state = 4; log = 2;
         tree_used = true;
         return true;
@@ -1470,7 +1473,7 @@ struct CainQuest {
     // bkd goes, CairnStones (missile 0x120) opens the way to Tristram.
     enum class Stone { none, lit, portal };
     Stone stone(QuestBits& quest_bits, int stone, bool bkd, bool fresh) {
-        if (qbit(quest_bits, kQuest, 0) || qbit(quest_bits, kQuest, 1)) return Stone::none;
+        if (quest::bit(quest_bits, kQuest, 0) || quest::bit(quest_bits, kQuest, 1)) return Stone::none;
         if (!bkd) { ++throttle; return Stone::none; }
         if (!active || state > 5 || stones_done) return Stone::none;
         state = 5;
@@ -1479,7 +1482,7 @@ struct CainQuest {
         if (!fresh) return Stone::none;
         if (touched < 5) return Stone::lit;
         stones_done = true;
-        if (log < 4) { log = 4; qset(quest_bits, kQuest, 4); }
+        if (log < 4) { log = 4; quest::set(quest_bits, kQuest, 4); }
         return Stone::portal;
     }
     // The stones as Stony Field comes up (InitFn 6, FUN_005935e0). True:
@@ -1494,8 +1497,8 @@ struct CainQuest {
     // opens, the player took part (bits 13, 1).
     bool gibbet(QuestBits& quest_bits, bool fresh) {
         if (!active || resolved || state >= 6) return false;
-        if (qbit(quest_bits, kQuest, 0) || qbit(quest_bits, kQuest, 1) || !fresh) return false;
-        qset(quest_bits, kQuest, 13); qset(quest_bits, kQuest, 1);
+        if (quest::bit(quest_bits, kQuest, 0) || quest::bit(quest_bits, kQuest, 1) || !fresh) return false;
+        quest::set(quest_bits, kQuest, 13); quest::set(quest_bits, kQuest, 1);
         return true;
     }
     // The Gibbet's opened (its mode end, FUN_00593290): Tristram Cain
@@ -1534,18 +1537,18 @@ struct TowerQuest {
 
     // A player's bits for the state (LAB_00594890; 0x59494c by log).
     void mark(QuestBits& quest_bits) const {
-        if (qbit(quest_bits, kQuest, 0) || qbit(quest_bits, kQuest, 1)) return;
-        if (state == 2) qset(quest_bits, kQuest, 2);
-        if (state == 3 && log >= 1 && log <= 4) qset(quest_bits, kQuest, log + 2);
+        if (quest::bit(quest_bits, kQuest, 0) || quest::bit(quest_bits, kQuest, 1)) return;
+        if (state == 2) quest::set(quest_bits, kQuest, 2);
+        if (state == 3 && log >= 1 && log <= 4) quest::set(quest_bits, kQuest, log + 2);
     }
     // The player joins (LAB_00595860).
     void join(const QuestBits& quest_bits) {
-        if (qbit(quest_bits, kQuest, 0) || qbit(quest_bits, kQuest, 15)) return;
-        if (qbit(quest_bits, kQuest, 4)) { state = 3; log = 1; }
-        else if (qbit(quest_bits, kQuest, 6)) { state = 3; log = 4; }
-        else if (qbit(quest_bits, kQuest, 5)) { state = 2; log = 3; }
-        else if (qbit(quest_bits, kQuest, 3)) { state = 3; log = 1; }
-        else if (qbit(quest_bits, kQuest, 2)) { state = 2; log = 1; }
+        if (quest::bit(quest_bits, kQuest, 0) || quest::bit(quest_bits, kQuest, 15)) return;
+        if (quest::bit(quest_bits, kQuest, 4)) { state = 3; log = 1; }
+        else if (quest::bit(quest_bits, kQuest, 6)) { state = 3; log = 4; }
+        else if (quest::bit(quest_bits, kQuest, 5)) { state = 2; log = 3; }
+        else if (quest::bit(quest_bits, kQuest, 3)) { state = 3; log = 1; }
+        else if (quest::bit(quest_bits, kQuest, 2)) { state = 2; log = 1; }
     }
     // The chain reached it (+0xf0, FUN_00595240). True: it passes on to
     // quest 3's (+0x10).
@@ -1572,7 +1575,7 @@ struct TowerQuest {
         { { 150, 140, false }, { 155, 141, false }, { 265, 145, false }, { 154, 144, false }, { 148, 143, false }, { 147, 142, false } },
     };
     [[nodiscard]] std::vector<QuestMsg> talk(const QuestBits& quest_bits, int npc) const {
-        const bool bit0 = qbit(quest_bits, kQuest, 0), b13 = qbit(quest_bits, kQuest, 13);
+        const bool bit0 = quest::bit(quest_bits, kQuest, 0), b13 = quest::bit(quest_bits, kQuest, 13);
         if (bit0 && !b13) return {};
         if (state > 3 && !due && !told) return {};
         int block = -1;
@@ -1607,7 +1610,7 @@ struct TowerQuest {
                        || npc == monster_ids::kAkara || npc == monster_ids::kGheed;
         if (!town || string < 140 || string > 145) return false;
         bool chain = false;
-        if (qbit(quest_bits, kQuest, 13) && first_talk) { first_talk = false; state = 5; chain = true; }
+        if (quest::bit(quest_bits, kQuest, 13) && first_talk) { first_talk = false; state = 5; chain = true; }
         if (due) { due = false; told = true; }
         return chain;
     }
@@ -1623,7 +1626,7 @@ struct TowerQuest {
             state = 3; log = 2;
             mark(quest_bits);
         } else if (from == 1) {                        // out of town
-            if (state == 2) { if (!qbit(quest_bits, kQuest, 0)) state = 3; }
+            if (state == 2) { if (!quest::bit(quest_bits, kQuest, 0)) state = 3; }
             else if (state == 5) told = false;         // FUN_00594740 (then rec+0xa = 0 once both lists are empty)
         }
     }
@@ -1636,11 +1639,11 @@ struct TowerQuest {
         state = 5;
         first_talk = true;
         log_in = 7;
-        if (qbit(quest_bits, kQuest, 0)) return false;
-        if (!in_cellar) { qset(quest_bits, kQuest, 14); return false; }
-        qset(quest_bits, kQuest, 13);
-        qset(quest_bits, kQuest, 0);
-        qset(quest_bits, kQuest, 1, false);
+        if (quest::bit(quest_bits, kQuest, 0)) return false;
+        if (!in_cellar) { quest::set(quest_bits, kQuest, 14); return false; }
+        quest::set(quest_bits, kQuest, 13);
+        quest::set(quest_bits, kQuest, 0);
+        quest::set(quest_bits, kQuest, 1, false);
         due = true;
         return true;
     }
@@ -1666,17 +1669,17 @@ struct ToolsQuest {
 
     // A player's bits for the state (0x591340).
     void mark(QuestBits& quest_bits) const {
-        if (qbit(quest_bits, kQuest, 0) || qbit(quest_bits, kQuest, 1)) return;
-        if (state == 2) qset(quest_bits, kQuest, 2);
-        if (state == 3 || state == 4) qset(quest_bits, kQuest, 3);
+        if (quest::bit(quest_bits, kQuest, 0) || quest::bit(quest_bits, kQuest, 1)) return;
+        if (state == 2) quest::set(quest_bits, kQuest, 2);
+        if (state == 3 || state == 4) quest::set(quest_bits, kQuest, 3);
     }
     // The player joins (FUN_00591ed0); a first player with it done or
     // closed turns it off for the game (FUN_00546270, FUN_00544410).
     void join(const QuestBits& quest_bits, bool holding = false) {
         carried_in = holding;
-        if (qbit(quest_bits, kQuest, 0) || qbit(quest_bits, kQuest, 15)) { active = false; return; }
-        if (qbit(quest_bits, kQuest, 2)) { log = 1; state = 2; }
-        else if (qbit(quest_bits, kQuest, 3)) { state = 3; log = 1; }
+        if (quest::bit(quest_bits, kQuest, 0) || quest::bit(quest_bits, kQuest, 15)) { active = false; return; }
+        if (quest::bit(quest_bits, kQuest, 2)) { log = 1; state = 2; }
+        else if (quest::bit(quest_bits, kQuest, 3)) { state = 3; log = 1; }
     }
     // The chain reached it (+0xf0, FUN_00591e40): open (Charsi's "!").
     // True: it passes on to the next (+0x10 = 6).
@@ -1696,8 +1699,8 @@ struct ToolsQuest {
         { { 150, 162, false }, { 155, 165, false }, { 265, 160, false }, { 148, 161, false }, { 147, 164, false } },
     };
     [[nodiscard]] std::vector<QuestMsg> talk(const QuestBits& quest_bits, int npc, bool holding, int clvl) const {
-        const bool bit0 = qbit(quest_bits, kQuest, 0);
-        if (bit0 && !qbit(quest_bits, kQuest, 13)) return {};
+        const bool bit0 = quest::bit(quest_bits, kQuest, 0);
+        if (bit0 && !quest::bit(quest_bits, kQuest, 13)) return {};
         int block = -1;
         if (holding) { if (clvl >= kClvl && !bit0) block = 3; }
         else if (!bit0 && state != 0 && state != 4) block = state - 1;
@@ -1709,8 +1712,8 @@ struct ToolsQuest {
     // The balloon over `npc` (FUN_00591c30): Charsi, while it's open or
     // the malus comes back at clvl 8+.
     [[nodiscard]] bool alert(const QuestBits& quest_bits, int npc, bool holding, int clvl) const {
-        if (npc != kCharsi || qbit(quest_bits, kQuest, 0)) return false;
-        if (state == 1 && !qbit(quest_bits, kQuest, 1)) return true;
+        if (npc != kCharsi || quest::bit(quest_bits, kQuest, 0)) return false;
+        if (state == 1 && !quest::bit(quest_bits, kQuest, 1)) return true;
         return clvl >= kClvl && holding;
     }
     // The player heard `string` from `npc` (FUN_00591490). True: Charsi
@@ -1721,9 +1724,9 @@ struct ToolsQuest {
     bool said(QuestBits& quest_bits, int npc, int string, bool holding) {
         if (npc != kCharsi) return false;
         if (string == 146) { state = 2; given = true; return false; }
-        if (string != 163 || qbit(quest_bits, kQuest, 0) || !holding) return false;
-        qset(quest_bits, kQuest, 13);
-        qset(quest_bits, kQuest, 1);
+        if (string != 163 || quest::bit(quest_bits, kQuest, 0) || !holding) return false;
+        quest::set(quest_bits, kQuest, 13);
+        quest::set(quest_bits, kQuest, 1);
         if (active && state == 4) { state = 5; returned = true; game_returned = true; }
         return true;
     }
@@ -1736,7 +1739,7 @@ struct ToolsQuest {
     // The player left level `from` (LAB_00591810): out of town after
     // Charsi gave it.
     void enter(QuestBits& quest_bits, int from) {
-        if (!active || from != 1 || state != 2 || qbit(quest_bits, kQuest, 0) || qbit(quest_bits, kQuest, 1)) return;
+        if (!active || from != 1 || state != 2 || quest::bit(quest_bits, kQuest, 0) || quest::bit(quest_bits, kQuest, 1)) return;
         log = 1;
         state = 3;
         mark(quest_bits);
@@ -1748,7 +1751,7 @@ struct ToolsQuest {
     enum class Stand { none, refuse, drop };
     Stand operate(QuestBits& quest_bits, int clvl) {
         if (!active) return Stand::refuse;
-        if (dropped || qbit(quest_bits, kQuest, 0) || qbit(quest_bits, kQuest, 1)) return Stand::none;
+        if (dropped || quest::bit(quest_bits, kQuest, 0) || quest::bit(quest_bits, kQuest, 1)) return Stand::none;
         if (clvl < kClvl) return Stand::refuse;
         dropped = true;
         if (state != 4) { state = 4; mark(quest_bits); }
@@ -1759,22 +1762,22 @@ struct ToolsQuest {
     // time — bit 6, and the player's line (FUN_00553380).
     bool picked_up(QuestBits& quest_bits) {
         log = 2;
-        if (qbit(quest_bits, kQuest, 6)) return false;
-        qset(quest_bits, kQuest, 6);
+        if (quest::bit(quest_bits, kQuest, 6)) return false;
+        quest::set(quest_bits, kQuest, 6);
         return true;
     }
     // Charsi imbued an item (FUN_00591790): done, the reward's used.
     void imbued(QuestBits& quest_bits) {
-        qset(quest_bits, kQuest, 0);
-        qset(quest_bits, kQuest, 1, false);
+        quest::set(quest_bits, kQuest, 0);
+        quest::set(quest_bits, kQuest, 1, false);
     }
     // The quest log's state (FUN_00591d30).
     [[nodiscard]] int log_state(const QuestBits& quest_bits, bool holding, int clvl) const {
-        if (qbit(quest_bits, kQuest, 1)) return 10;
-        if (holding) return qbit(quest_bits, kQuest, 0) ? 0 : 2;
+        if (quest::bit(quest_bits, kQuest, 1)) return 10;
+        if (holding) return quest::bit(quest_bits, kQuest, 0) ? 0 : 2;
         if (!active) return 0;
-        if (qbit(quest_bits, kQuest, 13)) return 0xd;
-        if (qbit(quest_bits, kQuest, 14)) return 0xc;
+        if (quest::bit(quest_bits, kQuest, 13)) return 0xd;
+        if (quest::bit(quest_bits, kQuest, 14)) return 0xc;
         if (state < 5) return log;
         return game_returned ? (clvl >= kClvl ? 12 : 4) : 0;
     }
@@ -1845,7 +1848,7 @@ struct QuestState {
 inline QuestText quest_text(const d2d::rules::QuestBits& quest_bits, int quest, const QuestState& quest_state) {
     if (quest < 1 || quest > 14 || quest == 7 || quest == 8) return {};
     const auto& rec = kQuestLogRecords[std::size_t(quest < 7 ? quest - 1 : quest - 3)];
-    auto flag = [&](int bit) { return d2d::rules::qbit(quest_bits, quest, bit); };
+    auto flag = [&](int bit) { return d2d::rules::quest::bit(quest_bits, quest, bit); };
     auto game = [&](int bit) { return (quest_state.game[std::size_t(quest)] >> bit & 1) != 0; };
     auto entry = [&](int string, int speech, int shown, int state, bool marks) {
         return QuestText{ string == 3725 ? 0 : string, -1, speech == 3725 ? 0 : speech, shown, state, marks };
@@ -1857,7 +1860,7 @@ inline QuestText quest_text(const d2d::rules::QuestBits& quest_bits, int quest, 
         return entry(rec[std::size_t(2 * log_state + 1)], rec[1], flag(12) ? 1 : 0, log_state, false);
     }
     if (quest == 14 && !b13) {                                // the Seven Tombs' own case (record 0x723a64)
-        const bool summoner = d2d::rules::qbit(quest_bits, 12, 0) || d2d::rules::qbit(quest_bits, 12, 13);
+        const bool summoner = d2d::rules::quest::bit(quest_bits, 12, 0) || d2d::rules::quest::bit(quest_bits, 12, 13);
         const int tomb = summoner && log_state == 1 ? 7 : flag(3) ? 5 : flag(4) ? 6 : 0;
         if (tomb) return entry(rec[std::size_t(2 * tomb + 1)], rec[std::size_t(2 * tomb + 2)], 3, tomb, false);
     }
@@ -1884,7 +1887,7 @@ inline QuestText quest_text(const d2d::rules::QuestBits& quest_bits, int quest, 
 [[nodiscard]] inline bool quest_act_open(const QuestBits& quest_bits, int act, bool expansion) {
     static constexpr std::array<int, 5> kActDone = { 0, 7, 15, 23, 26 };
     if (act <= 0) return act == 0;
-    return act < 5 && (act < 4 || expansion) && qbit(quest_bits, kActDone[std::size_t(act)], 0);
+    return act < 5 && (act < 4 || expansion) && quest::bit(quest_bits, kActDone[std::size_t(act)], 0);
 }
 [[nodiscard]] inline int quest_log_act(const QuestBits& quest_bits, int act) {
     act = act > 4 ? 0 : act;

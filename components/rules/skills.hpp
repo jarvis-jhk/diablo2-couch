@@ -343,10 +343,18 @@ enum class ServerDoFunction : int {
     kMaggotDown = 86,              // FUN_005cb300: burrowed, it heals calc1 % of its life
     kMaggotLay = 87,               // FUN_005cb3c0: its MonStats spawn two subtiles toward the target
     kMonsterBreath = 95,           // FUN_005cc4e0: FetishInferno, the inferno sentries
+    kNest = 91,                    // FUN_005cbe00: its young at the spot its start found (the vile mothers')
     kBestow = 96,                  // FUN_005cc840: heals the one it's at calc1..calc2 % of its life
     kMonTeleport = 98,             // FUN_005ccc80: to the free spot nearest its skill's point
     kMonPoisonNova = 99,              // FUN_005ccd10: srvmissilea on 8 ways, 16 with calc2 2
+    kDiabCold = 100,               // FUN_005cce80: one hit of the skill's damage at the unit
+    kFingerMageSpider = 101,       // FUN_005ccfa0: one srvmissilea at the target
+    kDiabWall = 102,               // FUN_005cd1c0: calc1 diabwallmakers round the target's side
+    kDiabRun = 103,                // FUN_005cd380: the run at the target, a hit on contact
+    kDiabPrison = 104,             // FUN_005cd5d0: a bone prison round the unit
+    kRegurgitatorEat = 108,        // FUN_005cdc10: a corpse eaten, life back
     kMonFrenzy = 109,              // FUN_005cdf10: a strike (FUN_005cddd0), the frenzy state on
+    kMonCurseCast = 112,           // FUN_005ce2b0: one of five curses (0x6e3228) on rand(5)
     kBookOrScroll = 113,           // Identify, Town Portal
     kRaven = 114,
     kVine = 115,                   // FUN_005c6a80: Plague Poppy, Cycle of Life, Vines
@@ -362,8 +370,10 @@ enum class ServerDoFunction : int {
     kWakeOfDestruction = 125,
     kReleaseMissileAtUnitsSecondScan = 143,   // FUN_005d4f40 -> FUN_005d4870: 37 through the other scan
     kHydra = 144,                  // FUN_005ca910
+    kDoomKnightMissile = 148,      // FUN_005cdfb0: srvmissilea (+ the knight's variant) at the target
     kVariantMissile = 149,         // FUN_005ce0b0: srvmissilea with the caster's variant 1..4 (necromage1..4)
     kSmite = 150,                  // FUN_005ce9f0
+    kDiabLight = 152,              // FUN_005cc690: diablight at the target every calc3 frames while state 0xc's on
 };
 
 // ---- skill rows
@@ -378,6 +388,7 @@ struct Skill {
     std::string anim, range;               // anim (A1, SC, KK, ...), range (h2h, rng, both, none)
     std::string monanim;                   // +0x11: a monster's mode for it (FUN_00647110; xx: SQ)
     int aitype = 0, aibonus = 0;           // +0x230 / +0x232: how the Shadows' AIs score it (pet-ai.md)
+    int attack_rank = 0;                   // attackrank (+0x18e): Diablo's target score weighs it (FUN_005e8530)
     bool progressive = false;              // flags +4 bit 2: a charge-up
     Calc delay;                            // +0x190: frames before it may be used again
     bool leftskill = false, passive = false, aura = false, use_attack_rate = false, in_town = false;

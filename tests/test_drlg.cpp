@@ -82,5 +82,36 @@ int main() {
     auto no_jungle = act3;
     no_jungle.erase(76);
     assert(act3_layout(no_jungle, d2d::rules::Rng{ 1 }).failed);
+    // Act 4 (FUN_00678a20): Pandemonium Fortress anchors Outer Steppes,
+    // Plains of Despair, City of the Damned; Chaos Sanctuary anchors its
+    // chain. Outer Steppes rolls flip 1 (y 968, 0x800000) or flip 0 (y 992, 0x400000).
+    LevelDefs act4 = {
+        { 103, { 40, 40, 1000, 1000 } }, { 104, { 80, 80, 0, 0, true } },
+        { 105, { 80, 80, 0, 0, true } }, { 106, { 80, 80, 0, 0, true } },
+        { 108, { 120, 120, 1500, 1000 } } };
+    int steppes_flips[2] = {};
+    for (std::uint32_t seed = 1; seed < 400; ++seed) {
+        const auto layout = act4_layout(act4, d2d::rules::Rng{ seed });
+        assert(layout.size() == 5);
+        assert(layout[0].level == 103 && layout[0].x == 1000 && layout[0].y == 1000);
+        assert(layout[1].level == 104 && layout[1].x == 1040);
+        assert((layout[1].flip == 1 && layout[1].y == 968 && layout[1].flags == 0x800000)
+            || (layout[1].flip == 0 && layout[1].y == 992 && layout[1].flags == 0x400000));
+        ++steppes_flips[layout[1].flip];
+        for (std::size_t i = 0; i < 4; ++i) {
+            const int link = kAct4Outdoors[i].link;
+            for (std::size_t j = 0; j < i; ++j)
+                if (int(j) != link) assert(apart(layout[i], layout[j]));
+            if (link >= 0) assert(touching(layout[i], layout[std::size_t(link)]));
+        }
+        assert(layout[4].level == 108 && layout[4].x == 1500 && layout[4].y == 1000);
+        // Reproducibility
+        const auto again = act4_layout(act4, d2d::rules::Rng{ seed });
+        for (std::size_t i = 0; i < 5; ++i) {
+            assert(again[i].x == layout[i].x && again[i].y == layout[i].y);
+            assert(again[i].flags == layout[i].flags && again[i].dir == layout[i].dir);
+        }
+    }
+    assert(steppes_flips[0] > 0 && steppes_flips[1] > 0);
     std::puts("test_drlg: ok");
 }

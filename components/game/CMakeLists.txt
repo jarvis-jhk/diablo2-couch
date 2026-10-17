@@ -3,7 +3,7 @@
 # tick, the protocol). No SDL, sound, pixels or fonts: the client
 # (apps/d2d) draws what it replicates. docs/PLAN.md "Where code goes".
 add_library(game STATIC ai.cpp fight.cpp gamedata.cpp gamedata_load.cpp objgroups.cpp world.cpp
-                        world_quests_act1.cpp world_quests_act2.cpp world_quests_act3.cpp)
+                        world_quests_act1.cpp world_quests_act2.cpp world_quests_act3.cpp world_quests_act4.cpp)
 target_include_directories(game PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 # std::thread (gamedata.cpp, d2d's main.cpp): before glibc 2.34 that needs
 # libpthread (fork: the Linux package builds on glibc 2.28).

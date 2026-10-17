@@ -48,6 +48,7 @@ const char* screen_name(Screen screen) {
         case Screen::InGame:     return "ingame";
         case Screen::Video:      return "video";
         case Screen::Cinematics: return "cinematics";
+        case Screen::Endgame:    return "endgame";
         case Screen::OtherMultiplayer: return "othermultiplayer";
         case Screen::TcpIp:      return "tcpip";
     }

@@ -42,7 +42,8 @@ Fedora and Arch (SteamOS's base) before it is released.
 | Act I (all areas and quests) | ✅ playable in D2Decomp |
 | Act II (all areas and quests) | ✅ playable in D2Decomp |
 | Act III (all areas and quests) | ✅ playable in D2Decomp |
-| Acts IV–V | 🚧 being built upstream |
+| Act IV (all areas and quests, Diablo) | ✅ playable in D2Decomp |
+| Act V | 🚧 being built upstream |
 | Two to four players on one screen | 🧪 preview — guests join with a pad, shared camera |
 | Controllers | 🧪 preview — stick walk, skills on buttons; menus still need the mouse |
 | Per-player inventory, stash, merchants | 📋 next |
@@ -101,8 +102,10 @@ player 1. Quest rewards fetched from an NPC (Den of Evil's skill point, Radament
 Charsi's imbue) are still player 1's only. Player 1 also carries the party's quests: a quest
 item a guest walks to (the Horadric Cube, Khalim's eye, the jade figurine, Lam Esen's tome …)
 goes into player 1's pack, and a quest object a guest uses (Khalim's chests, the sewer lever,
-the Gidbinn's altar, the compelling orb) works as if player 1 had used it. Mephisto's death
-counts for everyone's save too. The game no longer pauses under the Esc menu while guests
+the Gidbinn's altar, the compelling orb, the hellgate, the Hellforge, the Chaos Sanctuary's
+seals, Tyrael's portal) works as if player 1 had used it. Mephisto's and Diablo's deaths count
+for everyone's save too, whoever lands the blow, and so do the Act IV waypoints. Izual's
+skill points and the Hellforge's soulstone are player 1's, like the other NPC rewards. The game no longer pauses under the Esc menu while guests
 play. Each guest is saved when player 1 saves and leaves.
 
 Not there yet: guests have no inventory, stash, merchant or skill-tree screens, can't

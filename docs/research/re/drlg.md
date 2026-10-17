@@ -186,6 +186,89 @@ neighbours.
 d2d: `components/drlg` `act3_layout`; `diff_drlg.py 1-2000 75 layout`:
 2000/2000.
 
+## Act 4's layout (FUN_00678a20)
+
+Two chains through FUN_006772c0 (as act 2's: the third argument 0, no
+outdoor-flag rules), each check clear of every earlier record but its link
+(FUN_006770a0 / FUN_00677110 → FUN_0066b860, gap 0):
+
+| table | records |
+|---|---|
+| 0x6f0c00 | 103 Pandemonium Fortress (anchor, 1000,1000), 104 Outer Steppes ← 0 (FUN_00676c00), 105 Plains of Despair ← 1 (beside), 106 City of the Damned ← 2 (beside) |
+| 0x6f0cf0 | 108 Chaos Sanctuary (anchor, 1500,1000) |
+
+**Outer Steppes** (FUN_00676c00): one try, dir fixed 3 (right of the
+fortress); `next & 1` on the chain seed: 1 → (L.x + L.w, L.y + L.h − H + 8)
+and DAT_0096d66c = 0x800000; 0 → (L.x + L.w, L.y − 8), 0x400000.
+FUN_00678a20 then ORs DAT_0096d66c into level 104's outdoor flags, and
+FUN_00677680 links neighbours for 103..106 (`beside` as act 1's).
+
+The River of Flame (107) isn't in a chain: its maze build places it
+(FUN_00673320 below). Emulated (seeds 1–8): 104 at y 968 (0x800000) or 992
+(0x400000); 105 / 106 on beside's four sides.
+
+## Act 4's outdoors (FUN_0067e890, LevelTypes 27 / 28)
+
+Contact spans (FUN_00675770) for every level; borders (FUN_00675850) for
+all but 108. Border column 3 (LevelType 27; 0x6f0630: 799..810 Mesa
+Border 1..12); exits as act 1's (`+0x2c` file 3, 0x30400). FUN_006743c0's
+border flag doesn't cover 799..810 (only 4..15, 0x16c..0x177).
+
+**104..106, the Mesa:**
+
+1. FUN_0067e660: 104's flags 0x400000 → FortMesa (798, 8x24) at cell
+   (0, 1); 0x800000 → at (0, 4) (file −1, not border). Only 104 has them.
+2. Border LvlSub FUN_006752a0 types 1, 2, 3, base 0x31f (799).
+3. FUN_0067e6a0, `anywhere(def, −1, 0, 0xf)` (FUN_00674730) in order, with
+   M = 0x6f22b0[lid − 104] (812, 817, 823: the 24x24 "Mesa n") and P =
+   0x6f22a4[lid − 104] (828, 832, 832: the pits): 106 only 0x32b (811,
+   WarpLava); M, M+1, M+1, M+2, M+2, M+3, M+3; 105 only 0x336 (822,
+   Izual's 8x8); M+4 ×4; P, P+1 ×2, P+2 ×2, P+3 ×4.
+4. The finish: plain rooms LevelType 27 (DT1 mask 1, ground 0xa00000).
+
+**108, the Chaos Sanctuary** (FUN_0067e840): no borders; 25 presets of 24x24,
+i = 0..24 at cell ((i % 5)·3, (i / 5)·3), def 0x6f22c0[i], file −1:
+
+```
+836 836 836 836 836
+836 836 861 836 836      861 Arm N?   857 Entry
+836 858 862 859 836      858 Arm W  862 Diablo  859 Arm E
+836 836 860 836 836      860 Arm S
+836 836 857 836 836      836 LavaX filler
+```
+
+## Act 4's River of Flame (107, LevelType 28, maze)
+
+FUN_00673b30 case 28: the first room (24x24, LvlMaze rooms 6 / 6 / 6,
+Merge 500) and grow (FUN_00671210); no ring, no specials. Defs are
+836 + link mask (836 LavaX .. 851 NSEW, FUN_006709b0). Then, in place of
+FUN_00642590, FUN_00673320 (skipped when act +0x480 is 4):
+
+1. FUN_00670de0(def 852 WarpMesa, file −1, set_def 1) on side 3 (below) of
+   FUN_006724a0's room: the lowest (greatest y; ties keep the first)
+   non-special room with no side-3 link a probe fits below (FUN_00672340).
+2. The same with 855 BridgeLava on side 1 (above) of FUN_006723e0's room:
+   the topmost (least y).
+3. Two rooms (856 Bridge 2, file −1, special) chained above it, each
+   `alloc, place side 1, link 1, add` (a failed place frees it; the next
+   then has no room to go from — never seen).
+4. FUN_0066b790(last bridge, Chaos Sanctuary 108, side 1, is_town 0): the
+   Chaos Sanctuary becomes its neighbour node.
+5. Shift (computed now, applied after 7): dx = 2·bridge.w − bridge.x +
+   108.x, dy = 108.h − bridge.y + 108.y — the last bridge's top-left at
+   (108.x + 48, 108.y + 108.h), right under the sanctuary's entry.
+6. Level seed stepped once; FUN_006724e0 with 0x6f0474[low & 1]: {837 W →
+   853 ForgeW, else attach on side 2} or {838 E → 854 ForgeE, else side 0}:
+   the first non-special room of that def becomes the forge (file −1).
+7. FUN_00671320(836, last bridge): for each room listed before (level +8
+   count, list order) except the last bridge, sides 0..7 in turn (4 up-left,
+   5 up-right, 6 down-right, 7 down-left: FUN_00670880's eight cases), a
+   24x24 LavaX room (special, file −1) where it fits; linked, no set_def.
+8. Rooms moved by (dx, dy); the level's rect = its rooms' box (FUN_00642520).
+
+Then theme rooms / presets as every maze. Emulated (seeds 7, 8): 306 / 288
+rooms, 23 / 21 LavaX fill rooms; 107 at 1524,1120 (144x192, 96x216).
+
 ## Outdoor levels (DrlgType 3) — FUN_00675360
 
 The level's outdoor record (0x268 bytes, FUN_00675320) holds four cell
@@ -651,6 +734,25 @@ on level 133) keeps its wall; at sequence 0 or 4 it places the warp unit
 and stops there if that fails; then a LitVersion slot adds a twin wall
 at the same spot, sequence | LvlWarp Tiles << 8 (the cliff cave's
 lit mouth).
+
+**Animated presets** (LvlPrest Animate, preset +0x14; Act 4's lava 836..862):
+FUN_0066d290 counts, per layer, the extra entries animated keys need (a
+key's first candidate with DT1 header +6 & 0x100) and flags the room
+0x8000000; after the walk FUN_0066d700 runs FUN_0066d440 (DrlgAnim.cpp) on
+the walls, then the floors, then the shadows, as listed so far: each
+animated tile becomes its key's candidate with rarity 0, and the ones with
+rarity 1..n−1 (the frames; n the key's candidates) follow it onto the same
+list, flagged 8, at the same spot. The pick before it still rolled the
+room seed. d2d: `level_room_tiles` (`Preset::animate`).
+
+**FillBlanks** is the preset's own flag (LvlPrest FillBlanks, preset
++0x1c): 34 rows have 0, Act 4's lava among them; their empty floors stay
+empty. d2d: `Preset::fill_blanks`.
+
+**Preset units at bring-up** (FUN_00667890 → FUN_00667620): the roll is on
+the room's whole seed (room +0x14: its allocation step's low and high),
+outdoors too — the 1-in-2 MonPlace group50 roll reads the high word's
+parity (found on the Mesa's 24x24 presets).
 
 Room tiles as game.exe keeps them (room +0x54): walls +0x08 count /
 +0x14 array, floors +0x0c / +0x1c, shadows +0x10 / +0x24; 0x30-byte

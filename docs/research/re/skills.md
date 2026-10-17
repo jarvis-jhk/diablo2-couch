@@ -1348,3 +1348,28 @@ close but slow for FHR / FBR at high stat values (players get hit for
 1 – 4 more frames than in game.exe). Ship as-is until the real mechanism
 lands; the ponytail note in `combat.hpp` next to `speed_frames` should
 call out the FHR / FBR imprecision.
+
+### Act 4's monster skills (2026-10-14 traced; 2026-10-16 cast in `ai.cpp`)
+
+New srvstfunc / srvdofunc rows Act 4's monsters cast (tables 0x732140 /
+0x7322b0; skill record offsets as above: +0x48 srvmissilea, +0x4e its
+overlay, +0x12e / +0x130 / +0x134 hit flags, +0x138.. calc refs, +0x148..
+the Run sequence's numbers):
+
+| skill (Id) | srvst | srvdo | does |
+|---|---|---|---|
+| Nest (167, the vile mother's) | 49 FUN_005cbd10 | 91 FUN_005cbe00 | start: the point (FUN_0056e620), a free spot there (mask 0x100) stored in the unit's skill record (+0 class from MonStats spawn, x, y, mode); do: events cleared, a unit of that class at that spot (FUN_005b2f20, 1), flags 0x4020000, MonStats overlay (+0xe6) |
+| MegademonInferno (319), DiabLight (193) | 53 FUN_005cc240 | — | the breath's end frame (+ calc +0x13c, at least 1) in the skill record, state 0xc on |
+| DiabRun (198) | 54 FUN_005cd2c0 | 103 FUN_005cd380 | start: the target's id / type in the record, path to its spot; do (Params at +0x148..+0x15c): record flag 2 (the run over) → anim length Param1 (8) << 8, frame Param2 (14); at frame Param3 (5) runs (path type 1, velocity calc1 = 20, stat 0x43 read); at frame Param4 (13): length Param5 (16) << 8, back to frame Param6 (6); else, with unit +0x4e set, one hit with the skill's damage (FUN_0056e680, hit flags +0x130 \| 0x20) on the record's unit when in reach (FUN_00622c40), +0x4e cleared. Its sequence is MonSeq seq_diablorun (Sk5mode): 22 RN rows, event 2 on 5..13, event 1 on 18. d2d: `monster_update`'s DiabRun phases (2026-10-16) |
+| DiabLight (193) | — | 152 FUN_005cc690 | a missile (srvmissilea diablight, range from Missiles +0x9a / +0x9b × level / 8) at the target; while the record's end frame is ahead and state 0xc is on, events 0 / 1 cleared and event 0 at frame + calc +0x140; else ends (FUN_005cc3b0) |
+| DiabCold (194) | — | 100 FUN_005cce80 | the caster flag 0x40; one hit at the unit (flags +0x12e | 1, +0x130, +0x134), no block when stat 6 is 0; the overlay +0x4e |
+| FingerMageSpider (196) | — | 101 FUN_005ccfa0 | one srvmissilea (type 3) from the caster to the target (or its path's end); calc +0x138 the missile's level |
+| DiabWall (197) | — | 102 FUN_005cd1c0 | calc +0x138 missiles (diabwallmaker, flags 0x21) from him at the target's spot (FUN_0056d2c0), each with FUN_005cd110 and its index: range capped at 77, its seed {target x + index, 666} (FUN_00650e40), one draw; at 20+ of 100 Charged Bolt's wiggle (path type 10, steps = range), else straight. d2d: Missile::wall_maker (2026-10-16) |
+| DiabPrison (199) | — | 104 FUN_005cd5d0 | at the point's unit (or the path's target unit, type 2): FUN_005b34c0 makes the bone prison round it when its room isn't a town (FUN_0061ab00): FUN_005b3270 with 0x73d4f0 {4 pieces; (1, 1) kind 1, (1, −1), (−1, −1), (−1, 1) kind 3: only after a piece stood}, class 0x154 boneprison1 (AI Idle), radius 8 |
+| RegurgitatorEat (214) | — | 108 FUN_005cdc10 | the target a monster corpse (mode 12): its corpse removed (FUN_0061a270, FUN_00555600); heals its life (stat 6) by a share of the corpse's max life (calc +0x138 %, FUN_00483360(100): the args are register-passed, read the asm), capped at its own max |
+| MonCurseCast (212) | — | 112 FUN_005ce2b0 | `rand(5)` on the caster's unit seed picks a curse from 0x6e3228 {Amplify Damage, Weaken, Life Tap, Decrepify, Lower Resist}; its state's stat list built per pick (the decompile's case labels don't line up with the five rows: read the jump table when porting), cast through FUN_0056e780 / FUN_005c35c0 at the target's area (calc +0x64 radius, +0x60 length) |
+| DoomKnightMissile (335) | — | 148 FUN_005cdfb0 | srvmissilea + the caster's variant (unit +0x14 +0xe) when that row exists; FUN_0056ee90 when the skill's +4 flag (& 0x6ce26c), else FUN_0056ecb0 |
+
+Already in d2d's table: 22 Nova (Frost Nova, DiabFire), 24 wall
+(PrimeFirewall), 18 self state (MonBoneArmor), 10 guided (MonBoneSpirit),
+30 curse (Decrepify), 96 Bestow, 95 breath (MegademonInferno's do).

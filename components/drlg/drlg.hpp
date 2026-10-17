@@ -34,8 +34,8 @@ struct Placed { int level = 0, x = 0, y = 0, width = 0, height = 0, dir = -1, fl
 
 // How a record places its level against its link (game.exe's callbacks).
 // Act 2's: RockyWaste (FUN_006769a0), Shifted (FUN_00676280), Flush
-// (FUN_00676ae0).
-enum class Place { Anchor, Beside, BloodMoor, Town, Fixed, RockyWaste, Shifted, Flush };
+// (FUN_00676ae0). Act 4's: OuterSteppes (FUN_00676c00).
+enum class Place { Anchor, Beside, BloodMoor, Town, Fixed, RockyWaste, Shifted, Flush, OuterSteppes };
 struct Record { Place how; int level; int link; };
 
 // Act 1's two chains (0x6f0750, 0x6f0840): Stony Field anchors Cold
@@ -55,6 +55,16 @@ inline const std::vector<Record> kAct2Outdoors = {
     { Place::Anchor, 40, -1 }, { Place::RockyWaste, 41, 0 }, { Place::Shifted, 42, 1 }, { Place::Shifted, 43, 2 },
     { Place::Shifted, 44, 3 }, { Place::Flush, 45, 4 } };
 inline const std::vector<Record> kAct2Canyon = { { Place::Anchor, 46, -1 } };
+
+// Act 4's chains (0x6f0c00, 0x6f0cf0; FUN_00678a20): Pandemonium Fortress
+// anchors Outer Steppes, Plains of Despair, City of the Damned; Chaos
+// Sanctuary anchors its chain. No outdoor flag rules.
+inline const std::vector<Record> kAct4Outdoors = {
+    { Place::Anchor, level_ids::kPandemoniumFortress, -1 },
+    { Place::OuterSteppes, level_ids::kOuterSteppes, 0 },
+    { Place::Beside, level_ids::kPlainsOfDespair, 1 },
+    { Place::Beside, level_ids::kCityOfTheDamned, 2 } };
+inline const std::vector<Record> kAct4Chaos = { { Place::Anchor, level_ids::kChaosSanctuary, -1 } };
 
 // Which (town dir, town flip, Blood Moor dir, Blood Moor flip) are allowed
 // (0x6f1158), indexed dir + 4 flip + 8 bm_dir + 32 bm_flip.
@@ -104,6 +114,14 @@ inline std::vector<Placed> place_chain(const std::vector<Record>& recs, const Le
     // every one has been tried.
     auto next_side = [&](int index, bool with_flip, int sides) {
         auto& placement = placed[std::size_t(index)];
+        if (sides == 1) {                                          // Outer Steppes (FUN_00676c00): fixed dir 3, roll flip
+            if (start_dir[std::size_t(index)] == -1) {
+                start_dir[std::size_t(index)] = placement.dir = 3;
+                start_flip[std::size_t(index)] = placement.flip = int(seed.next() & 1);
+                return true;
+            }
+            return false;
+        }
         if (sides == 2) {                                          // the Rocky Waste: left (1) or above (2)
             if (start_dir[std::size_t(index)] == -1) { start_dir[std::size_t(index)] = placement.dir = int(seed.next() & 1) + 1; return true; }
             const int next = 3 - placement.dir;
@@ -143,8 +161,8 @@ inline std::vector<Placed> place_chain(const std::vector<Record>& recs, const Le
             placement.y = linked.y + linked.height;
             return true;
         }
-        const bool flips = record.how == Place::BloodMoor || record.how == Place::Town;
-        const int sides = record.how == Place::RockyWaste ? 2 : record.how == Place::Shifted || record.how == Place::Flush ? 8 : 4;
+        const bool flips = record.how == Place::BloodMoor || record.how == Place::Town || record.how == Place::OuterSteppes;
+        const int sides = record.how == Place::OuterSteppes ? 1 : record.how == Place::RockyWaste ? 2 : record.how == Place::Shifted || record.how == Place::Flush ? 8 : 4;
         if (!next_side(index, flips, sides)) return false;
         if (record.how == Place::BloodMoor) {                      // 96x56 left/right, 56x96 above/below
             placement.width = placement.dir & 1 ? 96 : 56;
@@ -152,6 +170,11 @@ inline std::vector<Placed> place_chain(const std::vector<Record>& recs, const Le
         }
         const int width = placement.width, height = placement.height, left = linked.x, top = linked.y, right = linked.x + linked.width, bottom = linked.y + linked.height;
         auto put_at = [&](int x, int y) { placement.x = x; placement.y = y; };
+        if (record.how == Place::OuterSteppes) {                   // FUN_00676c00: right, flip 1 bottom+8 / flip 0 top-8
+            put_at(right, placement.flip == 1 ? bottom - height + 8 : top - 8);
+            placement.flags |= placement.flip == 1 ? 0x800000 : 0x400000;
+            return true;
+        }
         if (record.how == Place::RockyWaste) {                     // left, top-aligned; or above, left-aligned
             put_at(placement.dir == 1 ? left - width : left, placement.dir == 1 ? top : top - height);
             return true;
@@ -256,6 +279,15 @@ inline std::vector<Placed> act2_layout(const LevelDefs& defs, d2d::rules::Rng ac
     auto outdoors = place_chain(kAct2Outdoors, defs, act_seed, false, false);
     const auto canyon = place_chain(kAct2Canyon, defs, act_seed, false, false);
     outdoors.insert(outdoors.end(), canyon.begin(), canyon.end());
+    return outdoors;
+}
+
+// Act 4's outdoor levels (FUN_00678a20), both chains from the act seed.
+// The chain check (FUN_006770a0 / FUN_00677110) is the plain overlap one.
+inline std::vector<Placed> act4_layout(const LevelDefs& defs, d2d::rules::Rng act_seed) {
+    auto outdoors = place_chain(kAct4Outdoors, defs, act_seed, false, false);
+    const auto chaos = place_chain(kAct4Chaos, defs, act_seed, false, false);
+    outdoors.insert(outdoors.end(), chaos.begin(), chaos.end());
     return outdoors;
 }
 

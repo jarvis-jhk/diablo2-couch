@@ -93,6 +93,16 @@ void lend(World& host, World& guest) {
     swap(host.summoner, guest.summoner);
     swap(host.tombs, guest.tombs);
     swap(host.guard_line, guest.guard_line);
+    swap(host.izual, guest.izual);
+    swap(host.hellforge, guest.hellforge);
+    swap(host.terror, guest.terror);
+    swap(host.izual_ghost_at, guest.izual_ghost_at);
+    swap(host.diablo_at, guest.diablo_at);
+    swap(host.diablo_dead_at, guest.diablo_dead_at);
+    swap(host.fortress_warp_done, guest.fortress_warp_done);
+    swap(host.end_movie, guest.end_movie);
+    swap(host.game_closed, guest.game_closed);
+    swap(host.had_soulstone, guest.had_soulstone);
     swap(host.game_bits, guest.game_bits);
     swap(host.hosted_quests, guest.hosted_quests);
     swap(host.den_left, guest.den_left);
@@ -262,7 +272,11 @@ void Party::tick(const std::vector<game::Command>& host_cmds, std::span<const st
             if (guest.level == host.level && std::size_t(npc) < host.level->npcs.size()) host.operate(npc, now_ms);
         for (const int id : guest.couch_quest_items)
             if (const int ground = host.loot.index_of(id); ground >= 0) host.pick_up(std::size_t(ground));
-        guest.couch_for_host.clear(); guest.couch_quest_items.clear();
+        // A monster the guest's own blow killed: the host's quest hooks run
+        // for it (Mephisto opens the hellgate, a seal boss frees Diablo,
+        // Diablo ends Terror's End), and step 4 shares the result.
+        for (const auto& kill : guest.couch_kills) host.couch_kill(kill, now_ms);
+        guest.couch_for_host.clear(); guest.couch_quest_items.clear(); guest.couch_kills.clear();
         if (guest.level != host.level) follow(guest, host);      // the host took a quest's portal
     }
     // 4. What the party earned this tick, in each guest's own save.

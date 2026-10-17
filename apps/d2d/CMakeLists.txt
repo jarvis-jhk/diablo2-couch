@@ -4,6 +4,71 @@
 find_package(SDL3 CONFIG REQUIRED)
 # Sound: OpenAL (openal-soft), like ../thirdeye. cmake/FindOpenAL.cmake.
 find_package(OpenAL REQUIRED)
+
+set(SENTRY_BACKEND crashpad CACHE STRING "Sentry crash-reporting backend" FORCE)
+set(SENTRY_BUILD_SHARED_LIBS OFF CACHE BOOL "Build Sentry Native statically" FORCE)
+set(SENTRY_BUILD_TESTS OFF CACHE BOOL "Build Sentry Native tests" FORCE)
+set(SENTRY_BUILD_EXAMPLES OFF CACHE BOOL "Build Sentry Native examples" FORCE)
+set(SENTRY_BUILD_BENCHMARKS OFF CACHE BOOL "Build Sentry Native benchmarks" FORCE)
+set(SENTRY_ENABLE_INSTALL OFF CACHE BOOL "Install Sentry Native" FORCE)
+set(SENTRY_SCREENSHOT none CACHE STRING "Do not capture crash screenshots" FORCE)
+# Fork: our builds never send to Sentry (no DSN, apps/launcher/CMakeLists.txt;
+# our own crash line is couch/fault_report.hpp), so no transport and no libcurl
+# for the portable Linux tarball to carry.
+set(SENTRY_TRANSPORT none CACHE STRING "Sentry transport" FORCE)
+FetchContent_Declare(
+    sentry_native
+    GIT_REPOSITORY https://github.com/getsentry/sentry-native.git
+    GIT_TAG        0.17.3
+    GIT_SHALLOW    TRUE
+    GIT_SUBMODULES external/crashpad external/third_party/lss
+    GIT_SUBMODULES_RECURSE TRUE
+)
+FetchContent_MakeAvailable(sentry_native)
+
+# The project treats its own warnings as errors. Do not let that policy turn
+# warnings in the separately maintained Sentry/Crashpad sources into failures.
+function(d2d_allow_vendor_warnings directory)
+    get_property(targets DIRECTORY "${directory}" PROPERTY BUILDSYSTEM_TARGETS)
+    foreach(target IN LISTS targets)
+        get_target_property(target_type ${target} TYPE)
+        if(NOT target_type STREQUAL "INTERFACE_LIBRARY")
+            if(MSVC)
+                target_compile_options(${target} PRIVATE
+                    "$<$<COMPILE_LANGUAGE:C,CXX>:/WX->")
+            else()
+                target_compile_options(${target} PRIVATE
+                    "$<$<COMPILE_LANGUAGE:C,CXX>:-Wno-error>")
+            endif()
+        endif()
+    endforeach()
+    get_property(subdirectories DIRECTORY "${directory}" PROPERTY SUBDIRECTORIES)
+    foreach(subdirectory IN LISTS subdirectories)
+        d2d_allow_vendor_warnings("${subdirectory}")
+    endforeach()
+endfunction()
+d2d_allow_vendor_warnings("${sentry_native_BINARY_DIR}")
+install(FILES "${sentry_native_SOURCE_DIR}/LICENSE"
+    DESTINATION share/licenses/sentry-native)
+install(FILES "${sentry_native_SOURCE_DIR}/external/crashpad/LICENSE"
+    DESTINATION share/licenses/crashpad)
+install(FILES "${sentry_native_SOURCE_DIR}/external/crashpad/third_party/mini_chromium/mini_chromium/LICENSE"
+    DESTINATION share/licenses/mini-chromium)
+install(FILES "${sentry_native_SOURCE_DIR}/external/crashpad/third_party/lss/lss/LICENSE"
+    DESTINATION share/licenses/crashpad-lss)
+install(FILES "${sentry_native_SOURCE_DIR}/external/third_party/lss/LICENSE"
+    DESTINATION share/licenses/sentry-lss)
+install(FILES "${sentry_native_SOURCE_DIR}/external/crashpad/third_party/zlib/zlib/LICENSE"
+    DESTINATION share/licenses/crashpad-zlib)
+install(FILES "${sentry_native_SOURCE_DIR}/external/crashpad/third_party/cpp-httplib/cpp-httplib/LICENSE"
+    DESTINATION share/licenses/cpp-httplib)
+install(FILES "${sentry_native_SOURCE_DIR}/external/crashpad/third_party/getopt/LICENSE"
+    DESTINATION share/licenses/crashpad-getopt)
+install(FILES "${sentry_native_SOURCE_DIR}/external/crashpad/third_party/mpack/LICENSE"
+    DESTINATION share/licenses/crashpad-mpack)
+install(FILES "${sentry_native_SOURCE_DIR}/vendor/libunwind/COPYING"
+    DESTINATION share/licenses/sentry-libunwind)
+
 # Cinematics: FFmpeg decodes Bink (video.hpp); sound and music are WAVs,
 # which SDL decodes. A distro's FFmpeg brings every codec and ~100 MB of
 # codec libraries to ship, so by default a static Bink-only FFmpeg (LGPL)
@@ -102,11 +167,12 @@ add_executable(d2d
 target_include_directories(d2d PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
 # Fork: the version a fault report names (the launcher's git describe stamp;
 # only a tag's own build reports, couch/fault_report.hpp).
-target_compile_definitions(d2d PRIVATE D2COUCH_VERSION="${D2D_VERSION}")
+target_compile_definitions(d2d PRIVATE D2COUCH_VERSION="${D2D_VERSION}"
+    D2D_WITH_SENTRY "D2D_APP_VERSION=\"${D2D_VERSION}\"")
 target_link_libraries(d2d PRIVATE
     ${ffmpeg_target}   # first: its headers before a system FFmpeg's in /opt/homebrew/include
     game couch_party net mpq d2s rules drlg txt userdir cof compcode dc6 dcc ds1 dt1 font palette tbl devctl screenshot
-    SDL3::SDL3 CLI11::CLI11 ${OPENAL_LIBRARY})
+    SDL3::SDL3 CLI11::CLI11 ${OPENAL_LIBRARY} sentry)
 target_include_directories(d2d SYSTEM PRIVATE ${OPENAL_INCLUDE_DIR})
 d2d_check_headers(d2d_headers LINK
     ${ffmpeg_target}   # first: its headers before a system FFmpeg's in /opt/homebrew/include

@@ -97,6 +97,9 @@ void advance_char_states(CharCreateUI& create_ui,
 // Hardcore-checkbox rect — RE'd char-create master table 0x70b0b0.
 constexpr int kHardcoreX = 319, kHardcoreW = 15, kHardcoreH = 16;
 constexpr int kHardcoreY = rec_top(560, kHardcoreH);
+// The Expansion Character box (record 0xD4, (319, 540), FUN_00430770: status
+// bit 0x20) and its label's hitbox 0xD3 (339, 561, 200 x 32, string 0x58cb).
+constexpr int kExpansionY = rec_top(540, kHardcoreH);
 
 void handle_charcreate_click(CharCreateUI& create_ui,
                              const Scene& scene,
@@ -139,6 +142,27 @@ constexpr std::array<const char*, 7> kCinematicVideo = {
     R"(data\local\video\ENG\Act03start640x292.bik)", R"(data\local\video\ENG\Act04start640x292.bik)",
     R"(data\local\video\ENG\Act04end640x292.bik)",   R"(data\local\video\ENG\D2x_Intro_640x292.bik)",
     R"(data\local\video\ENG\D2x_Out_640x292.bik)" };
+
+// The classic endgame screen (FUN_0044e770), after ACT04END on leaving the
+// game Diablo died in: ui\menu\endgame on its own palette, two 320x480
+// halves bottom-anchored at (0, 256) (0, H-1) / (W/2, 256) (W/2, H); in
+// font42 gold, centred: 0x13ea at baseline 62, 0x13eb at 107, the name at
+// 187, 0x13ec at 232, the title just earned and the name at 277
+// (FUN_0044d3e0, FUN_0044e5a0); endgameok at (W/2-48, H-80) with 0x13ee in
+// font16 (pressed: 2 left, 2 down). Its click (FUN_0044e4f0) goes on to the
+// main menu.
+// ponytail: classic only; LoD's endgame2 layout is never reached (its end is Tyrael's portal).
+struct EndgameUI {
+    d2d::dc6::Sprite background, ok;
+    d2d::palette::Palette pal;
+    std::array<std::string, 3> lines;
+    std::string name, titled, ok_label;
+    bool pressed = false;
+};
+EndgameUI endgame_ui(const Scene& scene, const d2d::d2s::Header& header);
+// Whether the point is on its OK (FUN_0044e460 / FUN_0044e4f0).
+bool endgame_on_ok(int x, int y);
+void render_endgame(std::vector<std::uint8_t>& framebuffer, const Scene& scene, const EndgameUI& endgame);
 
 // Other Multiplayer (FUN_00430c50, docs/research/re/tcpip-menu.md): the
 // title's background and logo (FUN_0043c4f0) under records 0xff OPEN

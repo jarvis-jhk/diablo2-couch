@@ -103,6 +103,9 @@ static std::string dump(const OutdoorAssets& assets, std::uint32_t seed, int id,
             const auto [court_x, court_y] = level_origin(assets.levels, *court);
             rect = { court_x, court_y, to_int(assets.levels.get(*court, "SizeX")), to_int(assets.levels.get(*court, "SizeY")) };
         }
+        if (id == level_ids::kRiverOfFlame)                  // FUN_00673320 hangs it under the Chaos Sanctuary
+            for (const auto& placement : act4_layout(level_defs(assets.levels), act_seed(seed)))
+                if (placement.level == level_ids::kChaosSanctuary) rect = { placement.x, placement.y, placement.width, placement.height };
         auto rooms = preset_level ? generate_preset(assets.data, id, width, height, level_seed(seed, id), notes, court_file)
                                   : generate_maze(assets.data, maze, id, width, height, level_seed(seed, id), 0, notes, court_file, &rect);
         pf("level %d at %d,%d size %dx%d\n", id, rect[0], rect[1], rect[2], rect[3]);
@@ -144,11 +147,12 @@ static std::string dump(const OutdoorAssets& assets, std::uint32_t seed, int id,
         return out.str();
     }
     const auto act3 = act3_layout(level_defs(assets.levels), act_seed(seed));
-    const auto layout = id >= level_ids::kKurastDocks ? act3.levels
+    const auto layout = id >= level_ids::kPandemoniumFortress ? act4_layout(level_defs(assets.levels), act_seed(seed))
+                      : id >= level_ids::kKurastDocks ? act3.levels
                       : id >= level_ids::kLutGholein ? act2_layout(level_defs(assets.levels), act_seed(seed)) : act1_from_map_seed(level_defs(assets.levels), seed);
     if (std::getenv("DRLG_LAYOUT"))
         for (const auto& placement : layout) std::fprintf(stderr, "layout %d at %d,%d %dx%d dir %d flip %d flags %x\n", placement.level, placement.x, placement.y, placement.width, placement.height, placement.dir, placement.flip, placement.flags);
-    const auto level = id >= level_ids::kKurastDocks ? act3_outdoor_level(assets.levels, act3, id) : outdoor_level(assets.levels, layout, id);
+    const auto level = level_ids::act_of(id) == 2 ? act3_outdoor_level(assets.levels, act3, id) : outdoor_level(assets.levels, layout, id);
     const auto outdoor = generate_outdoor(assets.data, level, level_seed(seed, id));
     pf("level %d at %d,%d size %dx%d\n", id, level.rect.x, level.rect.y, level.rect.width, level.rect.height);
     pf("flags %x\n", outdoor.flags);
@@ -340,7 +344,7 @@ static std::string dump_game(d2d::game::GameData& game, std::uint32_t seed, cons
 // order, then each NPC with the Npc AI and a path thinks `thinks` times
 // (rules::npc_think); a walk puts it at the spot, every other one 4
 // subtiles short on x; its mode is NU at each think. Lines sorted.
-// The town's NPCs thinking (tools/emu npcs.py): level 1 the camp, 40 Lut Gholein.
+// The town's NPCs thinking (tools/emu npcs.py): level 1 the camp, else any act's town.
 static std::string dump_npcs(d2d::game::GameData& game, std::uint32_t seed, int thinks, int lid) {
     d2d::game::set_map_seed(game, seed);
     auto spawning = d2d::game::start_spawning(game, 0);
@@ -445,6 +449,16 @@ int main(int argc, char** argv) {
         const auto last = dash == std::string::npos ? first : std::uint32_t(std::stoul(range.substr(dash + 1), nullptr, 0));
         for (auto seed = first;; ++seed) {
             std::ostringstream out;
+            if (id >= level_ids::kPandemoniumFortress) {     // act 4, as drlg.act4_layout_dump
+                auto layout = act4_layout(defs, act_seed(seed));
+                std::ranges::sort(layout, {}, &Placed::level);
+                for (const auto& placement : layout)
+                    out << "level " << placement.level << " at " << placement.x << ',' << placement.y << " size " << placement.width << 'x' << placement.height << '\n';
+                if (argc > 5) std::ofstream(fs::path(argv[4]) / (std::to_string(seed) + ".txt")) << out.str();
+                else std::fputs(out.str().c_str(), stdout);
+                if (seed == last) break;
+                continue;
+            }
             if (id >= level_ids::kKurastDocks) {     // act 3, as drlg.act3_layout_dump
                 const auto act3 = act3_layout(defs, act_seed(seed));
                 for (const auto& placement : act3.levels) {
@@ -549,7 +563,7 @@ int main(int argc, char** argv) {
         const auto first = std::uint32_t(std::stoul(range.substr(0, dash), nullptr, 0));
         const auto last = dash == std::string::npos ? first : std::uint32_t(std::stoul(range.substr(dash + 1), nullptr, 0));
         for (auto seed = first;; ++seed) {
-            const auto text = dump_npcs(*game, seed, thinks ? std::atoi(thinks) : 40, id == 40 || id == 75 ? id : 1);
+            const auto text = dump_npcs(*game, seed, thinks ? std::atoi(thinks) : 40, level_ids::is_town(id) ? id : 1);
             if (argc > 5) std::ofstream(fs::path(argv[4]) / (std::to_string(seed) + ".txt")) << text;
             else std::fputs(text.c_str(), stdout);
             if (seed == last) break;
