@@ -278,3 +278,10 @@
   its libcrypto.so.1.1 ship. Tarball 39 MB.
 - Not verified: a real desktop session, Wayland-only sessions (Qt falls back to XWayland;
   only the xcb platform plugin ships), physical pads, the Deck.
+- v0.0.5 published: https://github.com/jarvis-jhk/diablo2-couch/releases/tag/v0.0.5 from 85edbc2.
+  Push run 38983296567 and tag run 38984336418 green (Linux/Windows/macOS/both Flatpaks,
+  linux-portable build + all four distro starts; source SHA checked in the Linux, Windows and
+  portable job logs). All five assets downloaded, SHA-256 equal to GitHub's digests (hashes in
+  the release notes); the released tarball's launcher drew its window here (Debian 12, Xvfb),
+  the Windows zip holds d2d.exe, d2d-launcher.exe, SDL3.dll. Warpzone's Linux/Deck entries
+  point at this tarball, which now starts there. Next version > v0.0.5.

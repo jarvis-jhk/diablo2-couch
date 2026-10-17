@@ -39,7 +39,7 @@ becomes a GitHub issue; Flatpak for Linux/Deck, Windows zip, assets checksum-ver
 - [~] Linux/Windows/Deck builds, installer, update notice, first-start changelog (2026-10-16:
       launcher update check against our releases, CHANGELOG.md shown once after an update).
       2026-10-17: the Linux tarball is built on glibc 2.28 (linux-portable.yml) and started
-      on Ubuntu 24.04, Debian 12, Fedora and Arch in CI. Open: a self-installing update
+      on Ubuntu 24.04, Debian 12, Fedora and Arch in CI (v0.0.5). Open: a self-installing update
       (today the launcher links the release page).
 - [x] Anonymous fault relay (ntfy → GitHub issue → lane), 2026-10-16.
 - [x] Prerelease v0.0.2 with the above (2026-10-16); combined item closed.
