@@ -18,6 +18,11 @@ camera, with keyboard+pad or two pads.
       components/couch/party (guest Worlds lent the host's game state; test_couch_party,
       needs MPQs). Upstream's PlayerSession split (net-host.md stage 1) would replace it;
       asked upstream in psi29a/d2decomped#30.
+      2026-10-18: upstream now plans couch co-op natively — #34 session split, #36 SDL3
+      gamepads, #38 gamepad menus/panels, #40 four-player shared screen, #35 Deck, #33
+      remapping. Its PRs need a human owner/sign-off and gamepad footage (Jan's decision,
+      NOTES 2026-10-18). Rule: when an upstream piece lands, migrate onto it and retire the
+      fork's equivalent (party layer, apps/d2d/couch input) instead of keeping both.
 - [x] One shared camera following the group, with a leash keeping players on screen
       (rules 2026-10-14, wired 2026-10-16).
 - [x] Controller input per player (SDL3 gamepads), direct stick movement, skill buttons

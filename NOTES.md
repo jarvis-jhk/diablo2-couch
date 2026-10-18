@@ -342,3 +342,41 @@
   Plan: our fault_report already writes a pending crash line and posts it detached; add the
   Warpzone POST as the first target (stable title, version/platform only in detail), ntfy relay
   stays as fallback. ROADMAP M2 item added.
+
+## 2026-10-18 — weekly upstream sync (t_mvdarqta1io9tu)
+- Merged upstream 958ec02 (14 commits since fd86f34) as 9896f2f: opt-in widescreen in-game view
+  (`--widescreen` / `widescreen = 1` / `--view-width`, world up to 1400x600, HUD stays the centre
+  800x600; launcher checkbox), Act IV fidelity (seals, forge, Diablo's target and score of pets
+  and mercs via unit_pick), Nightmare/Hell population through the objgroups port, knights' curse
+  and missiles, monsters keep thinking while the player is dead, guided missiles keep their
+  target by unit id, Coverity model. No Act V (README: "not started"), no hosting, no controllers.
+- Conflicts: README (ours; docs/D2DECOMP-README.md refreshed verbatim), ingame.hpp/.cpp and
+  town.cpp (our hero_at and upstream's `wide` buffer both passed), main.cpp (both settings),
+  fight.cpp (upstream's merc pick, curse_dr and the AI-state list (curses + new `marks`) went
+  into side_pair(), so every hero's side carries them; the owner-alive missile predicate added
+  to our call), world.cpp (upstream's dead-player gate around warp/portal/corpse kept, our
+  `host` gates inside it). Fight gained `marks` (per-hero Fight, nothing to lend).
+- Couch + widescreen: the leash frame now widens with the view (g_view_width / 2 - 64 px each
+  side), so a wide view lets the party spread further. Untested with real data, like the rest.
+- Local clang 23 build of game/couch/tests clean, 38/38 ctest (MPQ tests skip); town.cpp and
+  ingame.cpp syntax-checked against the SDL3 headers (main.cpp needs sentry.h, not available
+  here). CI run 39096094671 on 9896f2f all green: Linux GCC, Windows MSVC, macOS, both Flatpaks,
+  linux-portable + four distro starts; 43/43 on Linux and Windows (couch tests passed, party
+  SKIPs without MPQs), source SHA checked in both job logs. No release: nothing couch-side new.
+- ⚠️ Upstream answered psi29a/d2decomped#30 (2026-10-17): co-op is welcome as a NATIVE D2D
+  feature, outside PRs welcome, AI assistance fine, BUT a human must own each contribution
+  (review, test, take responsibility, sign off), no AI co-authorship, and PRs only after local
+  testing with screenshots/video of a gamepad working. Stage 1 session split OK as small
+  behaviour-preserving PRs with tests; controllers/Deck are the maintainer's priority; agree a
+  first milestone against docs/design/controller-plan.md first. He asked @jarvis-jhk to take #36
+  and filed #33 (controls/remapping UI), #34 (GameSession/PlayerSession split), #35 (Deck),
+  #36 (SDL3 gamepad + default layout), #38 (gamepad menus/panels), #40 (four-player
+  shared-screen local co-op with local characters/saves, lobby, one shared camera) — i.e.
+  upstream now plans our whole M1/M2 natively.
+  Replied on #30 (comment 6245512537): honest that the fork is AI-maintained, the human
+  sign-off and footage are the owner's decision, no PR before both hold, no data/pads here,
+  please don't hold #36 for us. OPEN DECISION FOR JAN (record only, releases-only lane):
+  whether he wants to be the human who reviews/tests/signs off upstream PRs. Until then:
+  no upstream PRs, keep the fork's party layer, merge upstream weekly, and when #34/#36/#40
+  land upstream, move the fork onto them (drop components/couch/party and apps/d2d/couch
+  input in favour of upstream's) rather than diverging.
