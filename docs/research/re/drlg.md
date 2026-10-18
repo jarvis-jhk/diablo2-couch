@@ -1163,10 +1163,11 @@ values (seed 3) so a regression shows without the emulator.
 
 Conditions those results hold under, so they aren't overstated:
 
-- **Normal difficulty only.** Every run passes difficulty 0. The Blood
-  Moor's sizes don't change with difficulty; the maze's room count
-  would (LvlMaze.txt in 1.14d has one Rooms column, game.exe's .bin has
-  three; d2d uses the one for all) — untested for Nightmare / Hell.
+- **Normal difficulty only, for the comparisons above.** Every listed
+  run passes difficulty 0. The Blood Moor's sizes don't change with
+  difficulty; d2d and `drlg-dump` pick a maze's Rooms / Rooms(N) /
+  Rooms(H) by difficulty, but these tables don't cover Nightmare / Hell.
+  monsters.md "Nightmare and Hell" has the all-difficulty population runs.
 - **Tiles depend on room bring-up order** (edge sharing, see Room tiles).
   Proven for game.exe's room-list order with only that level's rooms up,
   and the collision grids for shuffled and reversed orders
@@ -1207,8 +1208,8 @@ Conditions those results hold under, so they aren't overstated:
 | What the server does with units: superunique mods and stat bonuses, minion placement, MonPlace units; objects' behaviour (shrines, chests); monster populating in general (d2d populates every room at load, in cell order, one game seed across both levels) | partly built, not diffed |
 
 d2d: `components/drlg/outdoor.hpp` (`generate_outdoor`), data loading in
-`outdoor_data.hpp`, `tests/test_outdoor.cpp`; the app's `load_wilderness`
-and `Town::cross_level`.
+`outdoor_data.hpp`, `tests/test_outdoor.cpp`; `build_outdoor`
+(components/game/gamedata.cpp) and `World::cross_level`.
 
 ### Taking a warp (FUN_005550b0)
 

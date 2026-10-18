@@ -612,7 +612,7 @@ struct ObjectRooms {
                 auto own = made(row, x, y);
                 ++pop.uniques;                                          // FUN_005a0320: the count FUN_005be020 reads
                 const auto& type = types[std::size_t(row)];
-                auto boss = d2d::rules::roll_boss(game_data.umods, type, 0, false, own, false);
+                auto boss = d2d::rules::roll_boss(game_data.umods, type, pop.difficulty, false, own, false);
                 const int minion = type.minion[0] >= 0 ? type.minion[0] : row;
                 for (int count = own(4) + 3; count > 0; --count)
                     if (int at_x, at_y; put(minion, x, y, 3, false, at_x, at_y)) { made(minion, at_x, at_y); tag(spawns->size() - 1, Boss::minion); }
@@ -627,13 +627,14 @@ struct ObjectRooms {
         if (sup) {
             superuniques.set(std::size_t(superunique));
             if (!d2d::rules::act_boss(row, types[std::size_t(row)].base)) ++pop.uniques;   // FUN_005a0320 as a boss, unless made() did
-            std::vector<int> mods;
-            for (const int id : sup->mods) if (id != 24) mods.push_back(id);
+            // Its mods, `difficulty` more unique ones on its own seed (FUN_005a0600).
+            auto mods = d2d::rules::superunique_mods(game_data.umods, types[std::size_t(row)], sup->mods, pop.difficulty, own);
             mods.push_back(22);                                         // questcomplete
             tag(first, Boss::superunique, std::move(mods));
             if (spawns && first < spawns->size()) (*spawns)[first].super = superunique;
             const int minion = types[std::size_t(row)].minion[0] >= 0 ? types[std::size_t(row)].minion[0] : row;
-            for (int count = own(sup->max_grp - sup->min_grp + 1) + sup->min_grp; count > 0; --count)   // FUN_005a0c00: a draw even when MinGrp == MaxGrp
+            const int more = sup->min_grp && sup->max_grp ? pop.difficulty : 0;   // each + difficulty when both are set
+            for (int count = own(sup->max_grp - sup->min_grp + 1) + sup->min_grp + more; count > 0; --count)   // FUN_005a0c00: a draw even when MinGrp == MaxGrp
                 if (int at_x, at_y; put(minion, spot_x, spot_y, 3, false, at_x, at_y)) { made(minion, at_x, at_y); tag(spawns->size() - 1, Boss::minion); }
             own.next();                                                 // FUN_005a0ce0: its name seed (data +0x14), unused for a superunique
             // FUN_005a49b0 by its hcIdx: Radament's (10) company, each FUN_005b23c0
@@ -671,7 +672,7 @@ struct ObjectRooms {
     // a roll beats 20) and rolls unique or group (FUN_005be020), all on the room seed.
     void populate(bool none) {
         ++pop.rooms_done;
-        const int density = std::min(level.mon.density[0], 10000);
+        const int density = std::min(level.mon.density[std::size_t(pop.difficulty)], 10000);
         if (none || density <= 0 || pop.rooms_total == 0 || index >= level.room_areas.size()) return;
         for (const auto& room_area : level.room_areas[index]) {
             if (!room_area.id || room_area.skip || (!room_area.left && !room_area.right)) continue;
@@ -679,8 +680,7 @@ struct ObjectRooms {
             for (int tries = (area.h / 3) * (area.w / 3); tries > 0; --tries) {
                 if (int(game.next() % 100000) > density) continue;
                 if (region.types.empty()) { area = {}; return; }
-                int type = d2d::rules::pick_type(region, seed);
-                if (const auto* info = type_at(type); info && info->place_spawn >= 0 && seed(100) > 20) type = info->place_spawn;
+                const int type = pick(20);
                 bool boss = false;                                      // FUN_005be020: its 1 and 2 both a group
                 if (pop.uniques < pop.umin) boss = seed(100) < pop.rooms_done * 100 / pop.rooms_total;
                 if (!boss && pop.uniques < pop.umax) boss = seed(100) < 6;
@@ -696,11 +696,20 @@ struct ObjectRooms {
     // party), counted (FUN_005a0320), champion or unique on its own seed
     // (FUN_005a0760); a unique's 3..6 minions at radius 3 (FUN_005a0c00),
     // a champion's 1..3 more champions at radius 4, each with its party (FUN_0054e1e0).
-    // ponytail: NM / hell's pick is the region's; this is normal's.
+    // FUN_005bde80: a type by rarity off the region; a placespawn type (the
+    // crow nests) becomes its spawn when a roll beats `beat` (20 for a
+    // group, 0 for a unique: FUN_0054ec90's two calls).
+    int pick(int beat) {
+        int type = d2d::rules::pick_type(region, seed);
+        if (const auto* info = type_at(type); info && info->place_spawn >= 0 && seed(100) > beat) type = info->place_spawn;
+        return type;
+    }
+    // NM / hell's unique pick is the same (FUN_005bde80's unique flag only
+    // reads umon in normal).
     void unique() {
         using d2d::rules::Boss;
         const auto& umon = level.mon.umon;
-        const int row = umon.empty() ? 0 : umon[std::size_t(seed(int(umon.size())))];
+        const int row = pop.difficulty > 0 ? pick(0) : umon.empty() ? 0 : umon[std::size_t(seed(int(umon.size())))];
         if (!type_at(row)) return;
         leader = int(spawns->size());
         int x, y;
@@ -708,7 +717,7 @@ struct ObjectRooms {
         const auto first = spawns->size();
         auto own = made(row, x, y);
         ++pop.uniques;
-        auto boss = d2d::rules::roll_boss(game_data.umods, *type_at(row), 0, true, own, false);
+        auto boss = d2d::rules::roll_boss(game_data.umods, *type_at(row), pop.difficulty, true, own, false);
         if (boss.kind == Boss::champion) {
             tag(first, Boss::champion, std::move(boss.mods), boss.name_seed);
             for (int count = own(3) + 1; count > 0; --count)
@@ -795,7 +804,7 @@ struct ObjectRooms {
         level.npcs.push_back(std::move(npc));
     }
     // FUN_005559a0: the room's preset units, the monsters last (`monsters`: normal's, here).
-    void presets(std::size_t room_at, bool monsters) {
+    void presets(std::size_t room_at) {
         const int nmon = int(game_data.mon_bin.size()), nsu = int(game_data.superuniques.size());
         for (std::size_t i = 0; i < level.units.size(); ++i) {
             const auto& unit = level.units[i];
@@ -824,7 +833,6 @@ struct ObjectRooms {
             }
             else if (unit.type == d2d::rules::unit_type::kWarp) game.next();                                                          // a warp tile: a unit made
         }
-        if (!monsters) return;
         // FUN_0063ec70 + FUN_0054e2a0: a base monster as the level has it (as populate()'s own()).
         const auto& types = game_data.monsters.types;
         auto own = [&](int base_bin) {
@@ -862,7 +870,10 @@ struct ObjectRooms {
                 monster(row, unit.x, unit.y, 0);                                                         // its spot only; NS (10) in mode 4
                 tentacle_ns = false;
             }
-            else if ((code == 0x02 || code == 0x03) && !level.mon.umon.empty())                         // FUN_005bde80: normal's pick is a umon
+            else if ((code == 0x02 || code == 0x03) && pop.difficulty > 0) {                             // FUN_005bde80 (1, 0): NM / hell's off the region
+                if (!region.types.empty()) monster(pick(0), unit.x, unit.y, 0, -1, code);
+            }
+            else if ((code == 0x02 || code == 0x03) && !level.mon.umon.empty())                         // normal's pick is a umon
                 monster(level.mon.umon[std::size_t(seed(int(level.mon.umon.size())))], unit.x, unit.y, 0, -1, code);
             else if (unit.id < nmon + nsu) {
                 monster(-1, unit.x, unit.y, 0, unit.id - nmon);
@@ -982,7 +993,8 @@ ObjectRooms& rooms_of(const GameData& game_data, Spawning& spawning, const Level
     else if (pop.ways.empty()) centre(level.ds1.width() / 2 - 2, level.ds1.height() / 2 - 2);
     int total = 0;
     for (std::size_t i = 0; i < level.rooms.size(); ++i) total += !ObjectRooms::none(level, i);
-    pop.pop = { 0, total, 0, level.mon.umin[0], level.mon.umax[0], 0, &game_data.umods };
+    const auto difficulty = std::size_t(std::clamp(spawning.difficulty, 0, 2));
+    pop.pop = { 0, total, 0, level.mon.umin[difficulty], level.mon.umax[difficulty], int(difficulty), &game_data.umods };
     return pop;
 }
 
@@ -1074,7 +1086,7 @@ void place_objects(const GameData& game_data, GameData::LevelBuilder& builder, L
     }
 }
 
-d2d::rules::Rng room_objects(const GameData& game_data, Spawning& spawning, const Level& level, std::size_t index, bool all) {
+d2d::rules::Rng room_objects(const GameData& game_data, Spawning& spawning, const Level& level, std::size_t index) {
     if (index >= level.rooms.size() || !game_data.builder) return {};
     auto& pop = rooms_of(game_data, spawning, level);
     pop.load(spawning, index);
@@ -1084,30 +1096,15 @@ d2d::rules::Rng room_objects(const GameData& game_data, Spawning& spawning, cons
     // rolls a wanderer (FUN_0054eff0: under 3 in 100).
     // ponytail: the wanderer itself (FUN_0054ef50) isn't made; 3 in 3.3M rooms.
     if ((pop.seed.next() & 0x7fff) == 0 && level.mon.wander) pop.seed.next();
-    pop.presets(index, all);
-    if (all) {
-        pop.out->pre = pop.seed.low;
-        if (pop.open(index, pop.themes)) pop.groups();
-        pop.out->post = pop.seed.low;
-        pop.out->rgn = pop.rgn.low;
-        pop.populate(ObjectRooms::none(level, index));
-        spawning.levels[&level].room_seeds[index] = pop.seed;
-    }
-    pop.save(spawning);
-    return pop.seed;
-}
-
-void room_groups(const GameData& game_data, Spawning& spawning, const Level& level, std::size_t index, d2d::rules::Rng& seed) {
-    if (index >= level.rooms.size() || !game_data.builder) return;
-    auto& pop = rooms_of(game_data, spawning, level);
-    pop.load(spawning, index);
-    pop.seed = seed;
+    pop.presets(index);
     pop.out->pre = pop.seed.low;
     if (pop.open(index, pop.themes)) pop.groups();
     pop.out->post = pop.seed.low;
     pop.out->rgn = pop.rgn.low;
-    seed = pop.seed;
+    pop.populate(ObjectRooms::none(level, index));
+    spawning.levels[&level].room_seeds[index] = pop.seed;
     pop.save(spawning);
+    return pop.seed;
 }
 
 std::vector<std::uint16_t> object_collision(const Spawning& spawning, const Level& level) {

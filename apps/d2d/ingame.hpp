@@ -59,6 +59,7 @@ void render_ingame(std::vector<std::uint8_t>& framebuffer,
                    const Hud& hud = {},             // the HUD's poison tint, run button
                    // Diablo 2 Couch: the player's feet when the camera isn't on
                    // them (a shared screen's group camera); null: at the camera.
-                   const std::pair<float, float>* hero_at = nullptr);
+                   const std::pair<float, float>* hero_at = nullptr,
+                   std::vector<std::uint8_t>* wide = nullptr);   // widescreen: the world draws here, its centre 800 wide copied to framebuffer
 
 }  // namespace d2d::client

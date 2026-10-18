@@ -167,6 +167,17 @@ int main() {
     const auto view = world.view();
     assert(view.level && view.level->id == 1 && !view.dead);
     assert(!view.level->unit_blocked(view.player.x, view.player.y));
+    // FUN_00545340's free spot (the seals' flash): its 7 x 7, centred a
+    // subtile up-left, is clear.
+    {
+        const int start_x = int(view.player.x * 5), start_y = int(view.player.y * 5);
+        const auto spot = view.level->free_area(start_x, start_y, 3, 0x3f11, 100);
+        assert(spot);
+        for (int row = -3; row <= 3; ++row)
+            for (int column = -3; column <= 3; ++column)
+                assert(!view.level->blocked((float(spot->first - 1 + column) + 0.5f) / 5, (float(spot->second - 1 + row) + 0.5f) / 5, 0x0f11));
+        assert(std::abs(spot->first - start_x) < 100 && std::abs(spot->second - start_y) < 100);
+    }
     std::printf("OK: %s in level %d at (%.1f, %.1f)\n", character.name.c_str(), view.level->id, view.player.x, view.player.y);
 
     // d2d's autoloot (deviations.md #5): gold under the player goes into the purse.

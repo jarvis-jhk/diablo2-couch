@@ -26,7 +26,7 @@ reading ("Reference projects" below).
 
 ## Phases
 
-Status as of 2026-10-12.
+Status as of 2026-10-17 (v0.4.0).
 
 1. **Bootstrap** — repo skeleton, CMake root, docs seeded. *Done.*
 2. **Launcher (install path)** — one Qt6 app (`apps/launcher/`, target
@@ -52,17 +52,19 @@ Status as of 2026-10-12.
    done, the `bin/` import will be dropped from the launcher — redistributing
    Blizzard's binaries is not permitted, so no release will include them.
 5. **Core loop**: main menu, character select, load act 1 rogue camp,
-   render tiles. *Done for Acts 1 and 2:* frontend, both towns, NPCs,
-   panels, trade, hiring, waypoints across acts, all 38 + 35 levels (maps,
-   monsters, objects and drops match game.exe), the twelve quests, saving.
-   Act 3 is reached (Meshif to Kurast Docks). Left: Acts 3–5.
+   render tiles. *Done for Acts 1–4:* frontend, the four towns, NPCs,
+   panels, trade, hiring, waypoints across acts, all 39 + 35 + 28 + 6
+   levels (maps, monsters, objects and drops match game.exe; monsters and
+   objects on all three difficulties), the twenty-one quests, the classic
+   ending, saving. Left: Act 5.
 6. **Combat + AI**: actor state machine, packet-equivalent events,
    monster AI from game.exe. *Implemented:* monsters and their fights,
    gear in combat, drops, experience, the merc, and the skills (phases 0–6
-   in `docs/research/re/skills.md`); Acts 1 and 2's MonAI thinks, run
-   against game.exe's own (`tools/emu/mon_ais.py`, `npcs.py`, `jarjar.py`).
-   Left: later acts' thinks, the unique mods still untraced (thief, the act
-   bosses' deaths), the gaps each skill section lists.
+   in `docs/research/re/skills.md`); Acts 1–4's MonAI thinks, Diablo's
+   included, run against game.exe's own (`tools/emu/mon_ais.py`, `npcs.py`,
+   `jarjar.py`, `diablo_score.py`). Left: Act 5's thinks, the unique mods
+   still untraced (thief, the act bosses' deaths), the gaps each skill
+   section lists.
 7. **Cross-platform polish** — Linux/macOS/Windows CI, controller,
    high-DPI, rebindable input.
 
@@ -876,8 +878,8 @@ Flame's pass (FUN_00673320) and its file rotation, the knights' variant
 draw, InitFns 34 / 46 (trapped souls) / 58. The hellgate takes the player
 to the fortress (its start: the first spawn tile, FUN_0066ac40);
 `quests_d2d.py ... 4`; the fortress's NPCs think as game.exe's
-(`diff_drlg.py 1-20 103 npcs` 20/20). Left: nightmare / hell population
-(fails in Act 1 too: an older gap).
+(`diff_drlg.py 1-20 103 npcs` 20/20). Nightmare / hell population: done
+2026-10-17 (monsters.md "Nightmare and Hell").
 
 **Step 2 — the monsters** (monster-ai.md "Act 4's MonAIs", skills.md "Act
 4's monster skills"): VileMother, VileDog, FingerMage, Regurgitator, the
@@ -894,7 +896,8 @@ MonCurseCast, DiabCold, DiabLight (as the breath), the spider / knight /
 bone spirit missiles, RegurgitatorEat, Bone Armor, Nest (the lay), and
 roughly: DiabRun (as Charge), DiabWall (a fan), DiabPrison (four
 boneprison1). Left as notes: armor absorb, the knights' missile variant,
-Diablo's target score, the target's skills / states.
+Diablo's target score, the target's skills / states — all done by
+2026-10-17.
 
 **Step 3 — the quests** (quests-act4.md): the opening, Izual (his ghost),
 the Hellforge (Hephasto's hammer, the soulstone, the gems and rune), the
@@ -911,6 +914,36 @@ character. Left as notes: the quest log's +0xb values (inferred), the
 classic ending (90 s, the credits), the seal flash's event (the boss comes
 at once), the gems at once on loot's rng, the burning souls' chest drop,
 Act 5 past the portal.
+
+## Checkpoint 2026-10-17: Act 4 done, v0.4.0
+
+PR #32 (`act4`, merged) and `act4-tidy`: Act 4 plays from the hellgate to
+Diablo's death and the ending (classic: the game ends; LoD: Tyrael's
+portal, Act 5 not built). Since v0.3.0 also: opt-in crash reports
+(Sentry, apps/README.md), the Act 3 quest-state crash fixed, the
+Expansion Character box. The tidy-up:
+
+- Monsters think on while the player is dead (the dead player isn't a
+  target: FUN_005dd7f0); before, every monster froze mid-mode.
+- The player's states the thinks read: a monster's curse and the finger
+  mage's spider mark (hit 19, FUN_005ab110: fingermagecurse, 0x54).
+- The knights fire undeadmissile1..4 by their variant (FUN_005cdfb0);
+  monster Bone Spirit homes (missile do 7, FUN_005ae780).
+- Nightmare and Hell populate through objgroups.cpp's port: the mazes'
+  Rooms(N) / Rooms(H), the unique pick off the region, superunique extras.
+  `DIFFICULTY=0..2 ACT=1..4 sweep.sh 1-10 monsters objgroups`: every level
+  10/10 on every difficulty.
+
+Fidelity pass (2026-10-17): the seals' flash (object 131) at
+FUN_00545340's free spot and the boss at its event 7, 27 frames on; the
+Hellforge's gems a round each 20 frames on the quest seed; DiabRun's
+velocity (calc1 × velocitypercent) and its hit on the event-1 row only;
+Diablo's target lists (pets, list 9's fallback); the quest log's +0xb
+moves traced (quests-act4.md "The quest log"); the 75 s step is a realm
+save (nothing in single player); Diablo comes wherever the player is;
+devctl `debug difficulty` rebuilds the levels.
+
+Next: Act 5.
 
 ## Checkpoint 2026-10-14 (later): housekeeping, fast act checks
 

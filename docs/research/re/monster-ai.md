@@ -257,7 +257,7 @@ d2d (`ai.cpp`): a think always has a target; no pending think event is seen; com
 - **The maggots and the mummies' heal.** MagottLay (87, FUN_005cb3c0): its MonStats spawn (FUN_0056e620 → FUN_0063ea70: maggotegg) two subtiles toward the target: FUN_00621dc0's 64-way direction folded into 8 (DAT_00745600), DAT_006e3138's ring-2 entry of the step tables DAT_006ea998 (x) / DAT_006ea978 (y), flag 0x4000000. MagottDown (86, FUN_005cb300): calc1 % of its life back (FUN_00483360 is a mul-div), flag 0x40. The egg's hatch (84, FUN_005cafa0; its sequence plays in DT): calc1 of its spawn (maggotbaby), the first on its spot, the rest on rings 1..4 (FUN_005b23c0, 2 × calc1 tries), then it dies. Bestow (96, FUN_005cc840): the one it's at gets lo + rand(hi − lo) % of its life (hi: calc2 within 0..100, lo: calc1 within 0..hi; the caster's seed), kept within 1..max. In d2d the larvae stand at the nearest free spots, a live DT sequence runs its events.
 - **Leap** (srvstfunc 40 FUN_005d9d50 at the sequence's first event, srvdofunc 77 FUN_005da370 after): a monster first hits its target (FUN_005d9c80: its attack damage, FUN_0057d4f0), then lands at twice the target's spot less its own (FUN_0045adf0 / FUN_0045ae20 of each), the free spot by mask 0x3c01 (FUN_0064e7b0); the rows after fly it (FUN_005d9f70) and land it (FUN_005da120); the knockback blast at the landing is a player's only. `ai.cpp`: `Monster::leaping`, the first event row a hit (then flag 0x40), a straight glide over the sequence to the nearest free spot; struck mid-leap it stays put.
 - **Plain casts.** A skill whose Sk mode is a plain SC (the Summoner's) runs FUN_0056f7f0 at the mode's action frame: its do-func, then its srvmissile (+0x46) if it has one. `ai.cpp`: a srvmissile at the target (Fire Ball, Glacial Spike) carrying the skill's element at its level (the missile row names the Skill: FUN_0064b860); a nova (22, FUN_005c9b50 → FUN_0056d400: 64 srvmissilea out to range + LevRange × level + calc1; Frost Nova); a fire wall (24, the Countess's, its maker's SubMissile1).
-- **In d2d.** `ai.cpp think`: the searches over the monsters within 80 subtiles; Duriel's aura through Aura Enchanted's (`Monster::aura`); a walk at a kin; S3 / S4. A skill act plays its sequence (above); a charge or an SC skill without one stands. Left out: states 0x5a / 0x5b, overlays, regen (stat 0x4a), FUN_005fd470 (always usable), Radament's wider reach, a wait counted from the mode's end; one free-spot search, its landing move onto itself a stand. The Vulture's take-off (FUN_005f2eb0: flags 0xe off, its 0x100 / 0x1000 lifted, pattern 5, path mask 0) and landing (FUN_005f2fc0: fails when down already (pattern 1) or no free spot (FUN_00554ea0), else flags 0xe, a 0x100 plus, pattern 1, mask 0x3c01): `Monster::aloft` (untargetable, out of the crowd, flies over anything). A vulture landed by a pillar with its target still and in another room keeps trying "keep 9 off" and stands: checked 2026-10-12, game.exe's toward (0xd) and wall (0xf) pathers on the same grid find no point either (the keep's spot lies past the pillar), so it's game.exe's behaviour too. "In a group" (FUN_0058f0d0) is an owner (AI control +0x28 / +0x2c, FUN_0058f030: a boss's minions, a flagged MonStats party), not a pack: d2d a minion.
+- **In d2d.** `ai.cpp think`: the searches over the monsters within 80 subtiles; Duriel's aura through Aura Enchanted's (`Monster::aura`); a walk at a kin; S3 / S4. A skill act plays its sequence (above); a charge or an SC skill without one stands. Left out: states 0x5a / 0x5b, overlays, regen (stat 0x4a), FUN_005fd470 (usable always, but Diablo's Prison: `fits_on`), Radament's wider reach, a wait counted from the mode's end; one free-spot search, its landing move onto itself a stand. The Vulture's take-off (FUN_005f2eb0: flags 0xe off, its 0x100 / 0x1000 lifted, pattern 5, path mask 0) and landing (FUN_005f2fc0: fails when down already (pattern 1) or no free spot (FUN_00554ea0), else flags 0xe, a 0x100 plus, pattern 1, mask 0x3c01): `Monster::aloft` (untargetable, out of the crowd, flies over anything). A vulture landed by a pillar with its target still and in another room keeps trying "keep 9 off" and stands: checked 2026-10-12, game.exe's toward (0xd) and wall (0xf) pathers on the same grid find no point either (the keep's spot lies past the pillar), so it's game.exe's behaviour too. "In a group" (FUN_0058f0d0) is an owner (AI control +0x28 / +0x2c, FUN_0058f030: a boss's minions, a flagged MonStats party), not a pack: d2d a minion.
 
 Act 4's MonAIs (levels 103..108, same table). Traced 2026-10-14; all eleven
 thinks proven 2026-10-16: `mon_ais.py` (5000 runs each, `--dump
@@ -323,12 +323,23 @@ the target's leader to his point (FUN_006417f0: under 0x55 with the leader
 in the Chaos Sanctuary), each (max · 2 + min) / 2. FUN_00573930 (two stack
 words) answers the players about him at +8.
 
-His target (FUN_005e8f20, 2026-10-16): the best scored (FUN_005e8530) of
-the game's players passing FUN_005e8eb0 (same act byte +0x18, FUN_005dc530
-under 0x3fc); it returns how many it looked at (the chooser's
-players_looked) and the best score. A second list (units of his act) can
-stand in for the best player when that one is out of reach and has no path
-(not kept in d2d). The score of a player, C division throughout:
+His target (FUN_005e8f20, 2026-10-16; lists 2026-10-17): over the unit
+lists at game +0x10f8, the best scored (FUN_005e8530, above 0, the first
+on a tie). Lists 0..7: a player passing FUN_005e8eb0 (same act byte +0x18,
+FUN_005dc530 under 0x3fc) scores (0 in mode 0 / 0x11) and so does every pet
+after it; list 8 (good monsters) of his act joins the same best. List 9
+(neutral: Confuse, Attract) of his act keeps its own best, the fallback:
+when it's within 5 of him (FUN_005dc530), the best isn't in reach
+(FUN_00622c40) and a path to it (FUN_00648b90, type 2, FUN_00649970)
+fails (FUN_00648780), the fallback is the target. It returns how many it
+looked at (the chooser's players_looked) and the best score. d2d: ai.cpp's
+Diablo block. FUN_00625480 reads the same stats off a pet or monster: its
+resists raw (a merc's base + gear, no penalty), and its aura is its right
+skill (FUN_005701b0 → FUN_00643c50: a merc's FUN_005e4d30, a summon's
+FUN_005c4470, Aura Enchanted's FUN_005a1650, Duriel's Holy Freeze), the
+auras' attackrank 1..9; a monster's max damage is its last swing's mode
+stats (FUN_005a4f50 into list 1), which d2d leaves 0 (`unit_pick`).
+The score of a player, C division throughout:
 `(300 if life % (FUN_00621f20) < 20) + ((damageresist 0x24 + magicresist
 0x25 x 2) x 4 + lightning 0x29 + fire 0x27 + cold 0x2b only in reach) / 15
 + (reach 100 (FUN_00622c40), else a clear line 75 (FUN_005dd290:

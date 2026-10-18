@@ -23,7 +23,6 @@
 #include <shrines.hpp>
 #include <tile_pick.hpp>
 #include <txt.hpp>
-#include <uniques.hpp>
 
 #include <algorithm>
 #include <array>
@@ -316,20 +315,9 @@ void populate(const GameData& game_data, Spawning& spawning, const Level& level,
                 }
         return;
     }
-    const auto& monsters = game_data.monsters;
     const auto& region = std::size_t(level.id) < spawning.regions.size() ? spawning.regions[std::size_t(level.id)] : d2d::rules::Region{};
-    // FUN_0054ebc0: none in a room flagged 0x800000 — a warp tile's
-    // (FUN_0066e360) or one whose near list reaches a town (FUN_0066bd50,
-    // FUN_006426a0); the level's totals (FUN_00642be0) leave them out.
-    auto nopop = [&](std::size_t index) {
-        return (index < level.nopop_rooms.size() && level.nopop_rooms[index])
-            || std::ranges::any_of(near_list(game_data, level, int(index)), [&](const NearRoom& other) { return other.level == &game_data.town; });
-    };
     if (state.up.empty()) {
         state.up.assign(level.rooms.size(), false);
-        int total = 0;
-        for (std::size_t index = 0; index < level.rooms.size(); ++index) total += !nopop(index);
-        state.pop = { 0, total, 0, level.mon.umin[std::size_t(difficulty)], level.mon.umax[std::size_t(difficulty)], difficulty, &game_data.umods };
         level.region[std::size_t(difficulty)].clear();
         for (const auto& [row, rarity] : region.types) level.region[std::size_t(difficulty)].push_back(row);
     }
@@ -337,207 +325,14 @@ void populate(const GameData& game_data, Spawning& spawning, const Level& level,
     state.up[made_index] = true;
     auto& spawns = state.spawns;
     const std::size_t first = spawns.size();
-    auto& pop = state.pop;
     const auto& made = level.rooms[made_index];
     auto& level_rw = const_cast<Level&>(level);                 // GameData owns its levels mutable
     const auto npcs_before = level.npcs.size();
     auto stamp_made = [&] {
         for (auto i = npcs_before; i < level_rw.npcs.size(); ++i) stamp_footprint(level_rw, level_rw.npcs[i]);
     };
-    // Normal: objgroups.cpp's port, game.exe's to the subtile.
-    if (difficulty == 0) {
-        room_objects(game_data, spawning, level, made_index, true);
-        stamp_made();
-        if (spawns.size() > first)
-            d2d::log::info("  room ({}, {}) of {} {}: {} monsters", made.x, made.y, level.name, kSfx[difficulty], spawns.size() - first);
-        return;
-    }
-    // The room1 seed: one step (FUN_0054f060) and the preset objects
-    // (room_objects), the preset monsters, the object groups (room_groups),
-    // then the population (FUN_0052d0f0).
-    d2d::rules::SpawnRoom room{ made.x * 5, made.y * 5, made.width * 5, made.height * 5, room_objects(game_data, spawning, level, made_index, false) };
-    if (made_index < level.room_areas.size())                   // FUN_0054ec90: areas with an id, not skipped, not empty
-        for (const auto& area : level.room_areas[made_index])
-            if (area.id && !area.skip && (area.left || area.top || area.right || area.bottom))
-                room.areas.push_back({ area.left * 5, area.top * 5, (area.right - area.left) * 5, (area.bottom - area.top) * 5 });
-    if (room.areas.empty()) room.areas.push_back({ 0, 0, 0, 0 });   // all skipped: no tries
-    // Not within WarpDist (2025 = 45^2 subtiles) of where players come
-    // in: the camp for the Blood Moor, the warps for a level entered by one.
-    // FUN_0054db50: within WarpDist (Levels +0xc, 2025 squared subtiles)
-    // of a point of the level's list (+0x1e0, FUN_00642444: the centre of
-    // each room with a warp or flagged 0x30000, a waypoint's) or of its
-    // 0xb point (FUN_0066b2b0: the waypoint's tile, FUN_0066ad80).
-    const auto rects = room_rects(level);
-    std::vector<std::pair<int, int>> ways;
-    auto centre = [&](int index) {
-        if (index >= 0) ways.push_back({ (level.rooms[std::size_t(index)].x + level.rooms[std::size_t(index)].width / 2) * 5,
-                                         (level.rooms[std::size_t(index)].y + level.rooms[std::size_t(index)].height / 2) * 5 });
-    };
-    for (const auto& warp : level.warps) centre(room_holding(rects, level, warp.x, warp.y));
-    for (const auto& unit : level.units)
-        if (unit.type == d2d::rules::unit_type::kObject && unit.id >= 0 && std::size_t(unit.id) < game_data.obj_subclass.size() && (game_data.obj_subclass[std::size_t(unit.id)] & d2d::rules::object_ids::kSubclassWaypoint)) {
-            const int index = room_holding(rects, level, float(unit.x) / 5, float(unit.y) / 5);
-            centre(index);
-            ways.push_back({ unit.x / 5 * 5, unit.y / 5 * 5 });
-        }
-    auto near_way = [&](int x, int y) {
-        return std::ranges::any_of(ways, [&](const auto& way) { return (x - way.first) * (x - way.first) + (y - way.second) * (y - way.second) < 2025; });
-    };
-    // Clear ground, and no monster already within its 2-subtile footprint
-    // (game.exe stamps each placed monster into collision, 0x800).
-    // Level::unit_blocked's plus, less the level's NPCs' own footprints
-    // (stamp_footprints): Flavie isn't there until her preset unit is made.
-    auto walk_blocked = [&](int x, int y) {
-        if (!level.blocked((float(x) + 0.5f) / 5, (float(y) + 0.5f) / 5)) return false;
-        if (x < 0 || y < 0 || x >= level.ds1.width() * 5 || y >= level.ds1.height() * 5) return true;
-        if (level.walk[std::size_t(y) * std::size_t(level.ds1.width() * 5) + std::size_t(x)] & 0x08) return true;
-        for (const auto& npc : level.npcs) {
-            if (npc.root == "objects") continue;
-            const int left = int(npc.x * 5) - npc.size_x / 2, top = int(npc.y * 5) - npc.size_y / 2, bit = (y - top) * npc.size_x + x - left;
-            if (x >= left && y >= top && x < left + npc.size_x && y < top + npc.size_y && !(bit < 32 && npc.walls >> bit & 1)) return false;
-        }
-        return true;
-    };
-    std::vector<std::pair<int, int>> npcs;                     // NPCs made here (Flavie): they block too, drawn by the level's NPCs
-    auto fits = [&](int x, int y) {
-        for (const auto& other : spawns) if (std::abs(other.x - x) < 2 && std::abs(other.y - y) < 2) return false;
-        for (const auto& [npc_x, npc_y] : npcs) if (std::abs(npc_x - x) < 2 && std::abs(npc_y - y) < 2) return false;
-        return !walk_blocked(x, y) && !walk_blocked(x - 1, y) && !walk_blocked(x + 1, y) && !walk_blocked(x, y - 1) && !walk_blocked(x, y + 1);
-    };
-    // Its preset units (Level::units in this room), as FUN_0054e600 spawns
-    // them (docs/research/re/monsters.md "Preset units on the server"): a
-    // MonStats row at its spot; a superunique with its minions; a MonPlace
-    // code by the switch (Fallen and shamans, champion packs, unique packs,
-    // Blood Raven, Flavie, the tight spot boss, the dead ones; the rest,
-    // group25..100 among them, spawn nothing).
-    // ponytail: the level-list walk up a family's chain (FUN_0063ec70's
-    // second half) and the champion / unique pick from Levels.txt umon1..
-    // in normal aren't there (the region's list stands in); a boss's company
-    // rolls the room seed, not the monster's own.
-    using d2d::rules::monster_detail::place;
-    const int nmon = int(game_data.mon_bin.size()), nsu = int(game_data.superuniques.size());
-    auto bin = [&](int bin_row) { return bin_row >= 0 && bin_row < nmon ? int(game_data.mon_bin[std::size_t(bin_row)]) : -1; };
-    // FUN_005b2f20 at the spot (radius -1), then within `retry` if taken.
-    auto at_spot = [&](int type, int x, int y, int retry, bool dead = false) {
-        if (type < 0) return;
-        int spot_x, spot_y;
-        if (place(room, x, y, -1, fits, spot_x, spot_y) || (retry > 0 && place(room, x, y, retry, fits, spot_x, spot_y)))
-            spawns.push_back({ type, spot_x, spot_y, -1, -1, d2d::rules::Boss::none, {}, 0, spawning.game.next(), {}, dead });
-    };
-    // at_spot for an NPC: made and blocking, not a spawn; its unit seed
-    // (the game seed's step, FUN_00552df0), none when there's no room.
-    auto npc_at = [&](int x, int y, int retry) -> std::optional<std::uint32_t> {
-        int spot_x, spot_y;
-        if (place(room, x, y, -1, fits, spot_x, spot_y) || (retry > 0 && place(room, x, y, retry, fits, spot_x, spot_y))) {
-            npcs.push_back({ spot_x, spot_y });
-            return spawning.game.next();
-        }
-        return std::nullopt;
-    };
-    // FUN_0063ec70 + FUN_0054e2a0: a base monster as the level has it — the
-    // first of its family in the level's list, then Carvers / Devilkin (and
-    // their shamans) by level.
-    auto own = [&](int base_bin) {
-        int row = bin(base_bin);
-        if (row < 0) return -1;
-        for (const int monstats_row : level.mon.mon)
-            if (monstats_row >= 0 && std::size_t(monstats_row) < monsters.types.size() && monsters.types[std::size_t(monstats_row)].base == monsters.types[std::size_t(row)].base) { row = monstats_row; break; }
-        const int base = monsters.types[std::size_t(row)].base, id = level.id;
-        if (base == bin(0x13)) return id == 6 ? bin(0x14) : id == 7 || id == 12 || id == 16 ? bin(0x15) : row;
-        if (base == bin(0x3a)) return id == 6 || id == 7 ? bin(0x3b) : id == 12 || id == 16 ? bin(0x3c) : row;
-        return row;
-    };
-    for (const auto& unit : level.units) {
-        if (unit.x < room.x || unit.y < room.y || unit.x >= room.x + room.width || unit.y >= room.y + room.height) continue;
-        if (unit.type != d2d::rules::unit_type::kMonster || unit.id < 0) continue;            // objects and warp tiles: room_objects
-        if (unit.id < nmon) {                                                // a MonStats row (FUN_0054e490)
-            const auto monstats_row = game_data.mon_bin[std::size_t(unit.id)];
-            const bool stay = unit.id == 0xe5 || (unit.id >= 0x11c && unit.id <= 0x120) || unit.id == 0x188 || unit.id == 0x189;   // FUN_0054e3a0
-            if (!game_data.mon_is_npc[monstats_row]) at_spot(int(monstats_row), unit.x, unit.y, stay ? 0 : 4);
-            else {                                                           // an NPC (Flavie, Lut Gholein's), standing at its spot
-                const auto unit_seed = npc_at(unit.x, unit.y, stay ? 0 : 4);
-                if (!game_data.mon_npc[monstats_row].code.empty()) {
-                    auto npc = game_data.mon_npc[monstats_row];
-                    npc.x = (float(unit.x) + 0.5f) / 5;
-                    npc.y = (float(unit.y) + 0.5f) / 5;
-                    for (std::size_t k = 0; k < unit.path.size(); ++k) {     // its DS1 path (the town AIs walk it)
-                        npc.path.emplace_back((float(unit.x + unit.path[k].first) + 0.5f) / 5, (float(unit.y + unit.path[k].second) + 0.5f) / 5);
-                        npc.actions.push_back(k < unit.actions.size() ? unit.actions[k] : 0);
-                    }
-                    // Its unit seed and its init's two draws (the look, the life), as the camp's.
-                    if (unit_seed) { npc.seed = d2d::rules::Rng{ *unit_seed }; if (npc.town_ai != TownAi::none) { npc.seed.next(); npc.seed.next(); } }
-                    level_rw.npcs.push_back(std::move(npc));
-                }
-            }
-            continue;
-        }
-        if (unit.id >= nmon + nsu) {                                         // MonPlace
-            const int code = unit.id - nmon - nsu;
-            if (code == 0x11 || code == 0x12) at_spot(own(code == 0x11 ? 0x13 : 0x3a), unit.x, unit.y, 4);   // place_fallen / _fallenshaman
-            else if (code == 0x05) at_spot(bin(0x10b), unit.x, unit.y, 0);      // place_bloodraven
-            else if (code == 0x08) at_spot(bin(0x11c), unit.x, unit.y, 0);      // place_tightspotboss (flag 8)
-            else if (code == 0x04) npc_at(unit.x, unit.y, 0);                  // place_rogue_warner: Flavie
-            else if (code >= 0x1d && code <= 0x20) {                         // deadminion / deadimp / deadbarb / reanimateddead: mode 12, unit +0xc4 |= 0x2000000
-                // ponytail: reanimateddead's (0x1b6) rand(50) on its own seed and its FUN_005417d0 event aren't there.
-                static constexpr int kDeadBase[4] = { 0x1c5, 0x1ec, 0x20a, 0x1b6 };   // 0x54e9a0..0x54e9c2
-                at_spot(own(code == 0x1e && level.id == d2d::rules::level_ids::kBloodyFoothills ? 0x211 : kDeadBase[code - 0x1d]), unit.x, unit.y, 4, true);
-            }
-            else if ((code == 0x02 || code == 0x03) && !region.types.empty()) {
-                const int type = d2d::rules::pick_type(region, room.seed);   // FUN_005bde80, the unique pick
-                int spot_x, spot_y, leader_x, leader_y;
-                if (code == 0x03) {                                       // place_champion: at the spot, mod 16, 1..3 more (FUN_0054e1e0)
-                    if (!place(room, unit.x, unit.y, -1, fits, spot_x, spot_y)) continue;
-                    const int lead = int(spawns.size());
-                    spawns.push_back({ type, spot_x, spot_y, lead, -1, d2d::rules::Boss::champion, { d2d::rules::umod::champion }, 0, spawning.game.next() });
-                    for (int remaining = room.seed(3) + 1; remaining > 0; --remaining)
-                        if (place(room, spot_x, spot_y, 4, fits, leader_x, leader_y))
-                            spawns.push_back({ type, leader_x, leader_y, lead, -1, d2d::rules::Boss::champion, { d2d::rules::umod::champion }, 0, spawning.game.next() });
-                } else if (d2d::rules::room_spot(room, fits, near_way, leader_x, leader_y) && place(room, leader_x, leader_y, -1, fits, spot_x, spot_y)) {
-                    d2d::rules::boss_pack(monsters, type, spot_x, spot_y, room, fits, spawns, pop, spawning.game);   // place_unique_pack: a random spot of the room (FUN_005a43e0)
-                }
-            }
-            continue;
-        }
-        // A superunique (FUN_005a49b0): once a game unless Stacks, at its
-        // spot or (AutoPos) a random one in the room (FUN_0054dc40, no
-        // entrance check), its mods and MonUMod 22 (questcomplete), then
-        // MinGrp..MaxGrp (each + difficulty when both are set) of minion1
-        // (else its own type) at radius 3 (FUN_005a0c00 / FUN_005b23c0).
-        // Its specials (the Countess's stat 0x76, AI 0xd) in make_boss.
-        // ponytail: its unique stat bonuses and TC come in the fight / loot;
-        // quest binding (FUN_005436b0: the Countess's 5, the Cow King's 4)
-        // as the kill's superunique row (world.cpp); its mods roll the room
-        // seed, not the monster's own.
-        const int superunique_index = unit.id - nmon;
-        const auto& sup = game_data.superuniques[std::size_t(superunique_index)];
-        if (sup.type < 0 || (!sup.stacks && spawning.superuniques.test(std::size_t(superunique_index)))) continue;
-        int spot_x = unit.x, spot_y = unit.y, leader_x, leader_y;
-        if (sup.autopos && !d2d::rules::room_spot(room, fits, [](int, int) { return false; }, spot_x, spot_y)) continue;
-        if (!place(room, spot_x, spot_y, -1, fits, leader_x, leader_y) && !place(room, spot_x, spot_y, 5, fits, leader_x, leader_y)) continue;
-        spawning.superuniques.set(std::size_t(superunique_index));
-        const int lead = int(spawns.size());
-        auto mods = d2d::rules::superunique_mods(game_data.umods, monsters.types[std::size_t(sup.type)], sup.mods, difficulty, room.seed);
-        mods.push_back(22);
-        spawns.push_back({ sup.type, leader_x, leader_y, -1, superunique_index, d2d::rules::Boss::superunique, std::move(mods), 0, spawning.game.next() });
-        for (const auto& [off_x, off_y] : unit.path) spawns.back().path.emplace_back(unit.x + off_x, unit.y + off_y);   // FUN_00555910: the preset's map AI
-        const int minion = monsters.types[std::size_t(sup.type)].minion[0] >= 0 ? monsters.types[std::size_t(sup.type)].minion[0] : sup.type;
-        const int low = sup.min_grp + (sup.min_grp && sup.max_grp ? difficulty : 0), high = sup.max_grp + (sup.min_grp && sup.max_grp ? difficulty : 0);
-        const int count = room.seed.range(low, std::max(low, high));
-        int placed = 0;
-        for (int k = 0; k < count; ++k) {
-            int minion_x, minion_y;
-            if (place(room, leader_x, leader_y, 3, fits, minion_x, minion_y)) {
-                spawns.push_back({ minion, minion_x, minion_y, lead, -1, d2d::rules::Boss::minion, {}, 0, spawning.game.next() });
-                ++placed;
-            }
-        }
-        d2d::log::info("  {} ({}) with {} minions at ({:.1f}, {:.1f})", sup.name, monsters.types[std::size_t(sup.type)].id, placed,
-                       (float(leader_x) + 0.5f) / 5, (float(leader_y) + 0.5f) / 5);
-    }
-    room_groups(game_data, spawning, level, made_index, room.seed);
-    if (nopop(made_index)) ++pop.rooms_done;
-    else d2d::rules::populate_room(monsters, region, level.mon.density[std::size_t(difficulty)], room, spawning.game, fits, near_way, spawns, &pop);
-    if (made_index < state.room_seeds.size()) state.room_seeds[made_index] = room.seed;
+    // objgroups.cpp's port, game.exe's to the subtile on every difficulty.
+    room_objects(game_data, spawning, level, made_index);
     stamp_made();
     if (spawns.size() > first)
         d2d::log::info("  room ({}, {}) of {} {}: {} monsters", made.x, made.y, level.name, kSfx[difficulty], spawns.size() - first);
@@ -1229,7 +1024,7 @@ bool build_maze(const GameData& game_data, d2d::mpq::Stack& mpqs, d2d::drlg::Out
     d2d::drlg::MazeDef maze;
     for (std::size_t maze_row = 0; maze_row < assets.lvl_maze.size(); ++maze_row)
         if (d2d::drlg::to_int(assets.lvl_maze.get(maze_row, "Level"), -1) == level.id) {
-            maze.rooms.fill(d2d::drlg::to_int(assets.lvl_maze.get(maze_row, "Rooms")));   // ponytail: the .txt's one column for every difficulty
+            for (std::size_t k = 0; k < 3; ++k) maze.rooms[k] = d2d::drlg::to_int(assets.lvl_maze.get(maze_row, std::array{ "Rooms", "Rooms(N)", "Rooms(H)" }[k]));
             maze.width = d2d::drlg::to_int(assets.lvl_maze.get(maze_row, "SizeX"));
             maze.height = d2d::drlg::to_int(assets.lvl_maze.get(maze_row, "SizeY"));
             maze.merge = d2d::drlg::to_int(assets.lvl_maze.get(maze_row, "Merge"));
@@ -1255,7 +1050,7 @@ bool build_maze(const GameData& game_data, d2d::mpq::Stack& mpqs, d2d::drlg::Out
         for (const auto& placement : game_data.act4_layout)
             if (placement.level == d2d::rules::level_ids::kChaosSanctuary) rect = { placement.x, placement.y, placement.width, placement.height };
     auto made = preset_level ? d2d::drlg::generate_preset(assets.data, level.id, size_x, size_y, seed, notes, court_file)
-                             : d2d::drlg::generate_maze(assets.data, maze, level.id, size_x, size_y, seed, 0, notes, court_file, &rect);
+                             : d2d::drlg::generate_maze(assets.data, maze, level.id, size_x, size_y, seed, game_data.difficulty, notes, court_file, &rect);
     int width = 0, height = 0;
     for (const auto& room : made) { width = std::max(width, room.x + room.width); height = std::max(height, room.y + room.height); }
     level.ds1 = d2d::ds1::Map(width, height, 4, 2);

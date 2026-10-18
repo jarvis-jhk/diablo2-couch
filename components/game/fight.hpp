@@ -155,6 +155,7 @@ struct Fight {
     // A monster by unit id: its index in `monsters`, or -1.
     [[nodiscard]] int monster_index(int id) const;
     void add_monster(Monster monster);
+    void add_monster(Monster monster, const Level* where);   // into that level's (kept) monsters
 
     const Level* mon_level = nullptr;                // whose monsters `monsters` are
     AreaSeen area_seen;                              // their spawn areas' "seen" flags (ai.cpp search_target)
@@ -164,6 +165,10 @@ struct Fight {
     // Summoner's Weaken. The player's aurastats join its self states'.
     struct Curse { int skill = -1, level = 0; std::uint32_t until = 0; };
     std::array<Curse, 2> curses{};
+    // A missile hit's state on the player / merc (hit 19, FUN_005ab110: the
+    // skill's auratargetstate for auralen frames, at least 5, with its
+    // aurastats): the finger mage's fingermagecurse (0x54).
+    std::array<Curse, 2> marks{};
     std::uint32_t chilled = 0;                       // the player's chill (state 11, a monster's cold) runs out
     // The player's stun (state 21, FUN_0057aae0: a monster's Smite) runs out.
     // It stops nothing; every hit while it runs is a get-hit (FUN_0057cee0).

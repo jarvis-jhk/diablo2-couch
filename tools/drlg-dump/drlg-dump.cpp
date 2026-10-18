@@ -53,6 +53,7 @@
 namespace fs = std::filesystem;
 using namespace d2d::drlg;
 
+static int dump_difficulty() { const char* value = std::getenv("DIFFICULTY"); return value ? std::atoi(value) : 0; }   // $DIFFICULTY 0..2
 static bool g_units = false;                            // print rooms' units instead of their tiles
 static bool g_seeds = false;                            // print rooms' room1 seeds instead of their tiles
 // The units kind brings rooms up in $ORDER, as drlg.py bring_up: list
@@ -86,8 +87,7 @@ static std::string dump(const OutdoorAssets& assets, std::uint32_t seed, int id,
         MazeDef maze;
         for (std::size_t row_index = 0; row_index < assets.lvl_maze.size(); ++row_index)
             if (to_int(assets.lvl_maze.get(row_index, "Level"), -1) == id) {
-                // ponytail: LvlMaze.txt has one Rooms column; game.exe's .bin has one per difficulty
-                maze.rooms.fill(to_int(assets.lvl_maze.get(row_index, "Rooms")));
+                for (std::size_t k = 0; k < 3; ++k) maze.rooms[k] = to_int(assets.lvl_maze.get(row_index, std::array{ "Rooms", "Rooms(N)", "Rooms(H)" }[k]));
                 maze.width = to_int(assets.lvl_maze.get(row_index, "SizeX"));
                 maze.height = to_int(assets.lvl_maze.get(row_index, "SizeY"));
                 maze.merge = to_int(assets.lvl_maze.get(row_index, "Merge"));
@@ -107,7 +107,7 @@ static std::string dump(const OutdoorAssets& assets, std::uint32_t seed, int id,
             for (const auto& placement : act4_layout(level_defs(assets.levels), act_seed(seed)))
                 if (placement.level == level_ids::kChaosSanctuary) rect = { placement.x, placement.y, placement.width, placement.height };
         auto rooms = preset_level ? generate_preset(assets.data, id, width, height, level_seed(seed, id), notes, court_file)
-                                  : generate_maze(assets.data, maze, id, width, height, level_seed(seed, id), 0, notes, court_file, &rect);
+                                  : generate_maze(assets.data, maze, id, width, height, level_seed(seed, id), dump_difficulty(), notes, court_file, &rect);
         pf("level %d at %d,%d size %dx%d\n", id, rect[0], rect[1], rect[2], rect[3]);
         auto sorted = rooms;
         std::ranges::sort(sorted, {}, [](const auto& room) { return std::tuple(room.y, room.x); });
@@ -203,11 +203,10 @@ static std::string dump(const OutdoorAssets& assets, std::uint32_t seed, int id,
 // Every room of the level populated in (y, x) order on a fresh game
 // (d2d::game::populate_level), one line per room that spawned.
 static std::string dump_monsters(d2d::game::GameData& game_data, std::uint32_t seed, int id) {
-    d2d::game::set_map_seed(game_data, seed);
+    d2d::game::set_map_seed(game_data, seed, dump_difficulty());
     const auto* level = game_data.level(id);
     if (!level) return "";
-    const char* difficulty = std::getenv("DIFFICULTY");
-    auto spawning = d2d::game::start_spawning(game_data, difficulty ? std::atoi(difficulty) : 0);
+    auto spawning = d2d::game::start_spawning(game_data, dump_difficulty());
     const auto order = d2d::game::populate_level(game_data, spawning, *level);
     const auto& spawns = spawning.levels[level].spawns;
     std::ostringstream out;
@@ -252,8 +251,8 @@ static std::vector<std::size_t> walk_order(std::size_t count, std::uint32_t seed
 // its rooms brought up in `kind` order and populated newest first, then
 // every container they made opened (World::operate's open_container).
 static std::string dump_game(d2d::game::GameData& game, std::uint32_t seed, const std::vector<int>& levels, const std::string& kind) {
-    d2d::game::set_map_seed(game, seed);
-    auto spawning = d2d::game::start_spawning(game, 0);
+    d2d::game::set_map_seed(game, seed, dump_difficulty());
+    auto spawning = d2d::game::start_spawning(game, dump_difficulty());
     std::vector<std::unique_ptr<d2d::game::Level>> built;
     std::ostringstream out;
     char line[160];
@@ -346,8 +345,8 @@ static std::string dump_game(d2d::game::GameData& game, std::uint32_t seed, cons
 // subtiles short on x; its mode is NU at each think. Lines sorted.
 // The town's NPCs thinking (tools/emu npcs.py): level 1 the camp, else any act's town.
 static std::string dump_npcs(d2d::game::GameData& game, std::uint32_t seed, int thinks, int lid) {
-    d2d::game::set_map_seed(game, seed);
-    auto spawning = d2d::game::start_spawning(game, 0);
+    d2d::game::set_map_seed(game, seed, dump_difficulty());
+    auto spawning = d2d::game::start_spawning(game, dump_difficulty());
     std::unique_ptr<d2d::game::Level> built;
     if (lid != level_ids::kRogueEncampment) built = d2d::game::build_level(game, *game.builder, lid);
     auto& town = built ? *built : game.town;
@@ -404,7 +403,7 @@ int main(int argc, char** argv) {
         const auto first = std::uint32_t(std::stoul(range.substr(0, dash), nullptr, 0));
         const auto last = dash == std::string::npos ? first : std::uint32_t(std::stoul(range.substr(dash + 1), nullptr, 0));
         for (auto seed = first;; ++seed) {
-            d2d::game::set_map_seed(*game, seed);
+            d2d::game::set_map_seed(*game, seed, dump_difficulty());
             std::ostringstream out;
             if (auto level = d2d::game::build_level(*game, *game->builder, id)) {
                 const std::size_t count = level->rooms.size();
@@ -601,10 +600,10 @@ int main(int argc, char** argv) {
         const auto first = std::uint32_t(std::stoul(range.substr(0, dash), nullptr, 0));
         const auto last = dash == std::string::npos ? first : std::uint32_t(std::stoul(range.substr(dash + 1), nullptr, 0));
         for (auto seed = first;; ++seed) {
-            d2d::game::set_map_seed(*game, seed);
+            d2d::game::set_map_seed(*game, seed, dump_difficulty());
             std::ostringstream out;
             if (const auto level = d2d::game::build_level(*game, *game->builder, id)) {
-                auto spawning = d2d::game::start_spawning(*game, 0);
+                auto spawning = d2d::game::start_spawning(*game, dump_difficulty());
                 d2d::game::populate_level(*game, spawning, *level);
                 const auto& group_rooms = spawning.levels[level.get()].group_rooms;
                 char line[80];

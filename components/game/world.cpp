@@ -1878,6 +1878,7 @@ auto World::deal(const Command& command) -> bool {
                 act1_talk_closed(hc_idx);
                 act2_talk_closed(hc_idx);
                 act3_talk_closed(hc_idx);
+                act4_talk_closed(hc_idx);
             }
             talking = { chat->npc, -1, -1 };
             return true;
@@ -2304,6 +2305,10 @@ auto World::tick(const std::vector<Command>& cmds, std::uint32_t now_ms, std::ui
                                  && (player.x != before_x || player.y != before_y);
             }
         }
+        }
+        // The world goes on with the player dead (game.exe runs the rooms
+        // around the corpse till the respawn): monsters see the dead player
+        // as not alive (Fight::world) and think on.
         if (host) npc_patrol(*game_data, *level, npc_states, talking, now_ms, elapsed, crowd, &player, arcane.guard_state == 2);
         if (host) cain_step(now_ms, elapsed);
         if (host) for (const auto& neighbour : level->nearby) {           // over the edge, still in play
@@ -2317,16 +2322,17 @@ auto World::tick(const std::vector<Command>& cmds, std::uint32_t now_ms, std::ui
         // The player's mode as the merc's think reads it: 2 walk, 3 run, 6 walk in town.
         fight.owner_mode = !player.walking ? 1 : running && character.stats.values[d2d::d2s::kStamina] > 0 ? 3 : in_moor ? 2 : 6;
         fight.world(in_moor, now_ms, elapsed, crowd);
-        if (host) den_count(now_ms);
+        if (host) den_count(now_ms);                            // the merc's or a missile's kill counts with the player dead
         if (host && den_log_at && now_ms >= den_log_at) { den.log = 5; den_log_at = 0; }
-        if (host) use_warp();                        // a guest goes where the host goes (couch/party.hpp)
-        if (fight.portal_due) { fight.portal_due = false; open_portal(now_ms); }
-        if (take_corpse >= 0 && std::size_t(take_corpse) < corpses.size() && corpses[std::size_t(take_corpse)].level == level) {
-            const auto& corpse = corpses[std::size_t(take_corpse)];
-            if (std::hypot(corpse.x - player.x, corpse.y - player.y) < 2.f) { take_corpse_items(std::size_t(take_corpse), now_ms); take_corpse = -1; }
-            else if (!player.walking) take_corpse = -1;
-        }
-        if (host) use_portal(now_ms);
+        if (!fight.dead()) {
+            if (host) use_warp();                    // a guest goes where the host goes (couch/party.hpp)
+            if (fight.portal_due) { fight.portal_due = false; open_portal(now_ms); }
+            if (take_corpse >= 0 && std::size_t(take_corpse) < corpses.size() && corpses[std::size_t(take_corpse)].level == level) {
+                const auto& corpse = corpses[std::size_t(take_corpse)];
+                if (std::hypot(corpse.x - player.x, corpse.y - player.y) < 2.f) { take_corpse_items(std::size_t(take_corpse), now_ms); take_corpse = -1; }
+                else if (!player.walking) take_corpse = -1;
+            }
+            if (host) use_portal(now_ms);
         }
         for (const auto& kill : hosted_quests ? std::vector<Fight::Kill>{} : fight.kills) {
             if (couch_guest) { couch_kills.push_back(kill); continue; }   // Diablo 2 Couch: the host's quests (couch_kill)

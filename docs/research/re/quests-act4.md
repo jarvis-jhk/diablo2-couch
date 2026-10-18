@@ -101,20 +101,30 @@ deaths.
 - **The seals** (objects 392..396, InitFn 56 nothing; OperateFn 52 for 393
   and 395 `FUN_005b5630`; 54 / 55 / 56 for 392 / 394 / 396): closed (mode
   0) → mode 1 (event 1 at its anim end), its flag +0xc..+0x10 by id
-  (0x188..0x18c). 54 / 55 / 56 first keep a spot (`FUN_00620870` + (−12,
-  −52) / (−39, +33) / (+32, +16) into +0x24 / +0x2c / +0x34) and make object
-  131 (the flash, `FUN_00555230` type 2) at a free spot (`FUN_00545340`
-  mask 0x3f11, sizes 13 / 15 / 14) — its event 7 (`FUN_005449e0` → in
-  level 108 `FUN_005b5750`) makes the seal's superunique there
+  (0x188..0x18c). 54 / 55 / 56 (`FUN_005b6b70` / `6bc0` / `6c10`) first
+  keep a spot (`FUN_00620870` + (−12, −52) / (−39, +33) / (+32, +16) into
+  +0x24 / +0x2c / +0x34), then `FUN_005b6ad0` moves it to a free spot
+  (`FUN_00545340`: size 3, mask 0x3f11, 100 rings; its size-13/14/15
+  argument is unused) and makes object 131 (the flash, `FUN_00555230` type
+  2) there; only when the flash is made does the seal open (`FUN_005b5630`).
+  The flash's InitFn 59 (`FUN_0054fe10`): mode 1, event 7 at +27 frames,
+  event 1 at FrameCnt1 + 1. Its event 7 (`FUN_005449e0`: mode 2; in level
+  108 `FUN_005b5750`) makes the seal's superunique at the kept spot
   (`FUN_00545c30`, ids [0x744304]+0xb28.. = 0x24 / 0x25 / 0x26), retried
   10 frames on when it can't.
+- **The free spot** (`FUN_00545340(room, &spot, size, mask, &room_out, -,
+  rings)`): for ring c = 1 .. rings − 1, rows r = c, c − 2 .. > −c, columns
+  k = −c, −c + 2 .. < c: the (2 size + 1)² square centred on spot + (k − 1,
+  r − 1) (`FUN_0064d800`: no bit of mask) in a room → spot + (k, r). d2d:
+  `Level::free_area`.
 - **All five open and three bound deaths** (seal op, the start point's
   InitFn 55 `FUN_005b5590`, or a death `FUN_005b52e0`): `FUN_005b5230`
   once (+0x13): every monster in level 108 but Diablo, not dead, not a
   pet, set to mode 0 (dies: `FUN_005a7e60` / `FUN_005a7c20`); and if not
   armed: +2, +1, the 1-tick timer `FUN_005b4be0`.
-- **The timer** (`FUN_005b4be0`): with +2, after 10 ticks and the start
-  point's object (+8, object 255 "diablo start point"): Diablo (0xf3) at its
+- **The timer** (`FUN_005b4be0`): with +2, +0x18 counts ticks; past 9 and
+  with the start point's object (+8, object 255 "diablo start point"),
+  wherever the players are: Diablo (0xf3) at its
   spot, mode 1, within −1 / 5 / 10 (`FUN_005b4b60` → `FUN_005b2f20`), flags
   0x3000000, +0x11; done. With +3 (dead): 75 s (wall clock) → once
   `FUN_0052e2a0`; 90 s → +5: classic every player `FUN_005b4a80` (saved,
@@ -164,8 +174,10 @@ hammers about, +0x14 gems per round, +0x1c the soulstone given.
   +0x14 = 1, every player in act 4 (`FUN_005b5b00`: not done: `hfh ` /
   `mss ` taken, bits 13 + 1, +0x14 count), state (0x125), event 7 at its
   anim end, the player's `LAB_005b5bb0` (bit 14). 
-- **The gems** (event 7, `FUN_005449e0` object 0x178 → `FUN_005b6710`):
-  mode 4 once; each round +0x14 drops at the forge (`FUN_00559a30(2)`),
+- **The gems** (event 7 at the strike + FrameCnt3 (+0xe4 >> 8: 22 frames),
+  `FUN_005449e0` object 0x178 → `FUN_005b6710`):
+  mode 4 once; each round +0x14 drops at the forge (`FUN_00559a30(2)`; 1
+  alone: `FUN_005b5b00` adds the striker's party in act 4 without bit 1),
   each `rand(7)` on the quest seed (`FUN_005438b0`) from round +8: 4
   0x73e56c (perfect: gpv gpr gpb gpy gpg gpw skz), 3 / 2 0x73e588
   (flawless), 1 0x73e5a4 (plain); a dropped round → +8 − 1 and the next 20
@@ -206,7 +218,9 @@ flags 2} plus sound event 0x4b. The client (`FUN_004a2cb0`): classic sets
 (`FUN_0044ec80`), and `DAT_007bc9d4`; LoD sets `DAT_007bc9d8` instead.
 
 The timer (`FUN_005b4be0`, real milliseconds, not frames):
-- 75 s: `FUN_0052e2a0` over the clients, once (+0x15).
+- 75 s: `FUN_0052e2a0` over the clients, once (+0x15): in a realm game
+  (game +0x6a 1 / 2) each client's character saved (`FUN_00532400`); a
+  single player or TCP/IP game (+0x6a 3) does nothing.
 - 90 s, classic: each player (`FUN_005b4a80`). With bit 13: warped to the
   Pandemonium Fortress (`FUN_0053aec0` level 103) and S→C 0x5d {0x17,
   flags 1}, which sets the client's leave flag (`DAT_007a0620`). Without:
@@ -241,7 +255,38 @@ colour 0 at baseline H−88 (pressed: 2 left, 2 down); its box W/2±48,
 H−112..H−80; down then up on it (`FUN_0044e460` / `FUN_0044e4f0`) ends it.
 
 d2d (2026-10-16): `World::act4_update` keeps the 90 / 95 s timer
-(`diablo_dead_at`; the 75 s step isn't sent), `end_movie` is the client's
+(`diablo_dead_at`; the 75 s step is realm-only), `end_movie` is the client's
 DAT_007a0604; any leave with it set plays ACT04END (skippable) and then
 `Screen::Endgame` (`render_endgame`), OK to the title. Classic only: LoD's
 end (Tyrael's portal, cinematic 5) waits for Act 5.
+
+## The quest log (+0xb)
+
+`FUN_00544350` sets only the state (+0xc). The log moves through
+`FUN_00544300(record ECX, log DL, callback, arg, flag)`: +0xb = DL, and
+with flag 1 the callback over the players (`FUN_005b3940` / `FUN_005b4e40`
+/ `FUN_005b59c0`: S→C 0x5d to each unless done (bit 0 or 15) without 13 /
+14). Besides the joins (2 / 1 / 1, written directly):
+
+| quest | where | log | sent |
+|---|---|---|---|
+| a4q1 | the fortress at state 2 (`LAB_005b4140`) | 1 if 0 | no |
+| a4q1 | Tyrael's talk closes with 670 heard (`LAB_005b41d0`, data +0x11) | 1 | yes |
+| a4q1 | Izual's first think (`FUN_005b4390`) | 2 if under 2 | yes |
+| a4q1 | the 3-tick timer (`FUN_005b3e60`), state 4 | 3 unless 4 / 13 | yes |
+| a4q1 | the ghost's 675 heard | 4 unless 4 | yes |
+| a4q1 | Tyrael's 676 (state 5) | 13 | no |
+| a4q2 | the fortress at state 2 / the sanctuary (`LAB_005b4ea0`) | 1 if 0 | no / yes |
+| a4q2 | Tyrael's talk closes with 681 heard (`FUN_005b4f90`, data +0) | 1 | yes |
+| a4q2 | Diablo dies (`FUN_005b52e0`), open | 13 | yes |
+| a4q3 | the forge's InitFn (`FUN_005b5a20`), open | 2 unless 2 / 3 / 13 | yes |
+| a4q3 | the soulstone set (`FUN_005b5c10`) | 3 | yes |
+| a4q3 | the third blow | 13 | yes |
+| a4q3 | Cain's talk closes with 678 / 679 heard (`FUN_005b6440`, data +2) | 4 with the stone given (+0x1c), else 1 | yes |
+| a4q3 | Cain's 680 (state 5) | 13 | no |
+
+The soulstone's pickup (`LAB_005b5a90`) opens a4q3 (state 0 → 1) only
+without bits 0 / 13 / 1 and with the log under 13; the chain from a4q1
+(`LAB_005b5f40`) only needs state 0 and +9. d2d: `IzualQuest` /
+`HellforgeQuest` / `TerrorQuest` `news`, drained in `World::act4_update`.
+

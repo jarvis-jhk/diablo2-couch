@@ -731,7 +731,9 @@ lines (missile names aren't passed in). What it does:
 - **Do 10** (FUN_005db6d0: Guided Arrow, Bone Spirit): srvmissilea at the
   target unit (flags 0x20; 0x420 with none); calc1 through the callback
   **0x5db6a0**, which adds it to the missile's stat 25 (damage %). Missile
-  do **7** (FUN_005ae780) re-aims at the target every Param1 frames; hit
+  do **7** (FUN_005ae780) re-aims at the target every Param1 (0: 5) frames
+  while it's 4..24 off (FUN_006416d0), a live hostile unit, the owner alive
+  (else the missile ends) and its room not a town's; hit
   **10** (FUN_005aa650) lets a guided one pass all but its target.
 - **St 8** (FUN_005dacd0, Strafe): n = the monsters within aurarange,
   clamped to [min(calc3, calc1), calc1]; **do 12** (FUN_005dba40) shoots one
@@ -839,6 +841,11 @@ lines (missile names aren't passed in). What it does:
   Molten Boulder): the damage within sHitPar1 (else aurarange), fire at
   0x6e2550's offsets; it rolls on. **48** (FUN_005ac6d0): HitSubMissile1
   on toward the target.
+- **19** (FUN_005ab110, FingerMageSpider): the missile's skill's
+  auratargetstate (+0x82) on the unit struck for auralen (+0x60) frames,
+  at least 5, with its aurastats (FUN_005c6cc0); a new hit renews the
+  length. Returns 3 (damage, end). d2d: `Fight::marks`, read by the knight's
+  and finger mage's thinks through `Foe::states`.
 - Missile do **15** (FUN_005af030, Frozen Orb): every Param1 frames
   SubMissile1 toward direction n of 64 (0x6e2b78 / 0x6e2a78), n += Param2.
   **23** (FUN_005af790, Firestorm): SubMissile1 where it is. **27**
@@ -1360,7 +1367,7 @@ the Run sequence's numbers):
 |---|---|---|---|
 | Nest (167, the vile mother's) | 49 FUN_005cbd10 | 91 FUN_005cbe00 | start: the point (FUN_0056e620), a free spot there (mask 0x100) stored in the unit's skill record (+0 class from MonStats spawn, x, y, mode); do: events cleared, a unit of that class at that spot (FUN_005b2f20, 1), flags 0x4020000, MonStats overlay (+0xe6) |
 | MegademonInferno (319), DiabLight (193) | 53 FUN_005cc240 | — | the breath's end frame (+ calc +0x13c, at least 1) in the skill record, state 0xc on |
-| DiabRun (198) | 54 FUN_005cd2c0 | 103 FUN_005cd380 | start: the target's id / type in the record, path to its spot; do (Params at +0x148..+0x15c): record flag 2 (the run over) → anim length Param1 (8) << 8, frame Param2 (14); at frame Param3 (5) runs (path type 1, velocity calc1 = 20, stat 0x43 read); at frame Param4 (13): length Param5 (16) << 8, back to frame Param6 (6); else, with unit +0x4e set, one hit with the skill's damage (FUN_0056e680, hit flags +0x130 \| 0x20) on the record's unit when in reach (FUN_00622c40), +0x4e cleared. Its sequence is MonSeq seq_diablorun (Sk5mode): 22 RN rows, event 2 on 5..13, event 1 on 18. d2d: `monster_update`'s DiabRun phases (2026-10-16) |
+| DiabRun (198) | 54 FUN_005cd2c0 | 103 FUN_005cd380 | start: the target's id / type in the record, path to its spot; do (Params at +0x148..+0x15c): record flag 2 (the run over) → anim length Param1 (8) << 8, frame Param2 (14); at frame Param3 (5) runs (path type 1, velocity max(calc1 << 8, 0x100) × stat 0x43 / 100 via FUN_00483360 into the path's +0x7c, the unit a MonStats Velocity's; calc1 = 20); at frame Param4 (13): length Param5 (16) << 8, back to frame Param6 (6); else, with unit +0x4e 1 (the frame's event, FUN_00623e..: event 1, row 18), one hit with the skill's damage (FUN_0056e680, hit flags +0x130 \| 0x20) on the record's unit when in reach (FUN_00622c40), +0x4e cleared. Its sequence is MonSeq seq_diablorun (Sk5mode): 22 RN rows, event 2 on 5..13, event 1 on 18. d2d: `monster_update`'s DiabRun phases (2026-10-16) |
 | DiabLight (193) | — | 152 FUN_005cc690 | a missile (srvmissilea diablight, range from Missiles +0x9a / +0x9b × level / 8) at the target; while the record's end frame is ahead and state 0xc is on, events 0 / 1 cleared and event 0 at frame + calc +0x140; else ends (FUN_005cc3b0) |
 | DiabCold (194) | — | 100 FUN_005cce80 | the caster flag 0x40; one hit at the unit (flags +0x12e | 1, +0x130, +0x134), no block when stat 6 is 0; the overlay +0x4e |
 | FingerMageSpider (196) | — | 101 FUN_005ccfa0 | one srvmissilea (type 3) from the caster to the target (or its path's end); calc +0x138 the missile's level |

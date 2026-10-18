@@ -76,7 +76,7 @@ def compare(e, first, last, lid, what, ours_dir, env):
         elif what == "game":
             game = objgroups.game_dump(e, seed, [int(v) for v in env.get("LEVELS", objgroups.LEVELS).split(",")], env["ORDER"]).splitlines()
         elif what in ("objgroups", "drops"):
-            game = objgroups.quest_stubbed(e, objgroups.dump, seed, lid, what == "drops").splitlines()   # Travincal reads a quest flag (FUN_00544760)
+            game = objgroups.quest_stubbed(e, objgroups.dump, seed, lid, what == "drops", int(os.environ.get("DIFFICULTY", 0))).splitlines()   # Travincal reads a quest flag (FUN_00544760)
         else:
             game = drlg.level_dump(e, seed, lid).splitlines()
         if tiles and what not in ("monsters", "objgroups", "drops", "collision", "game", "npcs"):

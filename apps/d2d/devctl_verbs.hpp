@@ -17,6 +17,7 @@
 #include "window.hpp"
 
 #include <d2s_items.hpp>
+#include <gamedata_load.hpp>
 #include <devctl.hpp>
 #include <light.hpp>
 #include <object_ids.hpp>
@@ -59,7 +60,7 @@ const char* screen_name(Screen screen) {
 // the channel is only pumped inside that loop, so the captures never
 // outlive it.
 void register_game_verbs(d2d::devctl::Channel& channel, Window& win, Screen& screen, CharSelectUI& csu, CharCreateUI& character,
-                         Town& town, const std::optional<Scene>& scene, Audio& audio) {
+                         Town& town, std::optional<Scene>& scene, Audio& audio) {
     auto click_verb = [&win = win](const std::vector<std::string>& args, std::uint8_t button) {
         if (args.size() < 3) return std::string("err click <x> <y>\n");
         // Args are game pixels; queued events carry window coords and get
@@ -401,7 +402,12 @@ void register_game_verbs(d2d::devctl::Channel& channel, Window& win, Screen& scr
             const int difficulty = std::clamp(std::atoi(args[2].c_str()), 0, 2);
             for (int i = 0; i < 3; ++i) town.world.character.header.difficulty[std::size_t(i)] &= 0x7f;   // the World's character
             town.world.character.header.difficulty[std::size_t(difficulty)] |= 0x80;
-            town.new_game();
+            // A new game on it, as a real one starts: the levels built again for
+            // the difficulty (set_map_seed: LvlMaze Rooms(N) / (H)), the World
+            // entered with its own character (items, stats) in the act's town.
+            static_cast<Character&>(town.character) = town.world.character;
+            if (scene) set_map_seed(*scene, scene->map_seed, difficulty);
+            town.enter();
             return std::string("ok\n");
         }
         if (args.size() >= 3 && args[1] == "give") {       // an item <code> [quality] at the player's feet, the area level's

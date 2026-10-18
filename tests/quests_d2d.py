@@ -711,8 +711,13 @@ def act4():
     cmd(f"debug warp {forge[0][1]} {forge[0][2]}")
     for _ in range(4): cmd(f"debug operate {forge[0][0]}")
     until("the forge struck", lambda: "the soulstone is shattered" in log_text(), 5)
-    assert bits(0x1b) & 0x2002 == 0x2002, f"word 0x1b: {bits(0x1b):#x}"
+    # The gems (FUN_005b6710): 22 frames on, then a round each 20 frames,
+    # 4 (perfect) down to 1 (plain), on the quest seed; at the forge even
+    # with the player gone.
     go(103)
+    until("the gems", lambda: "The Hellforge: round 1," in log_text(), 10)
+    assert [int(r) for r in re.findall(r"The Hellforge: round (\d)", log_text())] == [4, 3, 2, 1], "the gems' rounds"
+    assert bits(0x1b) & 0x2002 == 0x2002, f"word 0x1b: {bits(0x1b):#x}"
     talk_until("Cain", lambda: bits(0x1b) & 1, "the Hellforge not rewarded")
     print("OK: the Hellforge (a4q3)")
     # a4q2: Tyrael (681); the five seals, their three bosses dead release

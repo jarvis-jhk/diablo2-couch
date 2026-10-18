@@ -141,49 +141,7 @@ int main() {
     const auto reg = monster_region(monsters, level_mon, 0, rng);
     assert(reg.types.size() == 2 && reg.total == 4);
 
-    // A 40x40-subtile room (one 8x8-tile room) with a blocked column.
-    auto fits = [](int x, int y) { return x != 20 && x >= 0 && y >= 0; };
-    auto near_way = [](int x, int y) { return x < 5 && y < 5; };
-    std::vector<Spawn> first, second;
-    Rng rng1{ 7 }, rng2{ 7 };
-    for (int i = 0; i < 20; ++i) {
-        populate_room(monsters, reg, 10000, { 0, 0, 40, 40, Rng{ std::uint32_t(100 + i) } }, rng1, fits, near_way, first);
-        populate_room(monsters, reg, 10000, { 0, 0, 40, 40, Rng{ std::uint32_t(100 + i) } }, rng2, fits, near_way, second);
-    }
-    assert(first.size() == second.size() && !first.empty());                  // same seeds, same monsters
-    int leaders = 0, fallen_groups = 0;
-    for (std::size_t i = 0; i < first.size(); ++i) {
-        const auto& spawn = first[i];
-        assert(spawn.x == second[i].x && spawn.y == second[i].y && spawn.type == second[i].type);
-        assert(spawn.x >= 0 && spawn.y >= 0 && spawn.x < 40 && spawn.y < 40 && spawn.x != 20);
-        if (spawn.leader != int(i)) continue;
-        ++leaders;
-        assert(!near_way(spawn.x, spawn.y));
-        std::size_t count = 1;
-        while (i + count < first.size() && first[i + count].leader == int(i)) ++count;
-        if (spawn.type == 1) { ++fallen_groups; assert(count >= 1 && count <= 4); }   // leader + party 2..3 (fewer if crowded)
-        else assert(count <= 2);                                               // zombies: 1..2
-    }
-    std::printf("%zu monsters in %d groups (%d fallen) over 20 rooms\n", first.size(), leaders, fallen_groups);
-    assert(leaders >= 5 && fallen_groups > 0);
-
-    // Density 0: nobody.
-    std::vector<Spawn> none;
-    populate_room(monsters, reg, 0, { 0, 0, 40, 40, Rng{ 1 } }, rng1, fits, near_way, none);
-    assert(none.empty());
-
-    // FUN_0054ec90's areas: (h/3)*(w/3) game-seed tries each, spots only in
-    // the area drawn (nothing fits here, so every hit is one step too).
-    {
-        SpawnRoom split{ 0, 0, 40, 40, Rng{ 5 }, { { 0, 0, 30, 30 }, { 30, 30, 10, 9 } } };
-        Rng game{ 9 }, mirror{ 9 };
-        populate_room(monsters, reg, 10000, split, game, [](int, int) { return false; }, near_way, none);
-        for (int step = 0; step < 100 + 9; ++step) (void)mirror.next();
-        assert(none.empty() && game.low == mirror.low && game.high == mirror.high);
-        std::vector<Spawn> in_area;
-        populate_room(monsters, reg, 10000, SpawnRoom{ 0, 0, 40, 40, Rng{ 5 }, { { 30, 30, 10, 10 } } }, game, fits, near_way, in_area);
-        for (const auto& spawn : in_area) assert(spawn.leader != &spawn - in_area.data() || (spawn.x > 30 && spawn.y > 30));
-    }
+    // Room population: objgroups.cpp's port, proven by tools/emu/sweep.sh monsters ($DIFFICULTY 0..2).
 
     // Stats: zombie level 1 in normal = 7 HP x 101..181 %.
     Rng stats_rng{ 3 };

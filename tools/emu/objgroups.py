@@ -36,17 +36,18 @@ TOWNS = set(drlg.TOWNS)                                       # a camp room's li
 CONTAINERS = {1, 3, 4, 5, 14, 26}                           # OperateFn: casket, urn, chest, barrel, corpse / crate, bookshelf
 
 
-def dump(e, seed, lid, drops=False):
+def dump(e, seed, lid, drops=False, difficulty=0):
     game = e.alloc(0x2000)
+    e.mu.mem_write(game + 0x6d, bytes([difficulty]))         # a maze's rooms (LvlMaze Rooms by difficulty)
     state = seed * 0x6ac690c5 + 666                         # FUN_00547d20: the regions' step
     e.w32(game + 0xd0, state & 0xffffffff); e.w32(game + 0xd4, state >> 32)
     e.w32(game + 0x7c, seed); e.w32(game + 0x84, 1); e.w32(game + 0x70, 1)
-    e.call(0x5479c0, e.alloc(8), state & 0xffffffff, 0, 1, ecx=0, edx=game + 0xf0)   # monster regions (presets count into them)
+    e.call(0x5479c0, e.alloc(8), state & 0xffffffff, difficulty, 1, ecx=0, edx=game + 0xf0)   # monster regions (presets count into them)
     e.call(0x546c60, ecx=game)                               # objrgn: the object seed
     e.call(0x536070, ecx=game)                               # sunitproxy (a game-seed step)
     e.call(0x545d80, ecx=game)                               # the quests (the Cairn Stones' preset asks for its record)
     e.call(0x541470, ecx=game)                               # the event list
-    act = e.call(0x6194a0, drlg.act_of(lid), seed, 0, game, 0, 0, lid, 0, 0)   # its act
+    act = e.call(0x6194a0, drlg.act_of(lid), seed, 0, game, difficulty, 0, lid, 0, 0)   # its act
     e.w32(game + 0xbc + 4 * drlg.act_of(lid), act)
     lvl = drlg.find_level(e, e.r32(act + 0x48), lid)
     if not lvl: raise SystemExit(f"objgroups: level {lid} not built")

@@ -83,6 +83,19 @@ void cloak(const GameData& game_data, Monster& monster, int skill, int lvl, std:
 
 constexpr int kTerror = 77;                     // Skills.txt Terror: Howl's state (FUN_005ddd00, 0x4d)
 
+// Diablo's score of a pet or monster (FUN_005e8530 reads any unit's stats
+// so): its resists as stats 0x24 / 0x25 / 0x27 / 0x29 / 0x2b, raw, and its
+// aura as its right skill (FUN_005701b0 sets it: a merc's FUN_005e4d30, a
+// summon's FUN_005c4470, Aura Enchanted's FUN_005a1650) at its level.
+// ponytail: a monster's or summon's max damage left 0 (its last swing's
+// mode stats, FUN_005a4f50), and no left skill on any of them.
+d2d::rules::DiabloPick unit_pick(const GameData& game_data, std::array<int, 5> res, int aura, int aura_level) {
+    d2d::rules::DiabloPick pick;
+    std::tie(pick.damage_resist, pick.magic_resist, pick.fire_resist, pick.light_resist, pick.cold_resist) = std::tuple{ res[0], res[1], res[2], res[3], res[4] };
+    if (const auto* skill = aura > 0 ? game_data.skills.get(aura) : nullptr) { pick.right_skill = skill->id; pick.right_level = aura_level; pick.right_rank = skill->attack_rank; }
+    return pick;
+}
+
 }  // namespace
 
 auto Fight::monster_index(int id) const -> int {
@@ -92,6 +105,10 @@ auto Fight::monster_index(int id) const -> int {
     }
 
 auto Fight::add_monster(Monster monster) -> void { monster.id = next_id++; monsters.push_back(std::move(monster)); }
+auto Fight::add_monster(Monster monster, const Level* where) -> void {
+        monster.id = next_id++;
+        (where == mon_level || !where ? monsters : kept[where]).push_back(std::move(monster));
+    }
 
 auto Fight::own_stats() const -> d2d::d2s::Stats {
         using namespace d2d::d2s;
@@ -107,6 +124,7 @@ auto Fight::new_game(int difficulty) -> void {
         mon_level = nullptr;
         area_seen.clear();
         curses = {};
+        marks = {};
         chilled = 0;
         stunned = 0;
         kept.clear();
@@ -147,7 +165,7 @@ auto Fight::revive(std::uint32_t now_ms) -> void {
         regen.clear();
         charges.clear();
         self_states.clear();
-        curses[0] = {};
+        curses[0] = {}; marks[0] = {};
         stunned = 0;
         pmode = -1; player.mode_ms = now_ms; attack_mon = -1;
         if (merc) { merc->unit.x = player.x + 1; merc->unit.y = player.y + 1; merc->unit.path.clear(); merc->mode = "NU"; merc_target = -1; }
@@ -393,6 +411,7 @@ auto Fight::update_fighters(std::uint32_t now_ms) -> void {
                 && std::hypot(pet.monster.unit.x - player.x, pet.monster.unit.y - player.y) * 5 <= float(calc(*skill, skill->aurarange, pet.aura_level)))
                 states.push_back({ pet.aura, pet.aura_level, ~0u });
         if (now_ms < curses[0].until) states.push_back({ curses[0].skill, curses[0].level, curses[0].until });   // a monster's curse on the player
+        if (now_ms < marks[0].until) states.push_back({ marks[0].skill, marks[0].level, marks[0].until });
         for (const auto& state : states) {
             const auto* skill = game_data->skills.get(state.skill);
             for (std::size_t i = 0; skill && i < skill->aurastat.size(); ++i)
@@ -2370,7 +2389,7 @@ auto Fight::missile_tick(std::uint32_t now_ms) -> void {
         }
         for (std::size_t k = 0; k < missiles.size(); ++k) {
             auto& missile = missiles[k];
-            if (missile.skill < 0 || !missile.info) continue;
+            if (!missile.friendly || missile.skill < 0 || !missile.info) continue;   // the player's side's (a monster's carries its skill too)
             const auto* skill = game_data->skills.get(missile.skill);
             if (!skill) continue;
             const int age = int(now_ms - missile.born) / 40;
@@ -2980,6 +2999,7 @@ auto Fight::summon_one(const d2d::rules::Skill& skill, int type, int lvl, const 
             } else pet.ctrl = d2d::rules::shadow_master_init(type_info.diff[std::size_t(monster.difficulty)].aip[2], monster.seed);
         }
         set_mode(*game_data, monster, "NU", now_ms);
+        pet.monster.id = next_id++;                              // a unit id as a monster's (a guided missile's hold on it)
         pets.push_back(std::move(pet));
     }
 
@@ -3040,8 +3060,12 @@ auto Fight::pet_foe(const Pet& pet) const -> Foe {
         const bool still = type_info.velocity == 0 && type_info.run == 0 && pet.ranged >= 0;   // a Hydra, like a trap, isn't there to hit
         Foe foe{ pet.monster.unit.x, pet.monster.unit.y, pet.monster.stats.level, pet.monster.alive() && pet.monster.mode != "DT" && pet.shot_skill < 0 && !still && pet.where == level,
                  pet.monster.unit.walking, fighter };
-        foe.pet = true; foe.size = type_info.size; foe.threat = type_info.threat;
+        foe.pet = true; foe.size = type_info.size; foe.threat = type_info.threat; foe.id = pet.monster.id;
         foe.life_pct = int(std::int64_t(pet.monster.hit_points) * 100 / std::max(pet.monster.stats.hit_points, 1));
+        const auto& own = type_info.diff[std::size_t(pet.monster.difficulty)].res;
+        std::array<int, 5> res{ own[0], own[1] };
+        for (std::size_t k = 0; k < 3; ++k) res[k + 2] = pet.res[k] + pet_buff_stat(pet, kResists[k]);
+        foe.pick = unit_pick(*game_data, res, pet.aura, pet.aura_level);
         return foe;
     }
 
@@ -3981,7 +4005,7 @@ auto Fight::crowd(Crowd& crowd_out) -> void {
     }
 
 auto Fight::side_pair(std::uint32_t now_ms) -> std::vector<Foe> {
-        std::vector<Foe> foes{ Foe{ player.x, player.y, int(character.stats.get(d2d::d2s::kLevel)), true, player.walking, player_combat },
+        std::vector<Foe> foes{ Foe{ player.x, player.y, int(character.stats.get(d2d::d2s::kLevel)), !dead(), player.walking, player_combat },
                                Foe{ merc ? merc->unit.x : 0, merc ? merc->unit.y : 0, merc_st.level, merc && merc->mode != "DT",
                                     merc && merc->unit.walking, merc_fighter() } };
         foes[0].running = owner_mode == 3;                   // RN (World: walking with run on and stamina)
@@ -4005,9 +4029,23 @@ auto Fight::side_pair(std::uint32_t now_ms) -> std::vector<Foe> {
             foes[1].size = game_data->monsters.types[std::size_t(row)].size, foes[1].threat = game_data->monsters.types[std::size_t(row)].threat;
         // The merc's curse: its damageresist (Amplify Damage's -100 %).
         // ponytail: its other aurastats (Weaken's damagepercent) aren't on the merc's fighter.
+        int curse_dr = 0;
         if (const auto* skill = now_ms < curses[1].until ? game_data->skills.get(curses[1].skill) : nullptr)
             for (std::size_t i = 0; i < skill->aurastat.size(); ++i)
-                if (skill->aurastat[i] == d2d::d2s::kDamageResist) foes[1].fighter.dr_pct += calc(*skill, skill->aura_calc[i], curses[1].level);
+                if (skill->aurastat[i] == d2d::d2s::kDamageResist) curse_dr += calc(*skill, skill->aura_calc[i], curses[1].level);
+        foes[1].fighter.dr_pct += curse_dr;
+        if (merc) {                                          // its stats for Diablo's score: base + gear + curse, raw (no penalty or cap)
+            const auto sum = merc_gear().sum;
+            const auto stat = [&](int id) { return int(sum[std::size_t(id)]); };
+            int aura_level = 0;
+            for (std::size_t k = 0; k < merc_ids.size(); ++k) if (merc_ids[k] == merc_aura) aura_level = merc_levels[k];
+            foes[1].pick = unit_pick(*game_data, { stat(0x24) + curse_dr, stat(0x25), merc_st.resist + stat(0x27), merc_st.resist + stat(0x29), merc_st.resist + stat(0x2b) },
+                                     merc_aura, aura_level);
+            foes[1].pick.max_damage = stat(0x16) + stat(0x31) + stat(0x33) + stat(0x35) + stat(0x37) + (stat(0x3a) >> 8);   // 0x16 holds no base (merc_fighter)
+        }
+        for (std::size_t k = 0; k < 2; ++k)                  // the states on them the AIs read (their skills' +0x82)
+            for (const auto* held : { &curses[k], &marks[k] })
+                if (const auto* skill = now_ms < held->until ? game_data->skills.get(held->skill) : nullptr) foes[k].states.push_back(skill->auratarget);
         return foes;
     }
 
@@ -4063,7 +4101,9 @@ auto Fight::world(bool in_moor, std::uint32_t now_ms, float elapsed, const Crowd
                     for (std::size_t k = 0; k < 4; ++k) fighter.res[k] = std::min(target.res[2 + k], 95);
                     const auto& type_info = game_data->monsters.types[std::size_t(monster.type)];
                     Foe& foe = foes.emplace_back(Foe{ monster.unit.x, monster.unit.y, monster.stats.level, monster.targetable() && monster.mode != "DT", monster.unit.walking, fighter });
-                    foe.size = type_info.size; foe.threat = type_info.threat; foe.of = &monster;
+                    foe.size = type_info.size; foe.threat = type_info.threat; foe.of = &monster; foe.id = monster.id;
+                    foe.pick = unit_pick(*game_data, { target.res[0], target.res[1], target.res[2], target.res[3], target.res[4] }, monster.aura, monster.aura_lvl);
+                    foe.pick.state_b = now_ms < monster.chill_until;   // state 0xb, cold
                 }
             std::vector<Monster> born;
             for (std::size_t i = 0; host && i < monsters.size(); ++i) {
@@ -4117,7 +4157,7 @@ auto Fight::world(bool in_moor, std::uint32_t now_ms, float elapsed, const Crowd
                     return true;
                 }
                 return false;
-            });
+            }, [&](int owner) { const int index = monster_index(owner); return index >= 0 && monsters[std::size_t(index)].alive(); });
             if (couch_sides)                                       // what the guests' sides took, for their own passes
                 for (std::size_t k = 0; k < couch_sides->size(); ++k) {
                     auto& side = (*couch_sides)[k].foes;
@@ -4196,6 +4236,11 @@ auto Fight::world(bool in_moor, std::uint32_t now_ms, float elapsed, const Crowd
                     curses[k] = { skill->id, foes[k].cursed.level, now_ms + std::uint32_t(std::max(length, 25)) * 40 };
                     d2d::log::info("{} cursed: {} level {}", k ? "the merc" : "the player", skill->name, foes[k].cursed.level);
                 }
+            for (std::size_t k = 0; k < 2; ++k)
+                if (const auto* skill = game_data->skills.get(foes[k].marked.skill)) {
+                    if (now_ms >= marks[k].until) d2d::log::info("{} marked: {}", k ? "the merc" : "the player", skill->auratarget);
+                    marks[k] = { skill->id, foes[k].marked.level, now_ms + std::uint32_t(std::max(calc(*skill, skill->auralen, foes[k].marked.level), 5)) * 40 };
+                }
             if (foe.mana_burn > 0) {                             // Mana Burn
                 character.stats.values[d2d::d2s::kMana] = std::max<std::int64_t>(character.stats.values[d2d::d2s::kMana] - (std::int64_t(foe.mana_burn) << 8), 0);
                 d2d::log::info("mana burn: -{} mana", foe.mana_burn);
@@ -4207,7 +4252,7 @@ auto Fight::world(bool in_moor, std::uint32_t now_ms, float elapsed, const Crowd
             self_hurt &= 255;
             using namespace d2d::d2s;
             bool died = false;
-            if (foe.damage > 0) {
+            if (foe.damage > 0 && !dead()) {                    // a dead player takes no more (no second death)
                 character.stats.values[kLife] -= std::int64_t(foe.damage) << 8;
                 if (character.stats.values[kLife] <= 0) { die(now_ms); died = true; }
             }

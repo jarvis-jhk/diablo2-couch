@@ -114,12 +114,13 @@ struct Loot {
     // the game seed (+0xd0): its unit seed {low, 666} (FUN_00552df0), then
     // its own {low, 666} (FUN_00552e90); gold's coins come off the first.
     // It lands where drop_spot finds room from the dropper's subtile; gold
-    // times (100 + gold_find) / 100 (FUN_005589a0).
+    // times (100 + gold_find) / 100 (FUN_005589a0). `onto`: a level the
+    // player isn't on (the forge's gems), its floor kept.
     void put(const d2d::rules::Drop& dropped, float x, float y, int ilvl, d2d::rules::Rng& game_seed, std::uint32_t now_ms, bool bovine = false,
-             int gold_find = 0) {
+             int gold_find = 0, const Level* onto = nullptr) {
         {
             GroundItem ground_item;
-            std::tie(ground_item.x, ground_item.y) = drop_at(x, y);
+            std::tie(ground_item.x, ground_item.y) = drop_at(x, y, onto);
             ground_item.now_ms = now_ms;
             if (dropped.code == "gld") {
                 ground_item.item.code = "gld";
@@ -136,20 +137,24 @@ struct Loot {
                 const auto lines = item_lines(*game_data, ground_item.item, int(character.stats.get(d2d::d2s::kLevel)));
                 if (!lines.empty()) { ground_item.label = lines[0].text; ground_item.rgb = lines[0].rgb; }
             }
-            land(std::move(ground_item), now_ms);
+            land(std::move(ground_item), now_ms, onto);
         }
     }
     // FUN_00555da0 on the level's walk grid: walls and object footprints
     // (0x01) block, as do items already lying there (0x200).
     // ponytail: units (0x1000/0x2000) don't block; one level, no neighbours'.
-    [[nodiscard]] std::pair<float, float> drop_at(float x, float y) const {
-        const int width = level->ds1.width() * 5, height = level->ds1.height() * 5;
-        if (level->walk.empty()) return { x, y };
+    [[nodiscard]] std::pair<float, float> drop_at(float x, float y, const Level* onto = nullptr) const {
+        const Level* where = onto ? onto : level;
+        const int width = where->ds1.width() * 5, height = where->ds1.height() * 5;
+        if (where->walk.empty()) return { x, y };
+        const auto kept_floor = kept.find(where);
+        const auto& lying_items = where == ground_level ? ground : kept_floor != kept.end() ? kept_floor->second : ground;
+        const bool any_lying = where == ground_level || kept_floor != kept.end();
         const auto [spot_x, spot_y] = drop_spot(game_data->field, int(std::floor(x * 5)), int(std::floor(y * 5)), [&](int at_x, int at_y) {
             if (at_x < 0 || at_y < 0 || at_x >= width || at_y >= height) return 0x27;
-            int flags = level->walk[std::size_t(at_y) * std::size_t(width) + std::size_t(at_x)] & 0x01;
-            if (ground_level == level)
-                for (const auto& lying : ground)
+            int flags = where->walk[std::size_t(at_y) * std::size_t(width) + std::size_t(at_x)] & 0x01;
+            if (any_lying)
+                for (const auto& lying : lying_items)
                     if (int(std::floor(lying.x * 5)) == at_x && int(std::floor(lying.y * 5)) == at_y) flags |= 0x200;
             return flags;
         });
@@ -167,10 +172,12 @@ struct Loot {
         ground_item.item.location = d2d::d2s::item_location::kGround;
         land(std::move(ground_item), now_ms);
     }
-    // Onto the floor: its flippy plays and its drop sound at its drop frame.
-    void land(GroundItem ground_item, std::uint32_t now_ms) {
+    // Onto the floor: its flippy plays and its drop sound at its drop frame
+    // (onto another level's: kept, unseen and unheard).
+    void land(GroundItem ground_item, std::uint32_t now_ms, const Level* onto = nullptr) {
         if (const auto info = game_data->rules.item_info.find(ground_item.item.code);
             info == game_data->rules.item_info.end() || info->second.flippy.empty()) return;   // nothing to show on the ground
+        if (onto && onto != ground_level) { ground_item.id = next_id++; kept[onto].push_back(std::move(ground_item)); return; }
         cues.cue("item_flippy", now_ms, ground_item.x, ground_item.y);
         if (const auto info = game_data->rules.item_info.find(ground_item.item.code); info != game_data->rules.item_info.end())
             cues.cue(info->second.drop_sound, now_ms + std::uint32_t(info->second.drop_frame) * 40, ground_item.x, ground_item.y);

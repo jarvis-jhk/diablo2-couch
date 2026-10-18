@@ -17,6 +17,7 @@
 #include <array>
 
 #include <cstddef>
+#include <cmath>
 #include <cstdint>
 #include <format>
 #include <iterator>
@@ -33,7 +34,31 @@ struct SealBoss { int operate_fn, superunique, off_x, off_y; };
 constexpr std::array<SealBoss, 3> kSealBosses{ { { d2d::rules::operate_fn::kSealInfector, 0x24, -12, -52 },
                                                  { d2d::rules::operate_fn::kSealDeSeis, 0x25, -39, 33 },
                                                  { d2d::rules::operate_fn::kSealVizier, 0x26, 32, 16 } } };
+constexpr std::uint32_t kFlashFrames = 27;   // object 131's InitFn 59: event 7 at +0x1b frames
 }  // namespace
+
+// A seal's superunique and its minions at subtile (x, y) on the sanctuary
+// (FUN_00545c30 -> FUN_0054e600).
+auto World::seal_boss(const Level& where, int superunique, int x, int y) -> void {
+        if (std::size_t(superunique) >= game_data->superuniques.size()) return;
+        const int diff = character.header.active_difficulty();
+        const auto& row = game_data->superuniques[std::size_t(superunique)];
+        const auto [at_x, at_y] = where.nearest_free((float(x) + 0.5f) / 5, (float(y) + 0.5f) / 5);
+        auto boss = make_monster(*game_data, row.type, at_x, at_y, fight.rng, diff, false);
+        make_boss(*game_data, boss, d2d::rules::Boss::superunique, row.mods, superunique, 0, diff, fight.rng);
+        boss.aware = true;
+        const int minion = game_data->monsters.types[std::size_t(row.type)].minion[0] >= 0 ? game_data->monsters.types[std::size_t(row.type)].minion[0] : row.type;
+        const int count = row.min_grp + int(fight.rng.next() % std::uint32_t(std::max(row.max_grp - row.min_grp + 1, 1)));
+        fight.add_monster(std::move(boss), &where);
+        for (int i = 0; i < count; ++i) {
+            const auto [minion_x, minion_y] = where.nearest_free(at_x + float(i % 3 - 1) * 0.6f, at_y + float(i / 3 - 1) * 0.6f);
+            auto follower = make_monster(*game_data, minion, minion_x, minion_y, fight.rng, diff, false);
+            make_boss(*game_data, follower, d2d::rules::Boss::minion, {}, -1, 0, diff, fight.rng);
+            follower.aware = true;
+            fight.add_monster(std::move(follower), &where);
+        }
+        d2d::log::info("Terror's End: {} comes", row.name);
+    }
 
 auto World::act4_log(d2d::rules::QuestLogStates& log, const d2d::rules::QuestBits& bits) const -> void {
         log[d2d::rules::IzualQuest::kQuest] = std::uint8_t(izual.log_state(bits));
@@ -48,7 +73,10 @@ auto World::act4_join() -> void {
         hellforge.join(quests(), carries(d2d::rules::HellforgeQuest::kStone));
         terror = {};
         terror.join(quests());
-        izual_ghost_at = diablo_at = diablo_dead_at = 0;
+        izual_ghost_at = diablo_at = diablo_dead_at = gems_at = 0;
+        gem_rounds = 0;
+        forge_inited = false;
+        seal_bosses.clear();
         fortress_warp_done = end_movie = game_closed = false;
         had_soulstone = carries(d2d::rules::HellforgeQuest::kStone);
         act4_chain();
@@ -58,7 +86,7 @@ auto World::act4_join() -> void {
 // LAB_005b4530): a quest done or shut opens the next.
 auto World::act4_chain() -> void {
         if (izual.open && izual.state != 5) return;
-        hellforge.opened(quests());
+        hellforge.opened();
         if (hellforge.open && hellforge.state != 5) return;
         terror.opened();
     }
@@ -67,6 +95,12 @@ auto World::act4_enter(const Level& /*from*/) -> void {
         izual.enter(quests(), level->id);
         hellforge.enter(quests(), level->id);
         terror.enter(quests(), level->id);
+    }
+
+auto World::act4_talk_closed(int hc_idx) -> void {
+        izual.talk_closed(hc_idx);
+        hellforge.talk_closed(hc_idx);
+        terror.talk_closed(hc_idx);
     }
 
 auto World::act4_talk(std::vector<d2d::rules::QuestMsg>& out, int hc_idx) -> void {
@@ -155,11 +189,13 @@ auto World::act4_update(std::uint32_t now_ms) -> void {
         if (hosted_quests) return;
         // Izual's first think (FUN_005b4390): the Fallen Angel's log sent again.
         for (auto& monster : fight.monsters)
-            if (std::exchange(monster.greeted, false) && izual.greeted(quests())) {
-                events.push_back(ev::QuestNews{ d2d::rules::IzualQuest::kQuest });
-                d2d::log::info("The Fallen Angel: Izual's first think, the log sent");
+            if (std::exchange(monster.greeted, false)) {
+                izual.greet();
+                d2d::log::info("The Fallen Angel: Izual's first think, the log at {}", izual.log);
             }
-        // a4q1's timer (FUN_005b3e60): Izual's ghost (0x196) where he fell, an NPC.
+        // a4q1's timer (FUN_005b3e60): the log 3, then Izual's ghost (0x196)
+        // where he fell, an NPC.
+        if (izual_ghost_at && now_ms >= izual_ghost_at) izual.ghost_timer();
         if (izual_ghost_at && now_ms >= izual_ghost_at && izual.ghost_due) {
             izual_ghost_at = 0; izual.ghost_due = false;
             if (const auto& ghost = game_data->mon_npc[std::size_t(d2d::rules::IzualQuest::kGhost)]; !ghost.code.empty()) {
@@ -169,13 +205,60 @@ auto World::act4_update(std::uint32_t now_ms) -> void {
                 d2d::log::info("The Fallen Angel: Izual's ghost");
             }
         }
-        // a4q2's timer: Diablo at his start point (object 255) in the sanctuary.
-        // ponytail: due only while the player's there (the World holds that level's monsters).
-        if (diablo_at && now_ms >= diablo_at && level->id == d2d::rules::level_ids::kChaosSanctuary && !terror.diablo_made) {
-            const auto start = std::ranges::find(level->npcs, d2d::rules::object_ids::kDiabloStart, &Npc::object_id);
-            if (start != level->npcs.end()) {
+        if (izual_ghost_at && now_ms >= izual_ghost_at) izual_ghost_at = 0;
+        // A log moved with flag 1 (FUN_00544300): sent again (S->C 0x5d) to a
+        // player it's for (act4_detail::told).
+        for (auto [news, quest] : { std::pair{ &izual.news, d2d::rules::IzualQuest::kQuest }, { &hellforge.news, d2d::rules::HellforgeQuest::kQuest },
+                                    { &terror.news, d2d::rules::TerrorQuest::kQuest } })
+            if (std::exchange(*news, false) && d2d::rules::act4_detail::told(quests(), quest)) events.push_back(ev::QuestNews{ quest });
+        // The seals' bosses at their flash's event 7 (FUN_005b5750 -> FUN_00545c30).
+        const Level* sanctuary = game_data->level(d2d::rules::level_ids::kChaosSanctuary);
+        for (auto due = seal_bosses.begin(); due != seal_bosses.end();)
+            if (now_ms >= due->at && sanctuary) { seal_boss(*sanctuary, due->superunique, due->x, due->y); due = seal_bosses.erase(due); }
+            else ++due;
+        // The forge's gems (event 7, FUN_005b6710): a round each 20 frames,
+        // round 4 a perfect, 3 and 2 flawless, 1 plain, rand(7) on the quest
+        // seed (FUN_005438b0; skulls the seventh); LoD, a rune rand(11) on by
+        // difficulty after the last. They fall at the forge wherever the
+        // player is (the River of Flame's floor kept till they're back).
+        const Level* river = game_data->level(d2d::rules::level_ids::kRiverOfFlame);
+        const Npc* forge = nullptr;
+        if (river)
+            if (const auto found = std::ranges::find(river->npcs, d2d::rules::operate_fn::kHellforge, &Npc::operate_fn); found != river->npcs.end()) forge = &*found;
+        // The forge's InitFn (48, FUN_005b5a20) as its room comes up.
+        // ponytail: once; d2d's rooms stay up (player_moved), game.exe's
+        // come up again after one's freed and run it again.
+        if (!forge_inited && forge)
+            if (const auto made = fight.spawning.levels.find(river); made != fight.spawning.levels.end())
+                if (const int room = room_of(*river, forge->x, forge->y); room >= 0 && std::ranges::contains(made->second.order, std::size_t(room))) {
+                    forge_inited = true;
+                    hellforge.forge_seen();
+                }
+        if (gems_at && now_ms >= gems_at && forge) {
+            const int diff = std::clamp(character.header.active_difficulty(), 0, 2);
+            const auto& area_levels = game_data->area_level;
+            const int alvl = std::size_t(river->id) < area_levels.size() ? area_levels[std::size_t(river->id)][std::size_t(diff)] : 1;
+            const auto& table = d2d::rules::HellforgeQuest::kGems[std::size_t(gem_rounds == 4 ? 2 : gem_rounds == 1 ? 0 : 1)];
+            const char* gem = table[std::size_t(fight.spawning.quests(7))];
+            loot.put({ .code = gem }, forge->x, forge->y, alvl, fight.spawning.game, now_ms, false, 0, river);
+            d2d::log::info("The Hellforge: round {}, {}", gem_rounds, gem);
+            if (--gem_rounds > 0) gems_at = now_ms + d2d::rules::HellforgeQuest::kRoundFrames * kTickMs;
+            else {
+                gems_at = 0;
+                if (character.header.expansion()) {
+                    const int rune = d2d::rules::HellforgeQuest::kRuneFirst[std::size_t(diff)] + fight.spawning.quests(11);
+                    loot.put({ .code = std::format("r{:02}", rune) }, forge->x, forge->y, alvl, fight.spawning.game, now_ms, false, 0, river);
+                    d2d::log::info("The Hellforge: the rune r{:02}", rune);
+                }
+            }
+        }
+        // a4q2's timer (FUN_005b4be0): 10 ticks on, Diablo at his start
+        // point (object 255) in the sanctuary, wherever the player is.
+        if (diablo_at && now_ms >= diablo_at && sanctuary && !terror.diablo_made) {
+            const auto start = std::ranges::find(sanctuary->npcs, d2d::rules::object_ids::kDiabloStart, &Npc::object_id);
+            if (start != sanctuary->npcs.end()) {
                 const int diff = character.header.active_difficulty();
-                const auto [at_x, at_y] = level->nearest_free(start->x, start->y);
+                const auto [at_x, at_y] = sanctuary->nearest_free(start->x, start->y);
                 auto diablo = make_monster(*game_data, d2d::rules::TerrorQuest::kDiablo, at_x, at_y, fight.rng, diff);
                 if (const auto boss = d2d::rules::act_boss(diablo.type, game_data->monsters.types[std::size_t(diablo.type)].base)) {   // FUN_005b1cf0
                     diablo.boss = d2d::rules::Boss::unique;
@@ -183,7 +266,7 @@ auto World::act4_update(std::uint32_t now_ms) -> void {
                     diablo.half_freeze = boss->half_freeze;
                 }
                 diablo.aware = true;
-                fight.add_monster(std::move(diablo));
+                fight.add_monster(std::move(diablo), sanctuary);
                 terror.diablo_made = true; diablo_at = 0;
                 d2d::log::info("Terror's End: Diablo");
             }
@@ -192,7 +275,9 @@ auto World::act4_update(std::uint32_t now_ms) -> void {
         // each player (FUN_005b4a80): with bit 13 to the fortress (FUN_0053aec0
         // level 103), without it the client leaves (S->C 0x50 -> C->S 0x69);
         // 95 s the game closes (FUN_00530590).
-        // ponytail: the 75 s step (FUN_0052e2a0 over the clients) isn't sent.
+        // The 75 s step (FUN_0052e2a0) saves each client's character to the
+        // realm (game +0x6a 1 / 2, FUN_00532400); a single player or TCP/IP
+        // game (+0x6a 3) does nothing, nor does d2d.
         if (diablo_dead_at && now_ms - diablo_dead_at >= 90000 && !fortress_warp_done) {
             fortress_warp_done = true;
             const Level* fortress = game_data->level(d2d::rules::level_ids::kPandemoniumFortress);
@@ -208,7 +293,7 @@ auto World::act4_update(std::uint32_t now_ms) -> void {
         // The soulstone picked up (LAB_005b5a90): the Hellforge open.
         // ponytail: polled from what's carried, not the item event.
         if (const bool stone = carries(d2d::rules::HellforgeQuest::kStone); stone != had_soulstone) {
-            if (stone) hellforge.opened(quests());
+            if (stone) hellforge.stone_picked(quests());
             had_soulstone = stone;
         }
     }
@@ -217,12 +302,9 @@ auto World::act4_update(std::uint32_t now_ms) -> void {
 auto World::act4_operate(int npc_index, std::uint32_t now_ms) -> bool {
         using namespace d2d::rules::operate_fn;
         const auto& object = level->npcs[std::size_t(npc_index)];
-        const int diff = character.header.active_difficulty();
         // The Hellforge (OperateFn 49, FUN_005b5c10): the soulstone set in,
-        // then three blows of the hammer in hand; the gems (FUN_005b6710):
-        // round 4 a perfect, 3 and 2 flawless, 1 plain (rand(7) each, skulls
-        // the seventh); LoD, then a rune rand(11) on by difficulty.
-        // ponytail: the gems drop at once on loot's rng, not 20 frames apart on the quest seed.
+        // then three blows of the hammer in hand; its event 7 at mode 3's
+        // FrameCnt3 starts the gems (act4_update).
         if (object.operate_fn == kHellforge) {
             if (hosted_quests) return true;
             const bool in_hand = std::ranges::any_of(character.items, [](const d2d::d2s::Item& item) {
@@ -233,46 +315,31 @@ auto World::act4_operate(int npc_index, std::uint32_t now_ms) -> bool {
             if (struck.done) {
                 take_carried(d2d::rules::HellforgeQuest::kHammer);
                 doors[{ level, npc_index }] = Door{ 3, now_ms };
-                const auto& area_levels = game_data->area_level;
-                const int alvl = std::size_t(level->id) < area_levels.size() ? area_levels[std::size_t(level->id)][std::size_t(std::clamp(diff, 0, 2))] : 1;
-                for (int round = 4; round >= 1; --round) {
-                    const auto& table = d2d::rules::HellforgeQuest::kGems[std::size_t(round == 4 ? 2 : round == 1 ? 0 : 1)];
-                    loot.put({ .code = table[std::size_t(loot.rng.next() % 7)] }, object.x, object.y, alvl, fight.spawning.game, now_ms);
-                }
-                if (character.header.expansion()) {
-                    const int rune = d2d::rules::HellforgeQuest::kRuneFirst[std::size_t(std::clamp(diff, 0, 2))] + int(loot.rng.next() % 11);
-                    loot.put({ .code = std::format("r{:02}", rune) }, object.x, object.y, alvl, fight.spawning.game, now_ms);
-                }
+                gem_rounds = d2d::rules::HellforgeQuest::kRounds;
+                gems_at = now_ms + d2d::rules::HellforgeQuest::kStrikeFrames * kTickMs;
                 d2d::log::info("The Hellforge: the soulstone is shattered");
             }
             return true;
         }
-        // The seals (52, 54..56): open once (mode 1); 54..56 make their boss
-        // at the seal's spot plus its offset (the flash's event 7, object 131,
-        // FUN_005b5750 -> FUN_00545c30); all five and the three dead release Diablo.
-        // ponytail: the boss comes at once, not on the flash's event; the flash itself isn't drawn.
+        // The seals (52, 54..56): open once (mode 1). 54..56 (FUN_005b6b70 /
+        // 6bc0 / 6c10) keep the seal's spot plus their offset and put the
+        // flash (object 131, FUN_005b6ad0) at a free spot near it
+        // (FUN_00545340: size 3, mask 0x3f11, 100 rings); only with the flash
+        // made does the seal open (FUN_005b5630). The flash's event 7, 27
+        // frames on (InitFn 59), makes the boss there (act4_update). All five
+        // open and the three dead release Diablo.
         if (object.operate_fn == kSeal || object.operate_fn == kSealInfector || object.operate_fn == kSealDeSeis || object.operate_fn == kSealVizier) {
             if (hosted_quests || operated.contains({ level, npc_index })) return true;
-            operated[{ level, npc_index }] = now_ms;
             for (const auto& [operate_fn, superunique, off_x, off_y] : kSealBosses)
-                if (object.operate_fn == operate_fn && std::size_t(superunique) < game_data->superuniques.size()) {
-                    const auto& row = game_data->superuniques[std::size_t(superunique)];
-                    const auto [at_x, at_y] = level->nearest_free(object.x + float(off_x) / 5, object.y + float(off_y) / 5);
-                    auto boss = make_monster(*game_data, row.type, at_x, at_y, fight.rng, diff, false);
-                    make_boss(*game_data, boss, d2d::rules::Boss::superunique, row.mods, superunique, 0, diff, fight.rng);
-                    boss.aware = true;
-                    const int minion = game_data->monsters.types[std::size_t(row.type)].minion[0] >= 0 ? game_data->monsters.types[std::size_t(row.type)].minion[0] : row.type;
-                    const int count = row.min_grp + int(fight.rng.next() % std::uint32_t(std::max(row.max_grp - row.min_grp + 1, 1)));
-                    fight.add_monster(std::move(boss));
-                    for (int i = 0; i < count; ++i) {
-                        const auto [minion_x, minion_y] = level->nearest_free(at_x + float(i % 3 - 1) * 0.6f, at_y + float(i / 3 - 1) * 0.6f);
-                        auto follower = make_monster(*game_data, minion, minion_x, minion_y, fight.rng, diff, false);
-                        make_boss(*game_data, follower, d2d::rules::Boss::minion, {}, -1, 0, diff, fight.rng);
-                        follower.aware = true;
-                        fight.add_monster(std::move(follower));
-                    }
-                    d2d::log::info("Terror's End: {} comes", row.name);
+                if (object.operate_fn == operate_fn) {
+                    const auto spot = level->free_area(int(std::floor(object.x * 5)) + off_x, int(std::floor(object.y * 5)) + off_y, 3, 0x3f11, 100);
+                    if (!spot) return true;
+                    const std::uint32_t event7 = now_ms + kFlashFrames * kTickMs;
+                    if (!game_data->afterglow.code.empty())
+                        fires.push_back({ level, &game_data->afterglow, (float(spot->first) + 0.5f) / 5, (float(spot->second) + 0.5f) / 5, now_ms, event7 });
+                    seal_bosses.push_back({ superunique, spot->first, spot->second, event7 });
                 }
+            operated[{ level, npc_index }] = now_ms;
             if (terror.seal(object.object_id)) diablo_release(now_ms);
             return true;
         }

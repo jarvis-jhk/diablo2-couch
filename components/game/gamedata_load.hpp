@@ -30,6 +30,6 @@ void load_game_world(GameData& data, d2d::mpq::Stack& mpqs, std::uint32_t map_se
 // its units, the other levels dropped (they build again when wanted). The
 // World and its Town must enter afterwards; nothing may point into the
 // old levels.
-void set_map_seed(GameData& data, std::uint32_t seed);
+void set_map_seed(GameData& data, std::uint32_t seed, int difficulty);
 
 }  // namespace d2d::game

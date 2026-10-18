@@ -1,7 +1,7 @@
 # Monsters — spawning (1.14d game.exe)
 
-Our port: `components/rules/monsters.hpp` (`monster_region`, `populate_room`,
-`monster_stats`), loaded by `load_monsters` (apps/d2d/load.hpp), tested by
+Our port: `components/game/objgroups.cpp` (room population), `components/rules/monsters.hpp`
+(`monster_region`, `monster_stats`), loaded by `load_monsters` (components/game/gamedata_load.cpp), tested by
 `tests/test_monsters.cpp`. How they notice the player and when they think:
 monster-ai.md.
 
@@ -307,8 +307,8 @@ handlers do nothing without it, so a unique's minions don't explode.
   90 / 75 / 66) scale the champion and strong damage and to-hit bonuses.
 
 d2d: `components/rules/uniques.hpp` (`roll_boss`, `boss_stats`,
-`fire_blast`, `kSpectralElement`, `kBossBonus`), `populate_room` with a
-`Population`; `make_boss` (ai.hpp) applies the stats and mana burn when a
+`fire_blast`, `kSpectralElement`, `kBossBonus`), objgroups.cpp's `unique()`
+with a `Population`; `make_boss` (ai.hpp) applies the stats and mana burn when a
 game's monsters are made; `Fight::boss_events` runs the lightning bolts
 and death effects each tick; `attack_starts` (spectral hit) and the
 multishot and mana-burn hooks sit in `monster_update`.
@@ -393,21 +393,38 @@ id, x, y, mode) — fastcall, id / x / y / mode on the stack:
   Pitspawn, Corpsefire, the Countess, the Smith, the Cow King; monsters
   gargoyletrap 17, Andariel, chickens, cows, rogues, the town NPCs.
 
-## Not yet traced / approximated
+## Nightmare and Hell (2026-10-17)
 
-- Tiles still come up in list order at load (drlg.md): in game.exe they
-  come up with the room1, as the player walks, so edge-shared tiles (and
-  the room1 seeds after them) can differ from ours off that order.
-- The seed at `+0x20` used for party and group counts (we use the room's).
-- The `spawn` replacement.
-- The stat init after the look (FUN_00573cb0: life on the unit seed,
-  FUN_006538a0), and the unit seed's later rolls (champion / unique,
-  party and group counts: the room's here).
-- Random object groups per room (FUN_00552610): traced but not built. See
-  objects.md "Random object groups per room". Its slot-per-loop room-seed
-  step comes before monster population, so building it will shift every
-  subsequent monster/champion roll — the emu oracle needs it too before the
-  port can be verified.
+Every difficulty populates through objgroups.cpp's port (game.exe's to the
+subtile; `sweep.sh` monsters, acts 1–4, `$DIFFICULTY` 0..2). What differs
+from normal:
+
+- **Mazes grow by difficulty**: LvlMaze.txt `Rooms` / `Rooms(N)` /
+  `Rooms(H)`. `GameData::difficulty` (set with the map seed by
+  `set_map_seed`) picks the column.
+- **Density and MonUMin/Max** by difficulty (Levels `MonDen(N)`,
+  `MonUMin(N)` ...), so NM / hell rooms roll uniques and champions where
+  normal has none (the Blood Moor: 4 / 5 in NM).
+- **The unique's type** (FUN_005bde80 with its unique flag set, from
+  FUN_0054ec90 at 0x54ef0b and FUN_0054e600's preset codes 2 / 3 at
+  0x54e873): normal picks one of Levels umon1..; NM / hell pick by rarity
+  off the region like a group, with the placespawn swap at threshold 0
+  (`rand(100) > 0`, a group's call passes 20): a crow nest unique is a
+  foul crow.
+- **Mods**: a unique's `rand(1) + 1 + difficulty` (FUN_005a0760); a
+  superunique's `difficulty` more unique mods (FUN_005a0600) on its own
+  seed before its minions, and MinGrp / MaxGrp each + difficulty when both
+  are set (FUN_005a0c00).
+- A boss's draws are all on its own unit seed (+0x20) after the ones it
+  was made with (FUN_005a0c00 at 0x5a0c4a: ECX = unit + 0x20; FUN_0054e1e0
+  likewise), and FUN_005a0320 counts every boss once (flag 8 marks it
+  counted, champions too).
+- A placed monster blocks the next one's plus-shaped test only on its own
+  subtile (FUN_005b2a00 with pattern 2): a diagonal neighbour fits.
+
+Not yet: tiles still come up in list order at load (drlg.md); in game.exe
+they come up with the room1 as the player walks, so edge-shared tiles (and
+the room1 seeds after them) can differ off that order.
 
 Seed 3's Blood Moor: 155 monsters (107 fallen1, 24 quillrat1, 24 zombie1).
 
@@ -621,7 +638,7 @@ tile as each room populates.
   roll): MonStats rows 0x137 (doomknight2, Abyss Knight) and 0x138
   (doomknight3, Oblivion Knight) roll `rand(4)` on the unit seed into
   monster data +0xe (0x138 also +0xf): the row DoomKnightMissile adds to its
-  missile. One more unit-seed step, so their groups' counts come after it.
+  missile (FUN_005cdfb0: EDX = srvmissilea + that byte, undeadmissile1..4). One more unit-seed step, so their groups' counts come after it.
   d2d: `rules::monster_variant`, `Monster::variant`.
 - **Trapped souls** (InitFn 46, FUN_005506d0, object 369 "trapped soul
   placeholder", from ObjGrp 46's scatter): on the object seed,

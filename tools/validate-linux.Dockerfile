@@ -9,7 +9,7 @@ RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends \
         ca-certificates cmake ninja-build build-essential pkg-config \
         git python3 findutils \
-        libsdl3-dev libopenal-dev zlib1g-dev libbz2-dev libstorm-dev \
+        libsdl3-dev libopenal-dev zlib1g-dev libbz2-dev libstorm-dev libcurl4-openssl-dev \
         qt6-base-dev libgl1-mesa-dev \
         clang-tidy && \
     rm -rf /var/lib/apt/lists/*

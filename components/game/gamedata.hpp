@@ -260,6 +260,25 @@ struct Level {
                         return { x + float(offset_x) * 0.2f, y + float(offset_y) * 0.2f };
         return { x, y };
     }
+    // FUN_00545340: a spot near subtile (x, y) for something `size` wide
+    // whose (size x 2 + 1) square, centred a subtile up-left of it, has no
+    // bit of `mask` (FUN_0064d800), searched ring by ring (c = 1 .. rings - 1:
+    // rows c, c - 2 .. > -c; columns -c, -c + 2 .. < c). None: nullopt.
+    // ponytail: the units' bits (0x1000+) are the Crowd's, not the grid's.
+    [[nodiscard]] std::optional<std::pair<int, int>> free_area(int x, int y, int size, std::uint16_t mask, int rings) const {
+        const int half = size >> 1, side = size * 2 + 1;
+        const auto clear = [&](int centre_x, int centre_y) {
+            for (int row = 0; row < side; ++row)
+                for (int column = 0; column < side; ++column)
+                    if (blocked((float(centre_x - side / 2 + column) + 0.5f) / 5, (float(centre_y - side / 2 + row) + 0.5f) / 5, mask & 0x0fff)) return false;
+            return true;
+        };
+        for (int ring = 1; ring < rings; ++ring)
+            for (int row = ring; row > -ring; row -= 2)
+                for (int column = -ring; column < ring; column += 2)
+                    if (clear(x - half + column, y - half + row)) return std::pair{ x + column, y + row };
+        return std::nullopt;
+    }
     std::pair<float, float> start{ -1.f, -1.f };            // cells: where a player joining arrives; see load_world
     std::pair<float, float> portal_spot{ -1.f, -1.f };      // cells: a town's portal arrival (DS1 special 33, spawn index 11)
     // Every spawn index's spot (the first tile of each; -1 none): 5 is where
@@ -557,6 +576,7 @@ struct GameData {
     std::vector<std::uint8_t> obj_subclass;            // objects.txt SubClass by Id (+0x167: 552610's throttle, 0x40 a waypoint)
     std::vector<std::uint8_t> field;                   // expfield.d2: 256 x 256 directions (0-7, 8 the centre) toward (128, 128)
     std::uint32_t map_seed = 3;                        // act layout + levels (3: townE1)
+    int difficulty = 0;                                // the levels' (a maze's rooms: LvlMaze Rooms by difficulty)
     std::vector<d2d::drlg::Placed> act1_layout;        // where act 1's levels sit (act tiles)
     std::vector<d2d::drlg::Placed> act2_layout;        // act 2's (its own act tiles: the acts overlap)
     d2d::drlg::Act3Layout act3_layout;                 // act 3's, and its jungle's cells
@@ -805,7 +825,6 @@ Npc monster_npc(const GameData& game_data, const d2d::txt::Table& monstats, cons
 struct ObjectRooms;                                     // objgroups.cpp
 struct Spawning {
     struct LevelState {
-        d2d::rules::Population pop;
         std::vector<d2d::rules::Spawn> spawns;             // every spawn so far, level-relative subtiles
         std::vector<bool> up;                              // by Level::rooms index: its room1 made (and populated)
         std::vector<std::size_t> order;                    // Level::rooms indices as they came up
@@ -945,12 +964,10 @@ std::unique_ptr<Level> build_level(const GameData& game_data, GameData::LevelBui
 void place_objects(const GameData& game_data, GameData::LevelBuilder& builder, Level& level);
 // Room `index` of `level` coming into play (FUN_0052d0f0, objgroups.cpp):
 // its seed step (FUN_0054f060), its preset objects (FUN_005559a0) on the
-// game's object seed, then in normal (`all`) its preset monsters, object
-// groups (FUN_00552610) and population (FUN_0054ec90) into the level's
-// spawns. Returns the room seed as it stands; NM / hell populate() makes
-// the preset monsters, then room_groups.
-d2d::rules::Rng room_objects(const GameData& game_data, Spawning& spawning, const Level& level, std::size_t index, bool all);
-void room_groups(const GameData& game_data, Spawning& spawning, const Level& level, std::size_t index, d2d::rules::Rng& seed);
+// game's object seed, its preset monsters, object groups (FUN_00552610)
+// and population (FUN_0054ec90) into the level's spawns. Returns the room
+// seed as it stands.
+d2d::rules::Rng room_objects(const GameData& game_data, Spawning& spawning, const Level& level, std::size_t index);
 // The level's collision as room_objects sees it (FUN_0064ca50's words, 0x27
 // off the rooms up), level subtiles row-major: drlg-dump drops.
 std::vector<std::uint16_t> object_collision(const Spawning& spawning, const Level& level);

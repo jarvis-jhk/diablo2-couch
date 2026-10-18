@@ -1,7 +1,7 @@
 # States: how they look
 
 A state (States.txt) changes a unit's look three ways. d2d:
-`Scene::StateInfo` (loaded in `load_composite_data`), `dress` and
+`GameData::StateInfo` (loaded in `load_tables`, gamedata_load.cpp), `dress` and
 `monster_states` / `player_states` (town.hpp), drawn in `render_world`.
 
 ## Colour shift

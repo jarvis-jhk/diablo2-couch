@@ -240,6 +240,13 @@ struct World {
     bool end_movie = false;                // the client's DAT_007a0604: ACT04END and the endgame screen on leaving
     bool game_closed = false;              // classic, 95 s on (FUN_00530590), or 90 s without bit 13 (C->S 0x69)
     bool had_soulstone = false;            // the Hellforge's item event (LAB_005b5a90): the soulstone picked up
+    std::uint32_t gems_at = 0;             // the forge's event 7 (FUN_005b6710): the next round of gems
+    int gem_rounds = 0;                    // its data +8: rounds left (4 perfect .. 1 plain)
+    bool forge_inited = false;             // the forge's InitFn ran (its room came up)
+    // A seal's boss, due at its flash's event 7 (object 131, 27 frames on;
+    // FUN_005b5750 -> FUN_00545c30) at the flash's spot, subtiles.
+    struct SealBoss { int superunique, x, y; std::uint32_t at; };
+    std::vector<SealBoss> seal_bosses;
     [[nodiscard]] d2d::rules::KhalimQuest::Parts khalim_parts() const;
     bool had_gidbinn = false;
     std::uint32_t gidbinn_timer = 0;       // a3q3's 7 ticks from the altar's use (FUN_00543f10 -> FUN_005b9a30)
@@ -276,6 +283,7 @@ struct World {
     void act4_chain();                     // the records' +0xf0 down a4q1 -> a4q3 -> a4q2
     bool act4_operate(int npc_index, std::uint32_t now_ms);   // the forge, the seals, Tyrael's portal
     void diablo_release(std::uint32_t now_ms);   // FUN_005b5230: the sanctuary cleared, Diablo due
+    void seal_boss(const Level& where, int superunique, int x, int y);   // a seal's flash's event 7
     // The player changed level, from `from`.
     void act1_enter(const Level& from);
     void act2_enter(const Level& from);
@@ -290,6 +298,7 @@ struct World {
     void act1_talk_closed(int hc_idx);
     void act2_talk_closed(int hc_idx);
     void act3_talk_closed(int hc_idx);
+    void act4_talk_closed(int hc_idx);
     // A message heard from the NPC: its rewards.
     void act1_said(int hc_idx, int message_string);
     void act2_said(int hc_idx, int message_string);

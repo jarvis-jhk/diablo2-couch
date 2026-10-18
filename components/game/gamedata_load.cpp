@@ -264,7 +264,9 @@ void load_monsters(GameData& game_data, const d2d::mpq::Stack& mpqs) {
     for (std::size_t row_index = 0; row_index < skills_table.size(); ++row_index) {
         skill_missiles.emplace(skills_table.get(row_index, "srvmissile"));
         for (const char* column : { "srvmissilea", "srvmissileb", "srvmissilec" }) skill_missiles.emplace(skills_table.get(row_index, column));
-        if (const std::string missile_name(skills_table.get(row_index, "srvmissilea")); d2d::rules::ServerDoFunction(num(skills_table.get(row_index, "srvdofunc"))) == d2d::rules::ServerDoFunction::kVariantMissile && !missile_name.empty())   // necromage1..4
+        const auto srvdofunc = d2d::rules::ServerDoFunction(num(skills_table.get(row_index, "srvdofunc")));
+        if (const std::string missile_name(skills_table.get(row_index, "srvmissilea"));
+            (srvdofunc == d2d::rules::ServerDoFunction::kVariantMissile || srvdofunc == d2d::rules::ServerDoFunction::kDoomKnightMissile) && !missile_name.empty())   // necromage1..4, undeadmissile1..4
             for (char digit = '2'; digit <= '4'; ++digit) skill_missiles.emplace(missile_name.substr(0, missile_name.size() - 1) + digit);
     }
     // Thrown weapons' rows (weapons.txt missiletype: Missiles.txt Id), for
@@ -1532,10 +1534,12 @@ std::optional<GameData> load_game_data(const fs::path& data_dir, const fs::path&
     return game_data;
 }
 
-void set_map_seed(GameData& game_data, std::uint32_t seed) {
-    if (seed == game_data.map_seed || !game_data.builder || !game_data.builder->act1) return;
+// A new game's seed and difficulty (the mazes' room counts, LvlMaze Rooms(N) / Rooms(H)).
+void set_map_seed(GameData& game_data, std::uint32_t seed, int difficulty) {
+    if ((seed == game_data.map_seed && difficulty == game_data.difficulty) || !game_data.builder || !game_data.builder->act1) return;
     for (auto& [id, job] : game_data.builder->jobs) job.wait();
     game_data.builder->jobs.clear();
+    game_data.difficulty = difficulty;                  // the builds read it (build_maze): after they're done
     game_data.levels.clear();
     const Level& old = game_data.town;
     Level town{ .id = old.id, .name = old.name, .type = old.type, .layer = old.layer, .song = old.song, .ambience = old.ambience,
