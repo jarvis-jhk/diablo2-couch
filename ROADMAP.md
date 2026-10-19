@@ -26,7 +26,9 @@ camera, with keyboard+pad or two pads.
 - [x] One shared camera following the group, with a leash keeping players on screen
       (rules 2026-10-14, wired 2026-10-16).
 - [x] Controller input per player (SDL3 gamepads), direct stick movement, skill buttons
-      (2026-10-16, apps/d2d/couch). Menus and panels still need the mouse.
+      (2026-10-16, apps/d2d/couch). 2026-10-19: upstream's #36 gamepad layer landed; player 1's
+      pad (pad_player1) now plays through it, menus and panels included. Guests' pads are still
+      the fork's own (no cursor, no panels) until upstream's #40 seats exist.
 - [ ] Per-player inventory/stash/merchant panels that do not pause the world.
 - [~] Group rules for waypoints, town portals and area transitions: player 1 leads, the
       guests follow (2026-10-16). Guests' own portals and waypoints: not yet.

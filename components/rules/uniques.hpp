@@ -51,8 +51,8 @@ struct BossInfo {
 // Named MonUMod ids.
 namespace umod {
 inline constexpr int rndname = 1, hpmultiply = 2, light = 3, leveladd = 4, strong = 5, fast = 6, curse = 7, resist = 8,
-                     fire = 9, bloodraven = 12, champion = 16, lightning = 17, cold = 18, questcomplete = 22, poisonhit = 23, manahit = 25, teleport = 26, spectralhit = 27,
-                     stoneskin = 28, multishot = 29, aura = 30, ghostly = 36, fanatic = 37, possessed = 38, berserk = 39;
+                     fire = 9, poisondead = 10, durieldead = 11, bloodraven = 12, rage = 13, spcdamage = 14, partydead = 15, champion = 16, lightning = 17, cold = 18, scarab = 20, questcomplete = 22, poisonhit = 23, manahit = 25, teleport = 26, spectralhit = 27,
+                     stoneskin = 28, multishot = 29, aura = 30, suicideminion = 33, ai_after_death = 34, shatter = 35, ghostly = 36, fanatic = 37, possessed = 38, berserk = 39;
 }
 
 namespace unique_detail {
@@ -340,6 +340,26 @@ inline BossStats boss_stats(const UMods& umods, const MonType& type, Boss kind, 
 // then 3/4, 2/3 or 1/8 by difficulty; rolled from 60 % of v to v (the
 // monster's seed), 64ths of it both physical and fire, within difficulty
 // + 4 subtiles. Returns {lo, hi} before the roll.
+// FUN_005b21b0 (from the spawn, FUN_005b2a00): the mods a whole family
+// carries, boss or not (FUN_005a4850 with 0: not counted as a boss), by
+// MonStats BaseId. Built: scarab (20) and poisondead (10); the rest have
+// no hooks d2d needs yet (rage, 13, has none in 0x73c0b8 at all).
+inline std::vector<int> family_mods(int base_id) {
+    switch (base_id) {
+        case 0x18: return { umod::rage };                              // brute2: Yeti, Crusher, Brute, Wailing / Gargantuan Beast
+        case 0x5b: return { umod::scarab };                            // scarab1: Dung Soldier .. Steel Weevil
+        case 0x60: return { umod::poisondead };                        // mummy1: Dried Corpse .. Cadaver
+        case 0xd3: return { umod::durieldead, umod::questcomplete };   // Duriel
+        case 0x146: case 0x147: case 0x148: case 0x149: case 0x14a: case 0x162: return { umod::spcdamage };   // traps
+        case 0x154: case 0x155: case 0x156: case 0x157: return { umod::partydead };                          // Diablo's bone prisons
+        case 0x1b4: return { umod::ai_after_death };                   // barricade towers (Act 5)
+        case 0x1cd: return { umod::suicideminion };                    // minion8 (Act 5)
+        case 0x1f5: return { umod::shatter };                          // catapults (Act 5)
+        case 0x21c: case 0x21d: case 0x21e: return { umod::questcomplete };
+        default: return {};
+    }
+}
+
 inline std::pair<int, int> fire_blast(int max_life, int difficulty) {
     static constexpr int kCE[3] = { 50, 35, 20 };
     const int difficulty_index = std::clamp(difficulty, 0, 2);

@@ -116,9 +116,23 @@ void diablo_scores() {
     }
 }
 
+// The max damage a swing leaves for Diablo's score (FUN_005a4f50): that mode's, plus its elements.
+void swing_max_damages() {
+    d2d::rules::MonStats stats;
+    stats.a1_max = 10; stats.a2_max = 20; stats.s1_max = 30;
+    stats.elements[0] = { 0, 50, 1, 7, 0, "A1" };     // fire on A1
+    stats.elements[1] = { 3, 100, 2, 64, 25, "A2" };  // poison on A2: x 10 >> 8
+    assert(d2d::rules::swing_max_damage(stats, "") == 0);
+    assert(d2d::rules::swing_max_damage(stats, "A1") == 17);
+    assert(d2d::rules::swing_max_damage(stats, "A2") == 20 + 64 * 10 / 256);
+    assert(d2d::rules::swing_max_damage(stats, "S1") == 30);
+    assert(d2d::rules::swing_max_damage(stats, "S2") == 10);
+}
+
 int main() {
     missile_flights();
     diablo_scores();
+    swing_max_damages();
     Monsters monsters;
     MonType zombie;
     zombie.id = "zombie1"; zombie.spawnable = true; zombie.base = 5;

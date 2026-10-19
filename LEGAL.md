@@ -21,9 +21,9 @@ EU law it relies on. It is not legal advice.
   copy of the 1.14d `Game.exe` (with Unicorn) to check that our code behaves
   the same. Those tools load the program from your disk; they do not ship it.
 - **Two pieces of licensed artwork.** The app icon's goat skull and pentagram
-  (`apps/icon/`) are *Designed by dgim-studio / Freepik*, used under the
+  (`assets/icon/`) are *Designed by dgim-studio / Freepik*, used under the
   Freepik license, not the GPL. The binary "decompiling" half is ours.
-  The banner's wordmark (`apps/icon/hero.svg`) is set in AvQest, a freeware
+  The banner's wordmark (`assets/icon/hero.svg`) is set in AvQest, a freeware
   font by GemFonts / Imitation Warehouse, converted to outlines.
 
 ## The EU Software Directive

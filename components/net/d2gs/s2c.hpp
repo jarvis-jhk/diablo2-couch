@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -34,6 +35,39 @@ inline auto quest_word_of_record(int record) -> int {
                                                            19, 20, 37, 37, 22, 23, 24, 37, 37, 37, 37, 37, 37, 30, 31, 32, 33, 34, 35, 36 };
     const auto found = std::ranges::find(kRecordOfWord, record);
     return found == kRecordOfWord.end() ? -1 : int(found - kRecordOfWord.begin());
+}
+
+// 0xac assign monster's boss, from its tail (FUN_0045f190, net-packets.md
+// "0xac"): LSB-first bits from +0xd to the length at +0xc. Mode 4,
+// components (1, then 16, each 1 bit under 3 choices, else bit_width(n - 1)
+// with n MonStats2's HDv..S8v count), then the boss: 1, 5 flags (champion,
+// unique, superunique, minion, ghostly), a superunique's SuperUniques row
+// (16), mods 8 bits each till a 0 (at most 9), the name seed (16).
+struct MonsterBoss { int flags = 0; int super = -1; std::vector<int> mods; int name_seed = 0; };   // flags: 1 champion, 2 unique, 4 superunique, 8 minion, 0x10 ghostly
+inline auto monster_boss(std::span<const std::uint8_t> packet, const std::array<std::uint8_t, 16>& choices) -> std::optional<MonsterBoss> {
+    if (packet.size() < 0xd || packet[0] != 0xac) return std::nullopt;
+    const std::size_t end = std::min<std::size_t>(packet[0xc], packet.size()) * 8;
+    std::size_t bit_at = 0xd * 8;
+    bool over = false;
+    auto bits = [&](int count) {
+        std::uint32_t value = 0;
+        for (int bit = 0; bit < count; ++bit, ++bit_at) {
+            if (bit_at >= end) { over = true; return 0u; }
+            value |= std::uint32_t(packet[bit_at / 8] >> (bit_at % 8) & 1) << bit;
+        }
+        return value;
+    };
+    bits(4);
+    if (bits(1))
+        for (const int count : choices) bits(count < 3 ? 1 : std::bit_width(unsigned(count - 1)));
+    if (!bits(1) || over) return std::nullopt;
+    MonsterBoss out;
+    for (int flag = 0; flag < 5; ++flag) out.flags |= int(bits(1)) << flag;
+    if (out.flags & 4) out.super = int(bits(16));
+    for (std::uint32_t mod = bits(8); mod != 0 && !over && out.mods.size() < 9; mod = bits(8)) out.mods.push_back(int(mod));
+    out.name_seed = int(bits(16));
+    if (over) return std::nullopt;
+    return out;
 }
 
 }  // namespace d2d::net::d2gs::s2c

@@ -22,6 +22,8 @@
 #include "devctl_verbs.hpp"
 #include "fault_send.hpp"
 #include "frontend.hpp"
+#include "gamepad.hpp"
+#include "gamepad_map.hpp"
 #include "load.hpp"
 #include "platform.hpp"
 #include "scene.hpp"
@@ -51,6 +53,7 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <csignal>
 #include <cstddef>
 #include <cstdint>
@@ -431,8 +434,8 @@ int run_windowed(std::vector<std::uint8_t>& framebuffer,
         d2d::log::error("SDL_Init: {}", SDL_GetError());
         return 1;
     }
-    // Diablo 2 Couch: controllers. Without them the game still runs.
-    if (!SDL_InitSubSystem(SDL_INIT_GAMEPAD)) d2d::log::warn("SDL gamepads: {}", SDL_GetError());
+    // A pad is optional: without gamepad support d2d plays with keyboard and mouse as before.
+    if (!SDL_InitSubSystem(SDL_INIT_GAMEPAD)) d2d::log::warn("gamepad support unavailable: {}", SDL_GetError());
     const int sdl_v = SDL_GetVersion();
     d2d::log::info("Initializing SDL... done! SDL {}.{}.{} ({})", SDL_VERSIONNUM_MAJOR(sdl_v),
                    SDL_VERSIONNUM_MINOR(sdl_v), SDL_VERSIONNUM_MICRO(sdl_v), SDL_GetCurrentVideoDriver());
@@ -539,6 +542,10 @@ int run_windowed(std::vector<std::uint8_t>& framebuffer,
     CinematicsUI cin_ui = scene ? cinematics_ui(*scene, cinematics_unlocked(read_seen())) : CinematicsUI{};
     Screen last_screen = screen;
     Mouse  mouse;
+    pad::Mapper pad_mapper;
+    std::uint32_t pad_last_ms = std::uint32_t(SDL_GetTicks());
+    int pad_focus_key = 0;
+    bool pad_in_use = false, pad_was_field = false, pad_cursor_hidden = false;   // the pad was the last to act; its field mode
     TitleUI title = scene ? title_ui(*scene) : TitleUI{};
     TitleUI other_multiplayer = scene ? other_multiplayer_ui(*scene) : TitleUI{};
     TcpIpUI tcpip;
@@ -712,6 +719,7 @@ int run_windowed(std::vector<std::uint8_t>& framebuffer,
         std::vector<SDL_Keycode> keys_this_frame;
         current_phase.store(std::uint32_t(MainPhase::PollEvents),
                             std::memory_order_relaxed);
+        bool mouse_took_over = false;   // the mouse moved or clicked this frame: it ends the pad's field mode
         SDL_Event event;
         couch_pads.begin_frame();
         while (SDL_PollEvent(&event)) {
@@ -724,8 +732,54 @@ int run_windowed(std::vector<std::uint8_t>& framebuffer,
             if (event.type == SDL_EVENT_MOUSE_MOTION) event.motion.x -= view_off;
             else if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN || event.type == SDL_EVENT_MOUSE_BUTTON_UP) event.button.x -= view_off;
             else if (event.type == SDL_EVENT_MOUSE_WHEEL) event.wheel.mouse_x -= view_off;
+            if (event.type == SDL_EVENT_MOUSE_MOTION || event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) { pad_in_use = false; mouse_took_over = true; }
             handle_sdl_events(event, mouse, screen, text_this_frame,
                               backspace_this_frame, keys_this_frame, quit);
+        }
+        {
+            // The pad plays as a cursor, clicks and keys through the same paths as the mouse and keyboard.
+            const std::uint32_t pad_now = std::uint32_t(SDL_GetTicks());
+            const float pad_dt = std::min(float(pad_now - pad_last_ms) / 1000.f, 0.1f);
+            pad_last_ms = pad_now;
+            const pad::Context pad_context = screen == Screen::InGame ? pad::Context::Game
+                                           : screen == Screen::Title  ? pad::Context::Title : pad::Context::Menu;
+            // Diablo 2 Couch: player 1's pad is the couch's seat 1 with pad_player1, else none (every pad joins as a guest).
+            const pad::Actions pad_actions = pad_mapper.step(town.couch.host_sample(), pad_context, pad_dt);
+            const int pad_side = (win.view_w - int(kScreenWidth)) / 2;   // widescreen's world beyond the 800x600 UI
+            const bool pad_active = pad_actions.move_active || pad_actions.click_press || pad_actions.click_down || pad_actions.rclick_press
+                                    || pad_actions.cursor_dx != 0 || pad_actions.cursor_dy != 0 || !pad_actions.keys.empty();
+            if (pad_active && !pad_in_use) d2d::log::info("gamepad: in use (screen {})", int(screen));
+            if (pad_active) pad_in_use = true;
+            // In the field a pad plays without a cursor: its buttons hit what is in reach (Town::pad_act).
+            const bool pad_field = screen == Screen::InGame && pad_in_use && town.pad_field();
+            if (pad_field != pad_was_field && !mouse_took_over) { mouse.x = int(kScreenWidth) / 2; mouse.y = int(kScreenHeight) / 2; }   // the cursor comes back centred
+            pad_was_field = pad_field;
+            // A menu opening puts the pad's cursor on the choice to start from.
+            const auto pad_focus = screen == Screen::InGame && pad_in_use && !mouse_took_over ? town.pad_focus() : std::nullopt;
+            if (pad_focus && pad_focus->key != pad_focus_key) { mouse.x = pad_focus->x; mouse.y = pad_focus->y; }
+            pad_focus_key = pad_focus ? pad_focus->key : 0;
+            pad_cursor_hidden = pad_field;
+            if (pad_actions.recentre_cursor) { mouse.x = int(kScreenWidth) / 2; mouse.y = int(kScreenHeight) / 2; }
+            if (!pad_field) {
+                mouse.x = std::clamp(mouse.x + int(std::lround(pad_actions.cursor_dx)), -pad_side, int(kScreenWidth) + pad_side - 1);
+                mouse.y = std::clamp(mouse.y + int(std::lround(pad_actions.cursor_dy)), 0, int(kScreenHeight) - 1);
+            }
+            if (pad_actions.click_press && !pad_field)   { mouse.down = true;  mouse.press_this_frame = true; }
+            if (pad_actions.click_release && mouse.down) { mouse.down = false; mouse.release_this_frame = true; }
+            if (pad_actions.rclick_press && !pad_field)  mouse.rpress_this_frame = true;
+            for (const pad::Key pad_key : pad_actions.keys) {
+                // Escape quits from the title screen; B must not be able to close the app there.
+                if (screen == Screen::Title && pad_key == pad::Key::Escape) continue;
+                SDL_Event key_event{};
+                key_event.type = SDL_EVENT_KEY_DOWN;
+                key_event.key.down = true;
+                key_event.key.key = pad_keycode(pad_key);
+                handle_sdl_events(key_event, mouse, screen, text_this_frame, backspace_this_frame, keys_this_frame, quit);
+            }
+            town.pad_move = screen == Screen::InGame
+                ? Town::PadMove{ pad_actions.move_x, pad_actions.move_y, pad_actions.move_active, pad_actions.run,
+                                pad_field && pad_actions.click_press, pad_field && pad_actions.click_down, pad_field && pad_actions.rclick_press }
+                : Town::PadMove{};
         }
         current_phase.store(std::uint32_t(MainPhase::Devctl),
                             std::memory_order_relaxed);
@@ -992,8 +1046,10 @@ int run_windowed(std::vector<std::uint8_t>& framebuffer,
                         d2d::log::info("Joining {} as {} (net log {})", g_join_host, header.name, log_path.string());
                         std::vector<std::pair<int, int>> send_bits;
                         for (const auto& desc : scene->stat_desc) send_bits.emplace_back(desc.send_bits, desc.send_param);
+                        std::vector<std::array<std::uint8_t, 16>> monster_parts;
+                        for (const auto& type_info : scene->monsters.types) monster_parts.push_back(type_info.choices);
                         auto joined = NetGame::join(g_join_host, g_game_exe, std::move(save), log_path, 10000,
-                                                    scene->item_tables ? &*scene->item_tables : nullptr, g_autoparty, std::move(send_bits));
+                                                    scene->item_tables ? &*scene->item_tables : nullptr, g_autoparty, std::move(send_bits), std::move(monster_parts));
                         if (!joined) {
                             d2d::log::error("join failed: {}", joined.error().what);
                             csu.popup = join_error_text(*scene, joined.error(), header.expansion());
@@ -1033,6 +1089,10 @@ int run_windowed(std::vector<std::uint8_t>& framebuffer,
                     load_act_palettes(*scene, scene->mpqs, act);
                 town.update(framebuffer, mouse, keys_this_frame, screen, audio, now_ms, last_ms);
                 write_save_back();
+                if (town.net_game && town.net_game->closed()) {        // the host's gone: back to the characters, as game.exe's drop
+                    d2d::log::warn("net: lost the host; leaving the game");
+                    screen = Screen::CharSelect;
+                }
                 if (screen == Screen::CharSelect && town.net_game) {   // a joined game: leave the host, saving on again
                     town.net_game->leave();
                     write_save_back();
@@ -1040,6 +1100,7 @@ int run_windowed(std::vector<std::uint8_t>& framebuffer,
                     town.net_monsters.clear();
                     town.world.fight.remote_monsters = false;
                     town.world.hosted_quests = false;
+                    town.world.host_warps = false;
                     town.world.characters = g_no_save ? nullptr : &characters;
                 }
                 if (screen == Screen::CharSelect && scene) {         // left the game (saved): the roster again,
@@ -1126,7 +1187,7 @@ int run_windowed(std::vector<std::uint8_t>& framebuffer,
                 const auto& frame = scene->cursor_buysell.frame(0, 0);
                 blit_sprite(framebuffer, frame, pal, mouse.x + cursor_dx + frame.offset_x,
                             mouse.y + 0x21 + frame.offset_y - int(frame.height) + 1);
-            } else if (screen != Screen::Video && scene->cursor.frames_per_direction() >= 8) {   // hidden over cinematics
+            } else if (screen != Screen::Video && !(screen == Screen::InGame && pad_cursor_hidden) && scene->cursor.frames_per_direction() >= 8) {   // hidden over cinematics
                 const auto& pal = screen == Screen::InGame
                                       ? (scene->act_pal.entries().empty() ? scene->pal : scene->act_pal)
                                   : screen == Screen::CharCreate ? scene->charselect_pal : scene->pal;

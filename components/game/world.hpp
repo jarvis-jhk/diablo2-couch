@@ -403,6 +403,8 @@ struct World {
     void operate_door(int npc_index, std::uint32_t now_ms);
     // A door to `mode` (0 shut, 1 opening, 2 open...): its footprint and sound.
     void set_door_mode(int npc_index, int mode, std::uint32_t now_ms);
+    // The doors used here back to their mode's footprint (rooms laid again shut them).
+    void reopen_doors();
     // The player's item_reducedprices (stat 87) off their gear and charms now.
     [[nodiscard]] int reduced_prices() const;
     // A monster's door at its think (Fight::open_door): found, operated in reach.
@@ -479,6 +481,7 @@ struct World {
     // ponytail: "close" is 2 cells of the warp's cell, not LvlWarp's
     // Select box; arriving puts the player on the first warp back.
     void use_warp();
+    bool host_warps = false;   // a joined game: the host takes warps; d2d follows its 0x15 there
 
     // Into level `to` near (ax, ay): everything with the player (merc, pets)
     // comes along; the automap and monsters are the new level's.

@@ -43,7 +43,7 @@ set(D2D_SENTRY_DSN
 
 configure_file(config.hpp.in ${CMAKE_CURRENT_BINARY_DIR}/config.hpp @ONLY)
 
-set(icon_dir "${PROJECT_SOURCE_DIR}/apps/icon")
+set(icon_dir "${PROJECT_SOURCE_DIR}/assets/icon")
 set_source_files_properties("${icon_dir}/d2d.icns" PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
 add_executable(d2d-launcher WIN32 MACOSX_BUNDLE
     main.cpp

@@ -10,6 +10,7 @@ few Win32 calls the code paths we run need are stubbed in Python.
 import os
 import struct
 import subprocess
+import sys
 from pathlib import Path
 
 import pefile
@@ -27,9 +28,46 @@ TEB = 0x7EF00000
 RET_MAGIC = STUB + STUB_SIZE - 16            # a call returns here
 
 
+def d2d_cfg():
+    """d2d.cfg in d2d's user dir, found as components/userdir/userdir.hpp finds it."""
+    home = Path.home()
+    if sys.platform == "darwin":
+        return home / "Library/Preferences/d2d/d2d.cfg"
+    if sys.platform == "win32":                     # the Documents known folder (it can be redirected)
+        import ctypes
+        docs = ctypes.create_unicode_buffer(260)
+        documents = docs.value if ctypes.windll.shell32.SHGetFolderPathW(None, 5, None, 0, docs) == 0 else "."   # CSIDL_PERSONAL
+        return Path(documents) / "My Games/d2d/d2d.cfg"
+    xdg = os.environ.get("XDG_CONFIG_HOME", "")
+    return (Path(xdg) if xdg and Path(xdg).is_absolute() else home / ".config") / "d2d/d2d.cfg"
+
+
+def cfg_value(cfg, key):
+    """`key = value` as d2d's load_cfg reads it: trimmed, '#' lines skipped, the last one wins."""
+    value = None
+    for line in cfg.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        name, _, rest = line.partition("=")
+        if name.strip() == key:
+            value = rest.strip()
+    return value
+
+
 def data_path():
-    return subprocess.run(["defaults", "read", "com.d2decomp.D2 Launcher", "game.dataPath"],
-                          capture_output=True, text=True, check=True).stdout.strip()
+    """The MPQ folder, found as d2d finds it: $D2_MPQ_DIR, then d2d.cfg's `data =`
+    (the launcher writes it), then the macOS launcher's own setting."""
+    if os.environ.get("D2_MPQ_DIR"):
+        return os.environ["D2_MPQ_DIR"]
+    cfg = d2d_cfg()
+    if cfg.exists() and (data := cfg_value(cfg, "data")):
+        return data
+    if sys.platform == "darwin":
+        found = subprocess.run(["defaults", "read", "com.d2decomp.D2 Launcher", "game.dataPath"], capture_output=True, text=True)
+        if found.returncode == 0 and found.stdout.strip():
+            return found.stdout.strip()
+    sys.exit(f"no game data: set D2_MPQ_DIR, or `data = <MPQ folder>` in {cfg} (the launcher writes it)")
 
 
 class Emu:

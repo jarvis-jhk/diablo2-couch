@@ -17,7 +17,7 @@ namespace d2d::client {
 // RAII holders — SDL_Init failure is the only thing we treat as fatal;
 // everything else logs and returns false so the caller can bail out.
 
-void set_icon(SDL_Window* window);   // apps/icon/d2d.bmp: title bar, taskbar, dock
+void set_icon(SDL_Window* window);   // assets/icon/d2d.bmp: title bar, taskbar, dock
 
 struct Window {
     SDL_Window*   window = nullptr;

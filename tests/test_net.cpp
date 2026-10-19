@@ -13,6 +13,7 @@
 #include <join.hpp>
 #include <d2gs/wire.hpp>
 
+#include <array>
 #include <cassert>
 #include <cstdint>
 #include <cstdio>
@@ -141,7 +142,7 @@ int main() {
         assert(chunks.size() == 10 && total == 2516);
         assert(d2gs::c2s::ping(1234).size() == 13);
         // Chat to all: type 1, language 0, the message, no target (54a5d0 wants size > length + 4).
-        assert((d2gs::c2s::chat("hi") == d2d::net::Bytes{ 0x15, 0x01, 0x00, 'h', 'i', 0x00, 0x00 }));
+        assert((d2gs::c2s::chat("hi") == d2d::net::Bytes{ 0x15, 0x01, 0x00, 'h', 'i', 0x00, 0x00, 0x00 }));
         // 0x31: 9 bytes, the host's size check (54ba90); Atma's 304 heard.
         assert((d2gs::c2s::quest_message(0x12345678, 304) == d2d::net::Bytes{ 0x31, 0x78, 0x56, 0x34, 0x12, 0x30, 0x01, 0x00, 0x00 }));
         // 0x27 mode 1: Atma's greeting (kind 0) and a topic (kind 2); a lone
@@ -155,6 +156,15 @@ int main() {
         info[6] = 1; info[8] = 3;
         assert(!d2gs::s2c::npc_lines(info));
         assert(d2gs::s2c::quest_word_of_record(8) == 9 && d2gs::s2c::quest_word_of_record(1) == 1 && d2gs::s2c::quest_word_of_record(30) == 34 && d2gs::s2c::quest_word_of_record(7) == -1);
+    }
+    {   // 0xac: Lord De Seis as a 1.14d host sent him (2026-10-18): unique + superunique row 37
+        const std::array<std::uint8_t, 26> de_seis = { 0xac, 0x67, 0x01, 0x00, 0x00, 0x38, 0x01, 0x61, 0x1e, 0x38, 0x14, 0x80, 0x1a,
+                                                       0x11, 0x00, 0x0a, 0x4d, 0x09, 0x40, 0x81, 0x87, 0x05, 0x80, 0x77, 0x22, 0x00 };
+        const std::array<std::uint8_t, 16> doomknight3 = { 3, 1, 0, 1, 1, 0, 0, 0, 1, 1, 4, 4, 0, 0, 0, 0 };   // MonStats2 HDv..S8v counts
+        const auto boss = d2gs::s2c::monster_boss(de_seis, doomknight3);
+        assert(boss && boss->flags == 6 && boss->super == 37 && boss->mods == std::vector<int>({ 5, 30, 22 }) && boss->name_seed == 35294);
+        const std::array<std::uint8_t, 14> plain = { 0xac, 0xba, 0, 0, 0, 0x38, 0x01, 0x75, 0x1e, 0xd3, 0x15, 0x80, 0x0e, 0x01 };
+        assert(!d2gs::s2c::monster_boss(plain, doomknight3));
     }
     assert(d2gs::s2c_name(0x59) == "assign player" && d2gs::s2c_name(0xb5).empty());
 

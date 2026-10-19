@@ -3,6 +3,17 @@
 Diablo 2 Couch releases (prereleases while the couch co-op is a preview). The launcher
 shows a version's section once, on the first start after an update.
 
+## v0.0.7 (2026-10-19)
+
+- Player 1 on a controller (`pad_player1`, on by default on a Steam Deck) now uses
+  D2Decomp's new gamepad layout: inventory, character, skill tree, quest log, automap and
+  the menus open from the pad, with a cursor on the stick while a screen is open. Guests'
+  controllers play as before.
+- From D2Decomp: an optional widescreen view (launcher checkbox, or `widescreen = 1`); the
+  party may spread across the wider view. Act IV closer to the original (seals, Hellforge,
+  Diablo), Nightmare and Hell populated like the original, and monsters keep acting while
+  a hero lies dead.
+
 ## v0.0.6 (2026-10-17)
 
 - Act IV, from D2Decomp: the Pandemonium Fortress, the Outer Steppes, the Plains of

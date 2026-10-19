@@ -298,7 +298,11 @@ handlers do nothing without it, so a unique's minions don't explode.
 | 27 spectral hit | 0 `FUN_005a3040`, 5 `FUN_005a30b0` | at each mode change, and on a missile: one of five elements (0x6e21b8: fire 48 / 49, lightning 50 / 51, magic 52 / 53, cold 54..56, poison 57..59), min / max = MonLvl damage (DM, L-DM in an expansion game) × MonUMod constants row 28 / 31 % (the normal rows on every difficulty); cold and poison length + 40 |
 | 29 multishot | 5 `FUN_005a3610` | a missile it makes: two more, from the same skill and level, aimed a subtile to either side (flag 0x80 while they're made) |
 | 23 poison hit | init `FUN_005a1e00` | poisonmindam / maxdam (stats 57 / 58) = MonLvl damage × MonUMod constants rows 0x10 / 0x13 + difficulty (0x1c / 0x1f with the unique flag) / 100, poisonlength (59) = (mlvl × 5 + 150) × 2, then `FUN_005a1370` (+75 poison resist); `FUN_0057b7d0` rolls 57..59 into every hit it lands. The Maggot Queen's (`FUN_005b1cf0`, BaseId 0x11c: mods 23, 22) |
-| 24 thief, 10 / 20 / 31 .. 42 | 0 / 3 / 1 + 2 | not traced (stealing, act bosses' deaths) |
+| 20 scarab | 1 `FUN_005a2eb0`, 2 `FUN_005a2ee0` | into GH or DT: event 7 two frames on, then 8 missiles 225 (buglightning), 4 ways (0x6e21a8 / 0x6e2198) × 2 at its level (stat 12), steered by `FUN_005c9290`; no 10-frame limit |
+| 10 poisondead | 1 `FUN_005a3800`, 2 `FUN_005a2c20` | on death, 4 frames on: missile 155 (corpsepoisoncloud) at its own spot, level = its level (at least 1), through `FUN_0056ecb0` |
+| 24 thief | 3 `FUN_005a30e0` | on a hit; never reached: MonUMod disables it and `FUN_005a49b0` skips it in a superunique's list (Lord De Seis has it) |
+| 13 rage, 11 durieldead | none | no init (0x73c008) and no hooks (0x73c0b8) |
+| 14 / 15 / 21 / 31 .. 35 / 40 .. 42 | 0x73c0b8 | not traced (traps, bone prisons, suicides, Act 5's deaths) |
 | 25 mana burn | (spawn) `FUN_005a1f90` | manadrain min / max (stats 62 / 63) = MonLvl damage × `FUN_005a00f0`'s % |
 | 26 teleport | spawn `FUN_005a1600`: skill 184 MonTeleport level 1, AI-control flag 0x20 (`FUN_005dd250`); AI `FUN_005b11f0` | at a think: rand(100) < 40 (its seed), then — life under 30 % (`FUN_00621f20`), or not flagged by `FUN_00457490(class, 1)` (monsters 10 / 0x159 / 0x22d count as flagged) and AI param +0x14 < 10 — rand(100) < 15: a free spot in its room (`FUN_0054dc40`), not in town; under 30 %, rand(100) < 25 and no state 0x34: life + mlvl (stat 6 + mlvl × 256); then cast 184 there |
 | 30 aura | spawn `FUN_005a1650` | the table at 0x73bf68 {min mlvl, add, mul, div, skill}: Might 98 /6, Holy Fire 102 /6, Blessed Aim 108 /5, Holy Freeze 114 /7, Conviction 123 /8, Fanaticism 122 /8, Holy Shock 118 /8 from mlvl 20; pick = rand(rows reached) on {name seed (monster data +0x14), 666}; superunique 37 → Fanaticism; class 0x2c0 → Conviction 20; level = (add + mlvl) × mul / div, 1..99 |
@@ -326,6 +330,14 @@ multishot and mana-burn hooks sit in `monster_update`.
   foes, Holy Fire / Shock / Freeze strike every perdelay).
 - Not built: thief (MonUMod disabled) and poison hit (not a random pick),
   so neither turns up in Act 1.
+- **Family mods** (`FUN_005b21b0`, from the spawn): by MonStats BaseId,
+  every monster of the family, boss or not (`FUN_005a4850` with 0: not
+  counted): brute2 13, scarab1 20, mummy1 10, Duriel 11 + 22, the traps
+  (0x146..0x14a, 0x162) 14, the bone prisons (0x154..0x157) 15, Act 5's
+  0x1b4 34, 0x1cd 33, 0x1f5 35, 0x21c..0x21e 22. d2d:
+  `rules::family_mods`; the scarabs' bolts and the mummies' cloud run in
+  `Fight::boss_events` (checked 2026-10-18 in a headless game: Dung
+  Soldiers in the Rocky Waste, a Decayed in the Halls of the Dead).
 - Not proven against game.exe: the monster's own seed isn't the game's
   (unit creation isn't emulated).
 

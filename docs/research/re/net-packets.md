@@ -160,6 +160,12 @@ The tail, in order:
 5. **Stats**, 1 bit; if set a stat list as in 0xa8, only stats whose
    ItemStatCost flags (+4) match `DAT_006ce268`.
 
+The bits are LSB-first. d2d reads the boss (`s2c::monster_boss`, checked
+on Lord De Seis's: row 37, mods 5 / 30 / 22) and names the host's monster
+with `make_boss`; an act boss (Andariel, Blood Raven) comes as unique
+with name seed 0 and keeps its own name. A rolled unique has both
+champion and unique set.
+
 The client makes the monster (`FUN_00466360`), then sets stat 7 = 0x8000
 and stat 6 = life << 8 (not for its own merc). **The exact hit points
 never cross**: every monster's life is a byte, 0..128 of its maximum.
@@ -267,7 +273,8 @@ can't see the target (the target's x, y).
 Builders `0x53d530` / `0x53d4d0` (from `FUN_00548090` for players,
 `FUN_00597d70` for monsters). With the builder's last argument set
 (caller `0x571cd0`) the ids become 0x99 / 0x9a with the same layout,
-handled by `FUN_004ca200` / `FUN_004ca230` **(?)** what they mean.
+handled by `FUN_004ca200` / `FUN_004ca230` (0x99 below: the effect
+without a mode).
 
 **0x73 missile** (32; `0x45e6d0` → `FUN_004cd540`): fills a missile
 create struct (flags 0x40000001, or 0x40000021 when +0xf and +0x13 are
@@ -678,12 +685,36 @@ The ids apps/d2proxy flagged in a real game.exe client's session (table
 - **0x7e load act COFs** (5; `0x45e970`): reloads `DATA\GLOBAL\cmncof_a<act>`
   for the own player's act (`FUN_006427f0`); the payload isn't read.
 
+- **0x11 overlay on a unit** (8; `0x45d0f0` → `FUN_00464e50`): +1 u8
+  unit type, +2 u32 id, +6 u16 Overlay.txt row (under the count at data
+  +0xbc0): played once on the unit (`FUN_00470390` kind 2). Rows 0x97
+  `steallife` and 0x98 `stealmana` also play sound 0x18c / 0x18d
+  (`FUN_004b9a00`). The 2026-10-18 logs: 1202, all on our merc's leech.
+  d2d: not drawn (ponytail: a one-shot overlay on a host unit).
+- **0x74 assign corpse** (10; `0x45e7b0` → `FUN_00462f60`): +1 u8 flag,
+  +2 u32 player id, +6 u32 corpse id. With the flag 0 (every one of the
+  49 logged) the client does nothing; set, it moves the corpse's items
+  (`FUN_00462ee0`, type 3 entries) to the player and revives it as 0x8e
+  does. d2d: corpses by 0x8e.
+- **0x90 party member at** (13; `0x45e9c0` → `FUN_0047a100`): +1 u32
+  player id, +5 u32 x, +9 u32 y (act subtiles): kept in the roster
+  entry (`FUN_004792e0`, +0x28 / +0x2c) for the automap's party marks.
+  About one a second per member. d2d: not kept (its automap marks the
+  players it has units for).
+- **0x99 skill effect on a unit** (16; `0x45de80` → `FUN_004ca200` →
+  `FUN_004ca060`): 0x4c's layout (+1 type, +2 id, +6 u16 skill, +8 u8
+  level, +9 target type, +0xa id, +0xe u16): the caster faces the
+  target, the skill's sound (Skills +0x122) and overlay (+0x124) play,
+  no mode change. d2d: not drawn. **(?)** All 351 logged are our Act 2
+  merc's with skill 84 (Bone Spear) at level 16: the u16 may not be a
+  plain skill row here.
+
 ### Not traced
 
-0x11 (report kill: +1 type, +2 id, +6 u16 → `FUN_00464e50`), 0x12..0x14
+0x12..0x14
 and 0x66 (no-op handlers), 0x45 and 0x54 (no-ops), 0x47 / 0x48
-relators, 0x53 darkness, 0x5d / 0x5e / 0x5f, 0x61, 0x74, 0x78, 0x79,
-0x7a, 0x7c / 0x7d, 0x7e (loads `cmncof_aN.d2`), 0x90..0x93, 0x98, 0x9b,
+relators, 0x53 darkness, 0x5d / 0x5e / 0x5f, 0x61, 0x78, 0x79,
+0x7a, 0x7c / 0x7d, 0x7e (loads `cmncof_aN.d2`), 0x91..0x93, 0x98, 0x9b,
 0xa3..0xa6: handlers are known (the table), fields not.
 
 ## Client → server: layouts and d2d's commands
@@ -714,13 +745,18 @@ from a flag word (bit 0 left, bit 1 right, 0x8 held, 0x20 no approach):
 on a unit left 06 / 07 (0x20) / 09 (0x8) / 0a (both), right 0d / 0e /
 10 / 11; at x, y left 05 / 08 (0x8), right 0c / 0f. A unit target must
 be type 0, 1 or 3 unless the skill allows others; with approach a
-melee-range skill runs up first (`FUN_00548a50`).
+melee-range skill runs up first (`FUN_00548a50`). The x, y forms are
+refused past 0x32 subtiles on either axis from the caster (`FUN_005496f0`
+→ `FUN_00548ef0`, EBX 0x32); within it the skill runs and its mana goes
+even when the missile can't reach (seen live: Chain Lightning from ~34
+subtiles spent 641 mana and hit nothing). The host sends a caster's own
+skill to the others only (0x4c / 0x4d), not back to it.
 
 ### Interaction, NPCs, quests
 
 | Id | Size | Layout | Server | d2d |
 |---|---|---|---|---|
-| 13 interact | 9 | u32 type, u32 id | `54aa90` → `FUN_00548b00`: player (corpse / trade), NPC (walk up; ≤ 6 talk, `FUN_00573020`), object (range < 0x33, `FUN_00584540`; a walking player's 0x13 is dropped) | `cmd::Interact` (by `Level::npcs` index); a joined d2d sends it once the host has the player stopped within 4 subtiles |
+| 13 interact | 9 | u32 type, u32 id | `54aa90` → `FUN_00548b00`: player (corpse / trade), NPC (walk up; ≤ 6 talk, `FUN_00573020`), object (range < 0x33, `FUN_00584540`; a walking player's 0x13 is dropped), warp (case 5: `FUN_00641530` < 0x33, under 5 `FUN_005550b0` takes it, else `FUN_00548a50` walks the player toward the warp unit) | `cmd::Interact` (by `Level::npcs` index); a joined d2d sends it once the host has the player stopped within 4 subtiles (a warp: within 50) |
 | 2f start NPC chat | 9 | u32 type, u32 NPC id | `54b930` → `FUN_00572e60` | `cmd::Chat{npc}` |
 | 30 end NPC chat | 9 | the same | `54b9f0` → `FUN_00572f20`, first `FUN_00543d50`: every quest's "talk closed" (+0xa8, event 2) | `cmd::Chat{-1}` / `CloseTrade`; a joined d2d opens (0x2f) and shuts (0x30) every NPC talk, as game.exe's client does |
 | 31 quest message heard | 9 | u32 NPC id, u32 message (+5; the client's `FUN_004786a0` zero-extends the u16) | `54ba90` → `FUN_005443b0`: the NPC by id (type 1), every record of the player's act gets +0xcc; no open chat needed | `cmd::QuestMessage`; a joined d2d sends it with the host's NPC (an object's for the Moldy Tome). The client sends it as a quest line starts (0x4b4812) and again when one playing is cut (0x4b4670 / 0x4b46d0) |
@@ -765,6 +801,14 @@ melee-range skill runs up first (`FUN_00548a50`).
 | 21 / 25 / 28 / 29 / 2a / 4c / 63 | | stack, belt swap, socket, scroll to book, to cube, transmute, auto-belt | | none |
 | 50 drop gold | 9 | u32 player id, u32 amount | `54c800` | none |
 
+**Chat's framing** (`FUN_0052bc20`, the host's C→S sizer): 3 + message +
+1 + target + 1 + 1 + n, where n is the byte after the target's NUL. A 0x15
+without that byte is framed into the next packet: its first byte is read
+as n and that many more go with it, so every later packet from that client
+is cut wrong (seen live 2026-10-17: d2d's chat ate its next ping or move;
+whisper's raw sends left a host's own client unheard until it restarted).
+With the framing right, the host's 0x26 comes back to the sender too.
+
 ### Stats, skills, system
 
 | Id | Size | Layout | Server | d2d |
@@ -775,7 +819,7 @@ melee-range skill runs up first (`FUN_00548a50`).
 | 51 hotkey | 9 | u32 (hotkey << 16, bit 15 left, skill), u32 item id | `54c870` | none |
 | 4f click button | 7 | u16 button, u16, u16 | `54c7c0` | a trade's (`FUN_004b8730`..`FUN_004b9110`): 2 decline / cancel, 3 accept the request, 4 accept (our gold high, low), 7 take it back, 8 our gold |
 | 5d / 5e party | 7 / 6 | | `FUN_005a6000` | none |
-| 14 / 15 overhead / chat | var | u8 type, u8 language, message\0, target\0 (15: total > length + 4) | `54a290` / `54a5d0` | none (d2d's chat line: `c2s::chat`, type 1) |
+| 14 / 15 overhead / chat | var | u8 type, u8 language, message\0, target\0, u8 n, n bytes | `54a290` / `54a5d0` | d2d's chat line: `c2s::chat`, type 1, n 0 |
 | 6d ping | 13 | u32 tick, u32 (`FUN_0044ce70` >> 1), u32 checksum | system | **none** (the host expects it, at most every 5 s) |
 
 ## What the client does itself

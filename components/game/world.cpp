@@ -646,6 +646,15 @@ auto World::reduced_prices() const -> int {
         return int(sum[d2d::d2s::kReducedPrices]);
     }
 
+// Rooms laid again (relevel) stamp every door as its preset left it; the
+// doors used since go back to their mode's footprint.
+// ponytail: every frame, a few doors; on relevel only if it shows.
+auto World::reopen_doors() -> void {
+        for (const auto& [key, door] : doors)
+            if (key.first == level && std::size_t(key.second) < level->npcs.size())
+                set_footprint(*level, level->npcs[std::size_t(key.second)], level->npcs[std::size_t(key.second)].collision >> door.mode & 1);
+    }
+
 auto World::set_door_mode(int npc_index, int mode, std::uint32_t now_ms) -> void {
         const auto& door = level->npcs[std::size_t(npc_index)];
         auto& state = doors.try_emplace({ level, npc_index }, Door{ mode_index(door.mode), 0 }).first->second;
@@ -1507,6 +1516,7 @@ auto World::use_warp() -> void {
             return;
         }
         take_warp = -1;
+        if (host_warps) return;
         // The sewers' stairs down (a3q2's, FUN_0059d9d0 -> FUN_005550b0): shut
         // till the lever's opened them, or once Khalim's Will's done.
         if (level->id == d2d::rules::level_ids::kKurastSewersLevel1 && warp.destination == d2d::rules::level_ids::kKurastSewersLevel1 + 1 && !khalim.stairs_open) {
@@ -1562,6 +1572,7 @@ auto World::arrive(const Level* destination, float arrive_x, float arrive_y, con
         fight.warp_spot = { int(std::floor(free_x * 5)), int(std::floor(free_y * 5)) };
         fight.enter(level);
         fight.rooms_up(*level, player.x, player.y, true);
+        reopen_doors();
         std::tie(player.x, player.y) = level->nearest_free(player.x, player.y);   // off what the room just made
         loot.enter(level);
         swap_npcs(from);
@@ -1666,6 +1677,7 @@ auto World::use_portal(std::uint32_t now_ms) -> void {
             if (!player.walking) take_portal = -1;
             return;
         }
+        if (host_warps) { take_portal = -1; return; }   // joined: the host's portal moves us (it may refuse: a quest's level), its reassign brings us
         cues.cue("player_townportal_enter", now_ms, player.x, player.y);
         if (take_portal == 2) {                       // to Tristram, by its own portal back (object 60)
             take_portal = -1;
@@ -1890,6 +1902,7 @@ auto World::deal(const Command& command) -> bool {
             const int index = waypoint_index(*game_data, travel->level);
             if (now - arrived_at < 10000 || std::size_t(travel->npc) >= level->npcs.size() || level->npcs[std::size_t(travel->npc)].operate_fn != d2d::rules::operate_fn::kWaypoint
                 || travel->level == level->id || !character.header.waypoint(character.header.active_difficulty(), index)) return true;
+            if (host_warps) return true;                       // joined: the host's 0x49 moves us, its reassign brings us
             const Level* destination = game_data->level(travel->level);
             if (!destination || destination->ds1.width() == 0) { d2d::log::info("not implemented: level {} (a waypoint)", travel->level); return true; }
             // Its preset (objects.txt SubClass 0x40): its room makes it as the player lands.
@@ -2345,6 +2358,7 @@ auto World::tick(const std::vector<Command>& cmds, std::uint32_t now_ms, std::ui
         if (host) act4_update(now_ms);
         if (host) cross_level();
         fight.rooms_up(*level, player.x, player.y, false);
+        reopen_doors();
         if (host) grow_states(npc_states, *level);
         if (!fight.dead()) fight.apply_regen(now_ms, last_ms);
     }

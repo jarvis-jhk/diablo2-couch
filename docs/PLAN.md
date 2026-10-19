@@ -72,6 +72,7 @@ Status as of 2026-10-17 (v0.4.0).
 
 ```
 apps/           end-user apps: launcher (Qt6 installer), d2d (the game)
+assets/         not code: the icon and banner (assets/icon), Flatpak's desktop entry and app info (assets/flatpak)
 components/     shared libraries (one subdir per lib, own CMakeLists.txt)
 tests/          all tests. one test_*.cpp per subject, ctest-hooked
 tools/          decompilation helpers, format converters, Ghidra scripts

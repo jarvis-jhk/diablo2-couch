@@ -162,6 +162,7 @@ std::vector<Monster> spawn_monsters(const GameData& game_data, std::span<const d
 void set_mode(const GameData& game_data, Monster& monster, std::string_view mode, std::uint32_t now_ms) {
     if (monster.mode != "NU") monster.left_mode = monster.mode;
     monster.mode = mode;
+    if (mode == "A1" || mode == "A2" || mode == "SC" || mode == "S1" || mode == "S2" || mode == "S3" || mode == "S4") monster.swing_mode = mode;
     monster.seq_frame = -1;                                   // a sequence's row: drawn again as it plays
     monster.unit.mode_ms = now_ms;
     monster.unit.walking = mode == "WL" || mode == "RN";

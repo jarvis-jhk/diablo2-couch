@@ -1,8 +1,22 @@
-# Icon
+# icon
+
+d2d's icon and the launcher's banner, and where each file is used.
+
+## Change it
+
+1. Edit `d2d.svg` (or `hero.svg` for the banner).
+2. Re-render the files in the table below from it (rsvg-convert,
+   ImageMagick, macOS iconutil). The exact commands weren't recorded:
+   match each file's size and format as listed.
+3. Re-run `cmake -S . -B build`: `d2d.bmp` is baked into d2d at configure.
+
+## Licence
 
 `d2d.svg` is the master. Goat skull & pentagram: **Designed by dgim-studio /
 Freepik**, used under the Freepik license (see `LEGAL.md`), not the GPL. The
 binary half is ours.
+
+## The files
 
 The rest are rendered from it (rsvg-convert, ImageMagick, macOS iconutil):
 

@@ -380,3 +380,27 @@
   no upstream PRs, keep the fork's party layer, merge upstream weekly, and when #34/#36/#40
   land upstream, move the fork onto them (drop components/couch/party and apps/d2d/couch
   input in favour of upstream's) rather than diverging.
+
+## 2026-10-19 — upstream gamepad layer (#36) merged; player 1's pad moved onto it
+- Merged upstream 96cca20 (25 commits since 958ec02): SDL3 gamepad input with a default
+  layout (apps/d2d/gamepad*.{hpp,cpp}, test_gamepad; one pad drives the one local hero,
+  cursor emulation in menus/panels, soft targeting in the field), net-join fixes, drlg room
+  share fix (ASan), assets/ move of icon and Flatpak files, tool READMEs, whisper app.
+  Upstream tags v0.4.0/v0.4.1 exist now; ours stay v0.0.x.
+- Conflicts: apps/d2d/CMakeLists (upstream's list + couch.cpp/fault_send.cpp), main.cpp (one
+  SDL_INIT_GAMEPAD), world.cpp (upstream's new reopen_doors() runs for guests too: idempotent,
+  filtered by level, doors are lent; grow_states stays host-only), town.cpp (couch frame, then
+  upstream's pad_walk/pad_act).
+- Migration (ROADMAP rule: upstream's piece replaces ours): upstream's Gamepads opened the
+  first pad itself, so that pad would have walked player 1 AND joined as a guest. Now
+  CouchPads stays the only owner of SDL pads; main feeds upstream's pad::Mapper with
+  Couch::host_sample() — seat 1's pad with pad_player1, nothing otherwise — and the fork's
+  own host pad path (Couch::frame's host_out) is gone. Upstream's Gamepads class is unused
+  (kept compiled for pad_keycode). Effect: with pad_player1 (Deck default) player 1 gets
+  upstream's layout incl. menus/panels and works in joined net games; without it every pad
+  is a guest as before. Guests keep the fork's cursorless layout; upstream #40/#34 will
+  replace that.
+- Local: clang 23 build of components/tests clean, 39/39 ctest (test_gamepad passes; MPQ
+  tests skip); couch/town/gamepad/ingame syntax-checked against SDL3 headers, clang-tidy
+  clean on couch.cpp. No data or pads here: untested in play.
+

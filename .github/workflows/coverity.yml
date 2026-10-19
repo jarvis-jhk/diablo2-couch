@@ -41,16 +41,35 @@ jobs:
         env:
           COVERITY_TOKEN: ${{ secrets.COVERITY_SCAN_TOKEN }}
 
+      # C++23: Coverity 2024.12 doesn't know -std=c++26 and parses it as C++17,
+      # so the C++20 parts of libstdc++ fail and 84 of our files dropped out of
+      # the scan (2026-10-18). Everything of ours builds as C++23.
       - name: Configure
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_CXX_STANDARD=23
+
+      - name: Build FFmpeg (not scanned)
+        run: cmake --build build --config RelWithDebInfo --target ffmpeg_build
 
       - name: Build with cov-build
         run: cov-build --dir cov-int cmake --build build --config RelWithDebInfo -- -k 0
 
+      # Which translation units Coverity couldn't capture, and why.
+      - name: Keep Coverity's build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverity-build-log
+          path: cov-int/build-log.txt
+          retention-days: 14
+
+      # A manual run on a branch only builds and keeps the log above: no upload,
+      # so it spends none of Coverity Scan's weekly builds and leaves main's results.
       - name: Package results
+        if: github.ref == 'refs/heads/main'
         run: tar czf d2decomped.tgz cov-int
 
       - name: Upload to Coverity Scan
+        if: github.ref == 'refs/heads/main'
         run: |
           curl -sS --fail \
             --form token="$COVERITY_TOKEN" \

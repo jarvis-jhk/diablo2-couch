@@ -7,7 +7,9 @@
 // The heroes: the host is the hero the menus started (mouse and keyboard,
 // and its pad with pad_player1); each further pad that presses a button
 // joins with a hero of its own picked from the saves (couch/party.hpp).
-// A pad plays without a cursor: the stick walks, A attacks the nearest
+// The host's pad plays through upstream's gamepad layer (gamepad_map.hpp:
+// menus and panels too); this file only hands it the seat's Sample.
+// A guest's pad plays without a cursor: the stick walks, A attacks the nearest
 // monster or else takes what's close (an item, the hero's corpse, an object,
 // an NPC), X casts the right skill at the nearest monster, Y and the
 // shoulders change the left and right skill, the d-pad drinks the belt's
@@ -18,6 +20,7 @@
 
 #include "common.hpp"
 #include "game_api.hpp"
+#include "gamepad_map.hpp"
 #include "scene.hpp"
 #include "world_view.hpp"
 
@@ -45,6 +48,7 @@ struct CouchPad {
     std::uint64_t identity = 0;            // GUID and serial, hashed: the same pad after a reconnect
     std::array<bool, SDL_GAMEPAD_BUTTON_COUNT> down{}, pressed{};
     d2d::couch::Stick left, right;
+    float left_trigger = 0, right_trigger = 0;   // 0..1
     std::uint32_t back_since = 0;          // Back held since (frame ms), 0 not held
 };
 
@@ -87,9 +91,12 @@ struct Couch {
     // The player a seat is: the host is player 1, so pads count on from 2
     // unless the first pad plays the host.
     [[nodiscard]] std::size_t player_number(std::size_t seat) const { return seat + (pad_hosts ? 1 : 2); }
-    // The frame's pads: joins, the picker, each hero's commands (the host's
-    // into `host_out`). `store`: where guests are saved.
-    void frame(const Scene& scene, const CharacterStore* store, std::uint32_t frame_ms, std::vector<Command>& host_out);
+    // The frame's pads: joins, the picker, each guest's commands. `store`:
+    // where guests are saved.
+    void frame(const Scene& scene, const CharacterStore* store, std::uint32_t frame_ms);
+    // The host's pad as upstream's gamepad layer reads it: seat 1's pad with
+    // pad_player1, all let go otherwise (or while seat 1 is empty).
+    [[nodiscard]] pad::Sample host_sample() const;
     // After each World tick: the guests' positions for the slide.
     void ticked();
     // A guest's feet now, slid between its last two ticks.

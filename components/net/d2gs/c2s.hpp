@@ -86,13 +86,17 @@ inline auto set_running(bool run) -> Bytes { return { static_cast<std::uint8_t>(
 inline auto update_quests() -> Bytes { return { 0x40 }; }
 
 // 0x15: chat (54a5d0): +1 type (1: to all), +2 language, the message,
-// NUL, a whisper's target, NUL. The host sends it on as 0x26 type 1
-// (2 when a target is named), the sender's name and level filled in.
+// NUL, a whisper's target, NUL, then a count byte and that many more
+// (FUN_0052bc20 sizes it so; without the count the host takes the next
+// packet's first byte for it, seen live 2026-10-17). The host sends it on
+// as 0x26 type 1 (2 when a target is named), the sender's name and level
+// filled in.
 inline auto chat(std::string_view message) -> Bytes {
     Bytes out{ 0x15, 0x01, 0x00 };
     for (const char letter : message.substr(0, 255)) put_u8(out, std::uint8_t(letter));
-    put_u8(out, 0);
-    put_u8(out, 0);
+    put_u8(out, 0);   // the message's end
+    put_u8(out, 0);   // no target
+    put_u8(out, 0);   // no more bytes
     return out;
 }
 

@@ -271,6 +271,21 @@ struct MonStats {
     // on every hit it lands (FUN_0057b7d0): per tick in 256ths, ticks.
     int poison_min = 0, poison_max = 0, poison_len = 0;
 };
+// The max damage a monster's last swing left in its stats (FUN_005a4f50,
+// at each attack mode: A2's for A2, S1's for SC / S1, A1's otherwise; each
+// element of that mode as its own stat, poison x 10), as Diablo's score
+// sums it (FUN_005e8530: maxdamage, fire / lightning / magic / cold max,
+// poison max >> 8). 0 before any swing.
+// ponytail: an element counts whatever its chance (FUN_005a4f50 rolls one
+// under 100 %); the hireling / damage-% scaling (+0x70, stat 100) is left out.
+inline int swing_max_damage(const MonStats& stats, std::string_view swing_mode) {
+    if (swing_mode.empty()) return 0;
+    int total = swing_mode == "A2" ? stats.a2_max : swing_mode == "SC" || swing_mode == "S1" ? stats.s1_max : stats.a1_max;
+    for (const auto& element : stats.elements)
+        if (element.type >= 0 && element.mode == swing_mode) total += element.type == 3 ? element.max * 10 >> 8 : element.max;
+    return total;
+}
+
 inline MonStats monster_stats(const Monsters& monsters, int type, int difficulty, Rng& rng, int level_add = 0) {
     MonStats stats;
     if (type < 0 || std::size_t(type) >= monsters.types.size()) return stats;

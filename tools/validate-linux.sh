@@ -10,6 +10,26 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 tag="d2d-linux-ci:$(sha1sum tools/validate-linux.Dockerfile | cut -c1-12)"
 docker image inspect "$tag" >/dev/null 2>&1 || docker build -t "$tag" -f tools/validate-linux.Dockerfile tools/
+# --asan: a Debug build with AddressSanitizer + UBSan on glibc (where the
+# v0.4.0 exit-time heap abort was reported), in its own volume, then ctest.
+# Game data for the real-data tests (smoke, quests) when these are set on
+# the host: D2_MPQ_DIR, D2_PATCH_INSTALLER, D2_SAVES_DIR, D2_GAME_EXE (mounted read-only).
+if [[ "${1:-}" == "--asan" ]]; then
+    mounts=() envs=()
+    for var in D2_MPQ_DIR D2_PATCH_INSTALLER D2_SAVES_DIR D2_GAME_EXE; do
+        [[ -n "${!var:-}" ]] || continue
+        mounts+=(-v "${!var}:/data/$var:ro") envs+=(-e "$var=/data/$var")
+    done
+    exec docker run --rm -t "${mounts[@]}" "${envs[@]}" \
+        -e ASAN_OPTIONS=detect_leaks=0:abort_on_error=1 -e UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1 \
+        -v "$PWD:/src" -v d2d-build-linux-asan:/src/build-linux-asan -w /src \
+        "$tag" bash -euxc '
+cmake -S . -B build-linux-asan -G Ninja -DCMAKE_BUILD_TYPE=Debug -DD2D_BUILD_TOOLS=OFF -DD2D_CHECK_HEADERS=OFF \
+    -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+cmake --build build-linux-asan -- -j 8
+ctest --test-dir build-linux-asan --output-on-failure
+'
+fi
 # build-linux/ is a docker volume, not the bind mount: Docker Desktop's
 # macOS mount throws bus errors and torn files at FFmpeg's make.
 docker run --rm -t \

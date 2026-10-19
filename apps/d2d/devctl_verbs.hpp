@@ -181,6 +181,16 @@ void register_game_verbs(d2d::devctl::Channel& channel, Window& win, Screen& scr
         }
         return std::string("ok\n");
     });
+    channel.on("text", [&](const std::vector<std::string>& args) {
+        if (args.size() < 2) return std::string("err text <words>\n");
+        static std::string typed;   // SDL keeps the pointer until the event is read
+        typed.clear();
+        for (std::size_t index = 1; index < args.size(); ++index) typed += (index > 1 ? " " : "") + args[index];
+        SDL_Event event{};
+        event.text = { .type = SDL_EVENT_TEXT_INPUT, .windowID = SDL_GetWindowID(win.window), .text = typed.c_str() };
+        SDL_PushEvent(&event);
+        return std::string("ok\n");
+    });
     channel.on("move", [&](const std::vector<std::string>& args) {
         if (args.size() < 3) return std::string("err move <x> <y>\n");
         float x = 0, y = 0;
@@ -267,10 +277,26 @@ void register_game_verbs(d2d::devctl::Channel& channel, Window& win, Screen& scr
             town.world.take_warp = int(npc_index);
             return std::string("ok\n");
         }
+        if (args.size() >= 2 && args[1] == "tomb") {          // the true Tal Rasha's Tomb (the act seed's roll, FUN_0061aeb0)
+            if (!town.world.game_data) return std::string("err no game data\n");
+            auto act = d2d::drlg::act_seed(town.world.game_data->map_seed);
+            return std::format("ok {}\n", d2d::drlg::roll_act2_tombs(act).boss);
+        }
+        if (args.size() >= 3 && args[1] == "netsend" && town.net_game) {   // a raw C->S packet to the host, hex bytes (live checks)
+            d2d::net::Bytes packet;
+            for (std::size_t i = 2; i < args.size(); ++i) {
+                char* end = nullptr;
+                const unsigned long byte = std::strtoul(args[i].c_str(), &end, 16);
+                if (args[i].empty() || *end != '\0' || byte > 0xff) return std::string("err not a hex byte: ") + args[i] + "\n";
+                packet.push_back(std::uint8_t(byte));
+            }
+            town.net_game->send_items({ packet });
+            return std::string("ok\n");
+        }
         if (args.size() >= 2 && args[1] == "net" && town.net_game && town.level) {   // a joined game: where the host has us, where d2d has us (act subtiles), and how far apart
             const float local_x = (town.world.player.x + float(town.level->world_x)) * 5.f, local_y = (town.world.player.y + float(town.level->world_y)) * 5.f;
-            std::string out = std::format("host {:.0f} {:.0f} local {:.0f} {:.0f} apart {:.1f} units {} trade {}\n", town.net_game->host_x, town.net_game->host_y, local_x, local_y,
-                                          std::hypot(town.net_game->host_x - local_x, town.net_game->host_y - local_y), town.net_game->units.size(), town.net_game->trade.state);
+            std::string out = std::format("host {:.0f} {:.0f} local {:.0f} {:.0f} apart {:.1f} units {} trade {} self {}\n", town.net_game->host_x, town.net_game->host_y, local_x, local_y,
+                                          std::hypot(town.net_game->host_x - local_x, town.net_game->host_y - local_y), town.net_game->units.size(), town.net_game->trade.state, town.net_game->self_id);
             for (const auto& other : town.view.others)   // the other players: id, name, cell
                 out += std::format("player\t{}\t{}\t{:.1f}\t{:.1f}\n", other.id, other.name, other.unit.x, other.unit.y);
             return out + "ok\n";
@@ -464,11 +490,14 @@ void register_game_verbs(d2d::devctl::Channel& channel, Window& win, Screen& scr
             make_boss(*scene, *best, d2d::rules::Boss::unique, mods, -1, town.world.rng(0x10000), town.world.character.header.active_difficulty(), town.world.rng);
             return std::format("ok #{} {} aura={} lvl={}\n", best->id, best->npc.name, best->aura, best->aura_lvl);
         }
-        if (args.size() >= 2 && args[1] == "kill" && scene) {   // kill the level's monsters but <n> (quests)
-            int keep = args.size() >= 3 ? std::atoi(args[2].c_str()) : 0;
+        if (args.size() >= 2 && args[1] == "kill" && scene) {   // kill the level's monsters but <n> and those of MonStats id <spare> (quests)
+            int keep = args.size() >= 3 && args[2] != "spare" ? std::atoi(args[2].c_str()) : 0;
+            const auto spare_at = std::ranges::find(args, std::string("spare"));
+            if (spare_at != args.end() && spare_at + 1 == args.end()) return std::string("err spare <MonStats id>\n");
+            const std::string spare = spare_at != args.end() ? *(spare_at + 1) : "";
             auto& monsters = town.world.fight.monsters;
             for (std::size_t i = 0; i < monsters.size(); ++i)
-                if (monsters[i].alive() && keep-- <= 0 && hurt(*scene, monsters[i], monsters[i].hit_points, town.world.now)) town.world.fight.killed(i, town.world.now);
+                if (monsters[i].alive() && (spare.empty() || scene->monsters.types[std::size_t(monsters[i].type)].id != spare) && keep-- <= 0 && hurt(*scene, monsters[i], monsters[i].hit_points, town.world.now)) town.world.fight.killed(i, town.world.now);
             return std::string("ok\n");
         }
         if (args.size() >= 3 && args[1] == "itemat" && scene) {   // where carried item <id> sits on screen with the inventory open: its box's middle

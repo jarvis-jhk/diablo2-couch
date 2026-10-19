@@ -56,6 +56,8 @@ d2d_add_test(test_outdoor drlg mpq)
 # game.exe's copied tables against the real game.exe (skips without one).
 d2d_add_test(test_exe_tables game dc6 dcc font palette)   # game brings install_detect, rules, drlg, compcode
 target_include_directories(test_exe_tables PRIVATE ${PROJECT_SOURCE_DIR}/apps/d2d)
+d2d_add_test(test_gamepad)   # the pad's action mapping: header-only, no SDL
+target_include_directories(test_gamepad PRIVATE ${PROJECT_SOURCE_DIR}/apps/d2d)
 
 # End-to-end: headless d2d driven over devctl (SDL dummy driver).
 # Python3_EXECUTABLE rather than `python3`: Windows installs it as python.exe.

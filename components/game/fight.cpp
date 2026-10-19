@@ -87,10 +87,14 @@ constexpr int kTerror = 77;                     // Skills.txt Terror: Howl's sta
 // so): its resists as stats 0x24 / 0x25 / 0x27 / 0x29 / 0x2b, raw, and its
 // aura as its right skill (FUN_005701b0 sets it: a merc's FUN_005e4d30, a
 // summon's FUN_005c4470, Aura Enchanted's FUN_005a1650) at its level.
-// ponytail: a monster's or summon's max damage left 0 (its last swing's
-// mode stats, FUN_005a4f50), and no left skill on any of them.
-d2d::rules::DiabloPick unit_pick(const GameData& game_data, std::array<int, 5> res, int aura, int aura_level) {
+// A monster's or summon's max damage is its last swing's (rules::swing_max_damage).
+// None has a left skill: every FUN_005701b0 call with EDX 1 is a player's
+// (FUN_0055c5c0, FUN_0056af80 test unit type 0; FUN_0055da70 / FUN_00580280
+// put a player's saved hands back).
+// ponytail: the merc's max damage left 0.
+d2d::rules::DiabloPick unit_pick(const GameData& game_data, std::array<int, 5> res, int aura, int aura_level, int max_damage = 0) {
     d2d::rules::DiabloPick pick;
+    pick.max_damage = max_damage;
     std::tie(pick.damage_resist, pick.magic_resist, pick.fire_resist, pick.light_resist, pick.cold_resist) = std::tuple{ res[0], res[1], res[2], res[3], res[4] };
     if (const auto* skill = aura > 0 ? game_data.skills.get(aura) : nullptr) { pick.right_skill = skill->id; pick.right_level = aura_level; pick.right_rank = skill->attack_rank; }
     return pick;
@@ -1427,6 +1431,23 @@ auto Fight::boss_events(std::span<Foe> foes, std::uint32_t now_ms) -> void {
         for (auto& monster : monsters) {
             const bool boss = monster.boss == Boss::unique || monster.boss == Boss::superunique;
             const auto has = [&](int id) { return boss && std::ranges::contains(monster.mods, id); };
+            const auto family = d2d::rules::family_mods(monster.type >= 0 ? game_data->monsters.types[std::size_t(monster.type)].base : -1);
+            const bool scarab = std::ranges::contains(family, d2d::rules::umod::scarab), mummy = std::ranges::contains(family, d2d::rules::umod::poisondead);
+            const int mlvl = std::max(monster.stats.level, 1);
+            // Scarab (FUN_005a2eb0 / FUN_005a2ee0): into GH or DT, 2 frames on,
+            // 8 buglightning (4 ways x 2) at its level, steered as lightning enchanted's.
+            if (scarab && monster.mode != monster.fx_mode && (monster.mode == "GH" || monster.mode == "DT")) monster.scarab_due.push_back(now_ms + 2 * 40);
+            monster.fx_mode = monster.mode;
+            while (!monster.scarab_due.empty() && now_ms >= monster.scarab_due.front()) {
+                monster.scarab_due.erase(monster.scarab_due.begin());
+                d2d::log::info("{} lets off its bugs' lightning", monster.npc.name);
+                const auto ring = std::make_shared<std::vector<int>>();
+                for (const auto& [dir_x, dir_y] : { std::pair{ 0.f, -1.f }, { 1.f, 0.f }, { 0.f, 1.f }, { -1.f, 0.f } })
+                    for (int k = 0; k < 2; ++k) {
+                        const float angle = float(rng(51) - 25) * 3.14159265f / 180, cosine = std::cos(angle), sine = std::sin(angle);
+                        boss_missile(monster, "buglightning", dir_x * cosine - dir_y * sine, dir_x * sine + dir_y * cosine, ring, now_ms, mlvl);
+                    }
+            }
             if (monster.alive()) {
                 if (has(d2d::rules::umod::lightning) && monster.hit_points < monster.last_hp && now_ms - monster.bolts_at >= 10 * 40) {
                     monster.bolts_at = now_ms;
@@ -1438,10 +1459,16 @@ auto Fight::boss_events(std::span<Foe> foes, std::uint32_t now_ms) -> void {
                             boss_missile(monster, "lightunique", dir_x * cosine - dir_y * sine, dir_x * sine + dir_y * cosine, ring, now_ms);
                         }
                 }
-            } else if (boss && !monster.fx_done) {
+            } else if ((boss || mummy) && !monster.fx_done) {
                 if (!monster.fx_at) monster.fx_at = now_ms + 4 * 40;
                 else if (now_ms >= monster.fx_at) {
                     monster.fx_done = true;
+                    // Poisondead (FUN_005a3800 / FUN_005a2c20): corpsepoisoncloud (155) on its spot at its level.
+                    // ponytail: poisons each foe within 0.4 cells once; srvdofunc 3's own area and ticks untraced.
+                    if (mummy) {
+                        d2d::log::info("{} leaves a poison cloud", monster.npc.name);
+                        boss_missile(monster, "corpsepoisoncloud", 0, 0, std::make_shared<std::vector<int>>(), now_ms, mlvl);
+                    }
                     if (has(d2d::rules::umod::fire)) fire_blast(monster, foes, now_ms);
                     if (has(d2d::rules::umod::cold)) {
                         const auto ring = std::make_shared<std::vector<int>>();
@@ -1456,16 +1483,19 @@ auto Fight::boss_events(std::span<Foe> foes, std::uint32_t now_ms) -> void {
         }
     }
 
-auto Fight::boss_missile(const Monster& monster, const char* name, float dx, float dy, const std::shared_ptr<std::vector<int>>& ring, std::uint32_t now_ms) -> void {
+auto Fight::boss_missile(const Monster& monster, const char* name, float dx, float dy, const std::shared_ptr<std::vector<int>>& ring, std::uint32_t now_ms, int missile_level) -> void {
         const auto found = game_data->missiles.find(name);
         if (found == game_data->missiles.end()) return;
         const auto& missile_info = found->second;
-        const int lvl = std::max(monster.stats.level / 2, 1);
+        const int lvl = missile_level > 0 ? missile_level : std::max(monster.stats.level / 2, 1);   // the enchanted mods' mlvl / 2 by default
         const auto damage = d2d::rules::row_damage(missile_info.etype, missile_info.emin, missile_info.emax, missile_info.emin_lev, missile_info.emax_lev, missile_info.hitshift, missile_info.elen, missile_info.elen_lev, lvl);
         d2d::rules::MonStats stats;
         stats.level = monster.stats.level;
         stats.to_hit = 1 << 20;                                     // ToHit 0: always hits
-        if (damage.etype >= 0) stats.elements[0] = { damage.etype, 100, damage.elo >> 8, std::max(damage.ehi >> 8, 1), damage.elen, "A2" };
+        // Poison (3) is kept as monster poison is: x 10 makes it 256ths a frame
+        // (combat.hpp, FUN_005a4f50's stats 0x39 / 0x3a); the rest in points.
+        if (damage.etype == 3) stats.elements[0] = { damage.etype, 100, damage.elo / 10, std::max(damage.ehi / 10, 1), damage.elen, "A2" };
+        else if (damage.etype >= 0) stats.elements[0] = { damage.etype, 100, damage.elo >> 8, std::max(damage.ehi >> 8, 1), damage.elen, "A2" };
         const float speed = missile_speed(missile_info, lvl), distance = std::max(std::hypot(dx, dy), 0.01f);
         Missile x{ &missile_info, monster.unit.x, monster.unit.y, dx / distance * speed, dy / distance * speed, direction32(dx, dy), now_ms, now_ms + std::uint32_t(std::max(missile_info.range, 1)) * 40, stats };
         x.struck = ring; x.level = lvl; x.owner = monster.id;
@@ -3065,7 +3095,7 @@ auto Fight::pet_foe(const Pet& pet) const -> Foe {
         const auto& own = type_info.diff[std::size_t(pet.monster.difficulty)].res;
         std::array<int, 5> res{ own[0], own[1] };
         for (std::size_t k = 0; k < 3; ++k) res[k + 2] = pet.res[k] + pet_buff_stat(pet, kResists[k]);
-        foe.pick = unit_pick(*game_data, res, pet.aura, pet.aura_level);
+        foe.pick = unit_pick(*game_data, res, pet.aura, pet.aura_level, d2d::rules::swing_max_damage(pet.monster.stats, pet.monster.swing_mode));
         return foe;
     }
 
@@ -4102,7 +4132,8 @@ auto Fight::world(bool in_moor, std::uint32_t now_ms, float elapsed, const Crowd
                     const auto& type_info = game_data->monsters.types[std::size_t(monster.type)];
                     Foe& foe = foes.emplace_back(Foe{ monster.unit.x, monster.unit.y, monster.stats.level, monster.targetable() && monster.mode != "DT", monster.unit.walking, fighter });
                     foe.size = type_info.size; foe.threat = type_info.threat; foe.of = &monster; foe.id = monster.id;
-                    foe.pick = unit_pick(*game_data, { target.res[0], target.res[1], target.res[2], target.res[3], target.res[4] }, monster.aura, monster.aura_lvl);
+                    foe.pick = unit_pick(*game_data, { target.res[0], target.res[1], target.res[2], target.res[3], target.res[4] }, monster.aura, monster.aura_lvl,
+                                         d2d::rules::swing_max_damage(monster.stats, monster.swing_mode));
                     foe.pick.state_b = now_ms < monster.chill_until;   // state 0xb, cold
                 }
             std::vector<Monster> born;

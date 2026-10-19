@@ -65,7 +65,7 @@ Everything else is registered by the host binary via `Channel::on()`.
 | `debug quest <q>`           | `ok`                   | Mark quest q done on the active difficulty (Act 1: 1 Den of Evil .. 6 Andariel), then run its join and the chain from quest 1 as a new game would. |
 | `debug quest <q> show\|reset` | `ok bits=0x.. den=N skillpts=N states=<den>,<burial>,<tools>,<cain>,<tower>,<andy>` | Quest q's 16 flag bits and every Act 1 quest record's state; `reset` clears the bits and restarts the game's Den of Evil. |
 | `debug boss <mod>...`       | `ok #<id> <name> aura=<skill> lvl=<n>` | The nearest plain monster becomes a unique with those MonUMod ids (7 cursed, 26 teleport, 30 aura ...). |
-| `debug kill [n]`            | `ok`                   | Kill the level's monsters but n, as kills (experience, drops, quest deaths; for quest tests). |
+| `debug kill [n] [spare <id>]` | `ok` / `err spare <MonStats id>` | Kill the level's monsters but n and those of MonStats id `<id>` (`spare diablo`), as kills (experience, drops, quest deaths; for quest tests). |
 | `debug level`               | `ok <id> <x> <y> <w> <h> <wx> <wy>` | The player's level (1 town, 2 Blood Moor), position, level size and its act-tile origin. |
 | `debug blocked <x> <y>`     | `ok 0\|1`              | Whether a unit can't stand at (x, y) in the player's level (past its edge: the neighbour's collision). |
 | `debug grid [n]`           | a `.` / `#` row per row, `ok` | The level at n spots a cell (1..5, default 1; 5 is subtiles): `#` where a unit can't stand at the spot's middle (`debug blocked` for the whole level at once; route planning in probes). |
@@ -76,13 +76,16 @@ Everything else is registered by the host binary via `Channel::on()`.
 | `debug warps`               | `<i>\t<x>\t<y>\t<to>` per warp, `ok` | The level's warps (cave mouths, stairs): cell and the Levels.txt Id they lead to. |
 | `debug objects`             | `<i>\t<x>\t<y>\t<shrine\|chest>\t<row\|trap>\t<locked\|->\t<mode>` per object, `ok` | The level's shrines (Shrines.txt row) and chests (trap type 0..8, locked), and their mode now. |
 | `debug portals`             | `<which>\t<level>\t<x>\t<y>` per open portal, `ok` | The player's portals: 0 where it was cast, 1 its twin in camp (cells). |
-| `debug net`                 | `host <x> <y> local <x> <y> apart <d> units <n> trade <state>`, then `player\t<id>\t<name>\t<x>\t<y>` per other player, `ok` | A joined game: where the host has the player and where d2d does (act subtiles), how far apart, how many host units d2d knows, the trade's state; the other players (cells). |
+| `debug net`                 | `host <x> <y> local <x> <y> apart <d> units <n> trade <state> self <id>`, then `player\t<id>\t<name>\t<x>\t<y>` per other player, `ok` | A joined game: where the host has the player and where d2d does (act subtiles), how far apart, how many host units d2d knows, the trade's state; the other players (cells). |
 | `debug chat <text>`        | `ok` | Shows a chat line as if it came from the host ("name: message"), to look at it; no one is told. |
 | `debug typing [text]`      | `ok` | Opens the chat edit box holding `text`, to look at it; nothing is sent. |
+| `debug netsend <hex…>`     | `ok` | A joined game: sends the bytes to the host as one C->S packet (live checks). |
+| `debug tomb`               | `ok <level>` | The true Tal Rasha's Tomb of this map seed (`roll_act2_tombs`). |
 | `debug tradestate <n>`      | `ok` | A joined game: sets the trade's state (0 none, 1 asked, 2 asked of us, 3 open, 5 they accepted, 7 we did) to look at its box or window; the host isn't told. |
 | `debug operate <i> [n]`     | `ok life=… mana=… boost=<row>` | Operate shrine / chest i (town.hpp operate) without walking to it; `n` plays that Shrines.txt row / chest trap type instead. |
 | `debug enter <i>`           | `ok` / `err no such warp` | Stand by warp i as if it was clicked; the next frame takes it (`debug level` shows where). |
 | `key <name>`                | `ok`                   | Pushes SDL key down+up by SDL key name (`Left`, `Home`, `Escape`, `Return`). |
+| `text <words>`              | `ok`                   | Pushes the words as typed text (SDL text input), e.g. into the chat box. |
 | `move <x> <y>`              | `ok`                   | Pushes an SDL mouse motion to game coords (hover without clicking). |
 | `wheel <dy>`                | `ok`                   | Pushes an SDL wheel event (+up / -down); handled next frame. |
 | `state`                     | `screen=… save=… scroll=… class=… name=… hardcore=… cam=x.xx,y.yy walking=… dir=… saves=… stash=0/1 cube=0/1 store=<vendor> gold=… statpts=… str=… life=cur/max mana=cur/max level=… exp=… pmode=<A1/GH/DT/DD or -> missiles=<in flight> pets=<life/max:mode,… or -> lskill=<Skills.txt id> rskill=<id> picker=<0 closed, 1 left, 2 right> charges=<skill:count,… or -> skillpts=… tree=<tab, 0 closed> waypoint=… items=<count> held=<code or -> unid=<unidentified carried> merc=<x,y:code or -> menu=<lines> automap=<cells when open> speech=<lines> voice=<Sounds.txt index> music=<index> music_old=<the song fading out, 0 none>\nok` | Loop state for scripted asserts. |

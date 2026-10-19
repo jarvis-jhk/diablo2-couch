@@ -45,6 +45,7 @@ struct GameMenu {
     // The rows on screen (classic skips the LoD ones) and their tops.
     [[nodiscard]] std::vector<int> rows() const;
     [[nodiscard]] int top() const;
+    [[nodiscard]] int step() const;
     [[nodiscard]] int hit(int mouse_y) const;      // FUN_0047d520
     [[nodiscard]] bool enabled(int row) const;
 private:

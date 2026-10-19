@@ -727,7 +727,9 @@ std::vector<d2d::drlg::BuiltRoom> camp_rooms(const GameData& game_data, const Sp
         std::vector<std::size_t> order;                   // list indices: the list is newest first
         for (const auto room : came_up) order.push_back(made.size() - 1 - std::size_t(std::ranges::count_if(came_up, [&](std::size_t earlier) { return earlier < room; })));
         std::vector<std::string> notes;
+        const int base = int(rooms.size());               // each level's shares index its own build: re-based into `rooms`
         for (auto& room : d2d::drlg::level_room_tiles(made, other.plain, other.assets->data, other.tile_dt1s.heads, other.id, d2d::drlg::warp_slots(*other.assets, other.id), notes, order)) {
+            for (auto& share : room.shares) share.owner += base;
             room.x += beside.dx, room.y += beside.dy;
             for (auto& tile : room.tiles) tile.x += beside.dx, tile.y += beside.dy;
             room.seed = nullptr;                          // `made` goes
@@ -752,7 +754,9 @@ std::vector<d2d::drlg::BuiltRoom> camp_rooms(const GameData& game_data, const Sp
     for (const auto room : came_up) order.push_back(made.size() - 1 - std::size_t(std::ranges::count_if(came_up, [&](std::size_t other) { return other < room; })));
     std::vector<std::string> notes;
     auto camp = d2d::drlg::level_room_tiles(made, {}, level.assets->data, {}, town.id, d2d::drlg::warp_slots(*level.assets, town.id), notes, order);
+    const int camp_base = int(rooms.size());
     for (auto& room : camp) {
+        for (auto& share : room.shares) share.owner += camp_base;
         room.x += next_door->dx, room.y += next_door->dy;
         for (auto& tile : room.tiles) tile.x += next_door->dx, tile.y += next_door->dy;
         room.seed = nullptr;                             // `made` goes
@@ -801,6 +805,7 @@ std::vector<d2d::drlg::BuiltRoom> lay_tiles(Level& level, const std::vector<d2d:
     level.patches.clear();
     for (const auto& [step, at] : shares) {
         const auto& tile = built[std::size_t(at->owner)].tiles[std::size_t(at->tile)];
+        if (tile.x < 0 || tile.y < 0 || tile.x >= width || tile.y >= height) continue;   // a room next door's, off this level: its walk isn't ours (it wrote past level.walk)
         const int holding = holder(std::size_t(at->owner), tile.x, tile.y);
         if (holding >= 0 && step_of(holding) < step && (at->old_file != at->file || at->old_index != at->index))
             level.patches.push_back({ tile.x, tile.y, tile_of(at->old_file, at->old_index), tile_of(at->file, at->index) });

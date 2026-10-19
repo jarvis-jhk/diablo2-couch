@@ -1,7 +1,7 @@
 # Joining a game.exe host — implementation plan (step 1)
 
-Status: built through M10 (PRs #8–#12, 2026-10-06); the live checks on
-PR #12's features are still open. M4's menu path (Other Multiplayer → TCP/IP
+Status: built through M10 (PRs #8–#12, 2026-10-06); live checks run
+2026-10-17 and 2026-10-18 (Acts 1-4 played through to Diablo; "Live checks" below), the rest still open. M4's menu path (Other Multiplayer → TCP/IP
 → Join) and its error popup landed 2026-10-07: re/tcpip-menu.md. Planned 2026-09-30. Goal: d2d's client joins an open
 TCP/IP game hosted by an unmodified 1.14d game.exe, and Act 1 plays
 together (multiplayer.md "Order" step 4, the netplay goal's first leg).
@@ -193,6 +193,59 @@ Focused days, one developer or agent. Each lands alone, tree green.
   save-back loads in game.exe; an hour with no Desync or disconnect.
 
 **Total: about 27.5 days** (the join itself, M1-M4: 6 days).
+
+## Live checks, 2026-10-17
+
+Against Bret's son's game.exe (192.168.50.68; it was 1.14b until patched
+to 1.14d that day), driven from one Mac: d2d headless as the joining
+player, the host's own player through apps/whisper (a control socket
+inside game.exe) and its follower.
+
+| Check | Result |
+|---|---|
+| Join, items (34 of 34 match), positions | ✓ |
+| Chat both ways | ✓ after the fix: `c2s::chat` lacked 0x15's count byte, so the host cut every later packet wrong (net-packets.md "Chat's framing"); with it right the host echoes our line back |
+| Event lines ("joined our world", "joined your party") | ✓ |
+| Party (0x5e invite / accept) | ✓ |
+| The host's player running (0x0f command 0x17) | ✓ in the packets; the run's look not checked |
+| Casts | ✓ the host runs them; a cast from too far spends mana and hits nothing |
+| **Party portraits** | ✗ d2d draws none; game.exe draws the other player's |
+| **Own mana** | ✗ d2d shows its own (641) while the host's 0x95 says 13 |
+| **Our look** | ✗ green in d2d, red / orange on the host: one side has her gear wrong |
+| **Mercenary** | ✗ d2d draws a second Act 2 guard beside us; the host's is elsewhere |
+| **Warps (Den of Evil)** | ✗ d2d's World took the warp at once while the host never did: d2d sent 0x13 only within 8 of the warp unit, which sits in the mouth's rocks. Now sent within 50 (game.exe's 0x33), but the host's own walk toward the unit stalls on the rocks too: game.exe's client walks round to the mouth (~5 south of the unit) first, d2d must do the same, and pull its World back when the host doesn't follow |
+| Corpse owner (S→C 0x74) | unhandled (the body draws) |
+| Shrines, Den exit, trade gold, quests, travel, curse overlays | not reached yet |
+
+## Live checks, 2026-10-18
+
+Act 1 and Act 2 played through with the host's player (Arne, level 3)
+driven by whisper and Miriam by d2d; Act 3 reached the Blackened Temple.
+
+| Check | Result |
+|---|---|
+| Party portraits, own mana | ✓ fixed: `self_id` came from our corpse's 0x59 (same name); now only a 0x59 at 0, 0 |
+| Warps | ✓ the host walks to the mouth (`nearest_free` + ExitWalk), takes 0x13; d2d arrives on its reassign |
+| Waypoints | ✓ joined, d2d's World doesn't travel; 0x13 + 0x49 from beside the waypoint, again every 3 s until the host's 0x63 / reassign (a 0x49 before its menu, or within 10 s of a level change, is dropped) |
+| Caravan / boat (new act) | ✓ the reassign lands outside every level d2d expects: it goes by the last 0x03's area |
+| A quest door the host makes (Duriel's lair) | ✓ the level of the act that holds the reassign's spot |
+| Town portals, teleport (54) | ✓ the host casts; d2d hops where the host says |
+| Doors after rooms come up again | ✓ fixed: relevel stamped used doors shut (`World::reopen_doors`) |
+| d2d drifting from the host's player | 15+ subtiles for 2 s → back to the host's spot |
+| A dead host | ✓ 20 s without a packet (the host answers 0x6d every 5 s) → character select; TCP itself took 18 min |
+| Quests through the host | ✓ Den, Blood Raven, Andariel, Horadric Staff, Tainted Sun, Summoner, Seven Tombs, the High Council |
+| Quest items | game.exe gives them only to a player still on the quest; Levels.txt QuestFlag gates a portal's other end (`FUN_00584870` → `FUN_0065c310`) |
+| A d2d host dropped at 01:56Z | the Mac's idle sleep (pmset), not the protocol: `caffeinate` for live runs |
+| Unknown S→C | 0x11 (a leech overlay), 0x74 (corpse, flag 0: nothing), 0x90 (party member's spot), 0x99 (a skill's effect) traced and named (net-packets.md); not drawn. Some 0x9c action 0 items don't parse |
+| Act 3 to the hellgate, Act 4 to Diablo | ✓ Travincal, the Durance, Mephisto, the hellgate; the Chaos Sanctuary's five seals, Vizier, De Seis, Infector and Diablo all through the host |
+| Quest credit for the other player | Only near the kill: Arne at the Plains of Despair's entrance got no Izual (The Fallen Angel), nor Terror's End (never opened: Tyrael's 681 follows Izual). Small levels (Catacombs 4, the Arcane, Duriel's lair) were near enough |
+| Healing at an NPC | Needs the start of a chat (0x2f), not 0x13 alone; d2d's `cmd interact` on Ormus sent nothing to the host (its unit was gone, 0x0a). Live, 2026-10-18 evening: game.exe drops an 0x13 sent while the host's player walks or stands over 6 away, so a talk now goes the trade's way (walk up, 0x13, NPC info, then 0x2f). Still no heal: the 0x13 didn't go out in the last try, and `cmd interact` from across the camp didn't walk d2d's World — **to fix** |
+| A host superunique | Drawn and listed without its name (De Seis, the Vizier). Fixed: 0xac's boss tail read (`s2c::monster_boss`), every superunique in the logs decodes |
+| Our merc | Drawn where the host has it (0x81's unit), not where d2d's World walks it; d2d's duplicate went with the `self_id` fix |
+| Our look | ✓ live: game.exe draws Miriam as d2d does (green armour, orange gloves and boots, her round shield); the green is the Sorceress armour sprite's own |
+| Our corpse through the host | ✓ live: `cmd interact` on it, the host hands the 12 items back (0x9d); its 0x74 came with flag 0 |
+| A seal boss | Seal 394 (OperateFn 55) is De Seis's, 396 (56) the Vizier's, 392 (54) the Infector's; each boss at the seal plus its offset (quests-act4.md) |
+
 
 ## Open risks
 

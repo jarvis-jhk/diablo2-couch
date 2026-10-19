@@ -164,15 +164,21 @@ struct Town {
     std::uint32_t net_cursor = 0;                            // the host's id for the item in our hand
     bool net_items_checked = false;                          // the once-a-game item match logged
     std::size_t net_store_shown = 0;                         // the host stock count the store last showed
+    std::uint32_t net_waypoint_object = 0, net_waypoint_ms = 0;   // a waypoint we operated: its id, when
+    int net_waypoint_level = -1, net_waypoint_tries = 0;                              // ... the level asked for once its menu's open (0x63), -1 none
+    std::uint32_t net_drift_ms = 0;                          // since when d2d's player has been far from the host's (0: not)
     std::uint32_t net_follow_ms = 0;                         // when the host was last told where our walk is
+    int net_interact_pending = -1;                           // a level NPC whose host unit we wait for before its 0x13
     int net_trade_pending = -1;                              // the host NPC being walked to for a trade
     // Its C->S 0x38: kind 1 trade, 2 gamble, 0 travel (the extra: the handler's
     // level, 0x28 Warriv's east and Meshif's west, 0x4b Meshif's east, 1 Warriv's west).
-    int net_trade_kind = 1, net_trade_extra = 0;
+    int net_trade_kind = 1, net_trade_extra = 0;             // 0 travel, 1 trade, 2 gamble, -1 a talk alone (0x2f, no 0x38)
     bool net_trade_asked = false;                            // its 0x59 + 0x13 went out, NPC info awaited
     int net_operate_type = 2;                                // the host unit being walked to (0x13 once there): 2 object, 0 our corpse
     std::uint32_t net_operate = 0, net_operate_ms = 0;       // ... its id, when
     bool net_operate_moves = false;                          // ... a warp or portal: it takes us to another area
+    float net_warp_x = 0, net_warp_y = 0;                    // ... a warp: its mouth (act subtiles), the host's player walked there first
+    int net_warp_to = -1;                                    // the level the host's warp takes us to (its 0x15 lands us there)
     auto add_chat(const std::string& text, int colour = 0, std::size_t gold = 0) -> void;
     auto draw_portraits(std::vector<std::uint8_t>& framebuffer, bool left_open) -> void;
     struct Said { std::uint16_t string = 0; std::uint32_t until = 0; };
@@ -199,6 +205,20 @@ struct Town {
     std::uint32_t world_ms = 0;            // the World's clock: when it last ticked
     float prev_x = 0, prev_y = 0;          // the player a tick before: the camera slides between the two
     float cam_x = 0, cam_y = 0;            // where the camera is this frame
+    // A gamepad's left stick, set each frame by main: walk towards this screen
+    // direction (unit length); `run` at full tilt.
+    // `attack`/`attack_down`/`alt` are the pad's buttons in the field (no cursor): they hit what is in reach.
+    struct PadMove { float x = 0, y = 0; bool active = false, run = false, attack = false, attack_down = false, alt = false; } pad_move;
+    bool pad_walking = false, pad_ran = false;   // last frame's stick walk, to send a fresh walk and a Run change once
+    float pad_face_x = 0.707f, pad_face_y = 0.707f;   // the facing the pad last pointed (world, south at first)
+    int pad_target = -1;                          // the monster the held button stays on
+    void pad_walk();
+    void pad_act();
+    // True when no panel, menu or dialog is up: the pad plays without a cursor.
+    [[nodiscard]] bool pad_field() const;
+    // Where the pad's cursor goes when a menu opens (or its lines change): the choice to start on.
+    struct PadFocus { int key = 0, x = 0, y = 0; };
+    [[nodiscard]] std::optional<PadFocus> pad_focus() const;
     std::unordered_map<int, Automap> other_automaps;   // other Layers' maps, while elsewhere
     std::uint32_t level_ms = 0;            // when the player entered `level`
     bool have_world = false;

@@ -1,10 +1,50 @@
-# emu — game.exe as an oracle
+# emu: game.exe as the ground truth
 
-Runs game.exe (1.14d) code under [unicorn](https://www.unicorn-engine.org/)
-so a C++ port can be diffed against the real thing, one function at a
-time or a whole subsystem. There is no Windows or wine involved. The PE
-is mapped at its image base, and the few Win32 imports the code paths
-touch are stubbed in Python.
+Runs game.exe's own code (1.14d) in an emulator, so d2d's version of a
+function can be checked against the real one. No Windows or wine needed.
+
+## Run it
+
+```sh
+cd tools/emu
+uv sync                                   # once
+uv run python diff_drlg.py 1-20 2         # d2d's Blood Moor vs game.exe's, map seeds 1..20
+```
+
+Good: `level 2: 20/20 seeds match game.exe`.
+
+## Why it exists
+
+- d2d must match game.exe exactly (levels, drops, monster AI, ...).
+  Reading decompiled code gets close; running the real code proves it.
+- The dump oracles (levels, drops, objects) print game.exe's answer in
+  the same text form a small d2d tool prints, so a plain diff finds the
+  first difference. The AI checks (sight.py, search.py, moves.py,
+  missiles.py) compare against line-for-line copies in-process and print
+  `ok`.
+
+## The checks you'll use most
+
+| Checks | Command (in tools/emu) | Good output |
+|---|---|---|
+| Level layouts, monsters, objects | `uv run python diff_drlg.py 1-20 2 [tiles\|monsters\|objgroups\|collision\|game\|npcs]` | `N/N seeds match game.exe` |
+| Every level, all cores | `./sweep.sh 1-50 monsters objgroups` | every level matching |
+| Item drops | `uv run python drops.py 1-20000` (also `tables`, `items`, `objects`, `stands`) | `N/N ... match game.exe` |
+| Monster sight, search, moves | `uv run python sight.py 20000 3`, `search.py 20000 2`, `moves.py` | `ok` |
+| Missiles | `uv run python missiles.py 1500 7` | `ok` |
+
+## When it breaks
+
+| You see | Fix |
+|---|---|
+| `SystemExit` naming an import | game.exe called a Win32 function nobody stubbed: add a `w_<ImportName>` method to `emu.py` |
+| Can't find game.exe or the MPQs | Set `D2_MPQ_DIR`, or run the launcher once (it writes `data =` and puts `bin/game.exe` beside the MPQs) |
+| `mpq-cat` not found | Build first: `cmake --build build` |
+| 1.14d tables missing | Set `D2_PATCH_INSTALLER=/path/to/LODPatch_114d.exe` |
+| First run is slow | Normal: files are cached in `.cache/` after that |
+
+The rest of this page is the reference for every oracle and for adding
+your own.
 
 ## Setup
 
@@ -13,10 +53,11 @@ cd tools/emu
 uv sync                      # .venv with unicorn, pefile, capstone
 ```
 
-Needs the launcher's `bin/game.exe` (found through the launcher's
-`game.dataPath` default), the MPQs in that same directory, and a built
-`build/tools/mpq-cat/mpq-cat`. The 1.14d patch data comes from
-`$D2_PATCH_INSTALLER`, which defaults to
+Needs `bin/game.exe` beside the MPQs (the launcher puts it there) and a
+built `build/tools/mpq-cat/mpq-cat`. The MPQ folder is found as d2d finds
+it: `$D2_MPQ_DIR`, else `data =` in d2d.cfg (`~/.config/d2d/` on Linux,
+`~/Library/Preferences/d2d/` on macOS), else the macOS launcher's setting.
+The 1.14d patch data comes from `$D2_PATCH_INSTALLER`, which defaults to
 `~/Downloads/Diablo II + LoD/patch/LODPatch_114d.exe`.
 
 ## What's there

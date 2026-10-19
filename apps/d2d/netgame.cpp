@@ -15,6 +15,7 @@
 #include <tcp.hpp>
 
 #include <algorithm>
+#include <array>
 #include <bitset>
 #include <chrono>
 #include <cmath>
@@ -73,7 +74,7 @@ NetGame::NetGame(d2d::net::JoinSession joined, d2d::net::TcpConnection socket, c
 
 auto NetGame::join(const std::string& host, const std::filesystem::path& game_exe, std::vector<std::uint8_t> save,
                    const std::filesystem::path& log_path, int timeout_ms, const d2d::d2s::ItemTables* item_tables, bool auto_party,
-                   std::vector<std::pair<int, int>> send_bits)
+                   std::vector<std::pair<int, int>> send_bits, std::vector<std::array<std::uint8_t, 16>> monster_parts)
     -> std::expected<std::unique_ptr<NetGame>, JoinError> {
     const auto tables = d2d::net::d2gs::load_exe_tables(game_exe);
     if (!tables) return std::unexpected(JoinError{ tables.error() });
@@ -85,6 +86,7 @@ auto NetGame::join(const std::string& host, const std::filesystem::path& game_ex
     game->item_tables = item_tables;
     game->auto_party = auto_party;
     game->stat_send_bits = std::move(send_bits);   // before the first 0xaa: join pumps the world in
+    game->monster_parts = std::move(monster_parts);   // and the first 0xac (the bosses near where we land)
     game->log.note("joining " + host + " as " + game->session.name());
     const auto deadline = steady_ms() + std::uint32_t(timeout_ms);
     while (game->session.state() != d2d::net::JoinState::InGame) {
@@ -168,6 +170,7 @@ auto NetGame::pump(std::uint32_t now_ms, std::uint32_t elapsed_ms) -> void {
             d2d::log::warn("net: {}", received.error());
             socket_gone = true;
         } else if (!received->empty()) {
+            heard_ms = now_ms;
             auto step = session.receive(*received, now_ms);
             for (const auto& packet : step.packets) {
                 log.from_host(packet);
@@ -176,6 +179,13 @@ auto NetGame::pump(std::uint32_t now_ms, std::uint32_t elapsed_ms) -> void {
             }
             send(step.to_send);
             if (session.state() == d2d::net::JoinState::Desync) d2d::log::warn("net: the stream broke: {}", session.desync_reason());
+        }
+        // The host answers our 0x6d every 5 s: silence that long means it's
+        // gone without a word (live 2026-10-18: TCP took 18 min to say so).
+        if (session.state() == d2d::net::JoinState::InGame && heard_ms != 0 && now_ms - heard_ms > kSilentMs) {
+            log.note("the host's said nothing for " + std::to_string(kSilentMs / 1000) + " s");
+            d2d::log::warn("net: the host's said nothing for {} s; gone", kSilentMs / 1000);
+            socket_gone = true;
         }
         send(session.tick(now_ms));
         // Stopped: no walk sent for as long as the host's player needs to
@@ -224,7 +234,9 @@ auto NetGame::handle(const d2d::net::Bytes& packet) -> void {
             auto& unit = unit_at(0, read_u32(packet, 1));
             unit.cls = packet[5];
             unit.name = std::string(read_name(packet, 6, 16));
-            if (unit.name == session.name()) self_id = unit.id;
+            // Ours comes at 0, 0; our corpse from an earlier game comes as a
+            // player of our name too, at its spot (live 2026-10-17, then 0x74).
+            if (unit.name == session.name() && read_u16(packet, 0x16) == 0 && read_u16(packet, 0x18) == 0) self_id = unit.id;
             place(unit, read_u16(packet, 0x16), read_u16(packet, 0x18));
         }
         break;
@@ -504,6 +516,9 @@ auto NetGame::handle(const d2d::net::Bytes& packet) -> void {
             unit.cls = read_u16(packet, 5);
             place(unit, read_u16(packet, 7), read_u16(packet, 9));
             unit.life = packet[0xb];
+            if (const auto boss = d2d::net::d2gs::s2c::monster_boss(packet, unit.cls >= 0 && std::size_t(unit.cls) < monster_parts.size() ? monster_parts[std::size_t(unit.cls)] : std::array<std::uint8_t, 16>{})) {
+                unit.boss_flags = boss->flags; unit.super = boss->super; unit.mods = boss->mods; unit.name_seed = boss->name_seed;
+            }
         }
         break;
     case 0x67:   // monster to x, y; +0xd i16 its velocity % (0: unchanged)
@@ -567,6 +582,9 @@ auto NetGame::handle(const d2d::net::Bytes& packet) -> void {
         break;
     case 0xab:   // heal: type, id, life
         if (size >= 7) unit_at(packet[1], read_u32(packet, 2)).life = packet[6];
+        break;
+    case 0x63:   // the waypoint menu's open (FUN_0045e670): +1 its object, then our waypoints
+        if (size >= 5) waypoint_menu = read_u32(packet, 1);
         break;
     case 0x0a:   // remove: type, id (4: an item)
         if (size >= 6) {

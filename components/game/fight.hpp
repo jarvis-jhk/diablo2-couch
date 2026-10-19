@@ -613,7 +613,7 @@ struct Fight {
     void boss_events(std::span<Foe> foes, std::uint32_t now_ms);
     // A boss's missile from where it stands, at level mlvl / 2 (at least
     // 1), the row's own element (FUN_0064b100 ..).
-    void boss_missile(const Monster& monster, const char* name, float dx, float dy, const std::shared_ptr<std::vector<int>>& ring, std::uint32_t now_ms);
+    void boss_missile(const Monster& monster, const char* name, float dx, float dy, const std::shared_ptr<std::vector<int>>& ring, std::uint32_t now_ms, int missile_level = -1);
     // Fire Enchanted's death blast (uniques.hpp fire_blast): physical and
     // fire, each a 64th of the roll in 256ths, on everyone within
     // difficulty + 4 subtiles; the corpse's guts (monstercorpseexplode).

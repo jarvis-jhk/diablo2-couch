@@ -612,7 +612,7 @@ void automap_reveal(const Scene& scene, const Level& level, Automap& automap, fl
             if (done) continue;
             done = 1;
             const int act_x = tile_x + level.world_x, act_y = tile_y + level.world_y;     // act tiles
-            const std::uint32_t hash = std::uint32_t(act_x * 73856093) ^ std::uint32_t(act_y * 19349663);
+            const std::uint32_t hash = std::uint32_t(act_x) * 73856093u ^ std::uint32_t(act_y) * 19349663u;   // unsigned: wraps, not UB
             const int automap_x = (act_x - act_y) * 80 / 10, automap_y = (act_x + act_y) * 40 / 10;
             // A generated level's tiles are its picks (a maze's DS1 is blank):
             // FUN_00458f40 adds the room's floors, then its walls, each

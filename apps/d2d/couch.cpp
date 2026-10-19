@@ -3,6 +3,7 @@
 
 #include "common.hpp"
 #include "game_api.hpp"
+#include "gamepad_map.hpp"
 #include "scene.hpp"
 #include "world_view.hpp"
 
@@ -131,6 +132,8 @@ void CouchPads::event(const SDL_Event& event) {
             case SDL_GAMEPAD_AXIS_LEFTY: pad.left.y = value; break;
             case SDL_GAMEPAD_AXIS_RIGHTX: pad.right.x = value; break;
             case SDL_GAMEPAD_AXIS_RIGHTY: pad.right.y = value; break;
+            case SDL_GAMEPAD_AXIS_LEFT_TRIGGER: pad.left_trigger = std::max(0.f, value); break;
+            case SDL_GAMEPAD_AXIS_RIGHT_TRIGGER: pad.right_trigger = std::max(0.f, value); break;
             default: break;
         }
         return;
@@ -335,7 +338,7 @@ std::vector<Command> Couch::commands(const Scene& scene, CouchPad& pad, CouchHer
     return out;
 }
 
-void Couch::frame(const Scene& scene, const CharacterStore* store, std::uint32_t frame_ms, std::vector<Command>& host_out) {
+void Couch::frame(const Scene& scene, const CharacterStore* store, std::uint32_t frame_ms) {
     if (!pads) return;
     guest_cmds.resize(party.size());
     // A seat that holds a pad but no hero (it joined in the menus, its
@@ -396,11 +399,7 @@ void Couch::frame(const Scene& scene, const CharacterStore* store, std::uint32_t
     for (std::size_t seat = 0; seat < d2d::couch::kMaxSeats; ++seat) {
         CouchPad* pad = pads->seat(seat);
         if (!pad) continue;
-        if (pad_hosts && seat == 0) {
-            const auto out = commands(scene, *pad, heroes[seat], party.host(), frame_ms);
-            host_out.insert(host_out.end(), out.begin(), out.end());
-            continue;
-        }
+        if (pad_hosts && seat == 0) continue;         // the host's: main's pad::Mapper (host_sample)
         if (!seat_hero[seat]) continue;
         // Back held two seconds: the guest leaves, saved.
         if (pad->down[SDL_GAMEPAD_BUTTON_BACK]) {
@@ -414,6 +413,30 @@ void Couch::frame(const Scene& scene, const CharacterStore* store, std::uint32_t
         auto out = commands(scene, *pad, heroes[seat], party.guest(index), frame_ms);
         guest_cmds[index].insert(guest_cmds[index].end(), out.begin(), out.end());
     }
+}
+
+pad::Sample Couch::host_sample() const {
+    pad::Sample out;
+    if (!pads || !pad_hosts) return out;
+    const auto& seat = pads->seats[0];
+    if (!seat.connected()) return out;
+    const auto found = std::ranges::find(pads->pads, seat.device, &CouchPad::id);
+    if (found == pads->pads.end()) return out;
+    const CouchPad& pad = *found;
+    out.lx = pad.left.x;   out.ly = pad.left.y;
+    out.rx = pad.right.x;  out.ry = pad.right.y;
+    out.left_trigger = pad.left_trigger;   out.right_trigger = pad.right_trigger;
+    using pad::Button;
+    const auto set = [&](Button which, SDL_GamepadButton button) { out.held[std::size_t(which)] = pad.down[std::size_t(button)]; };
+    set(Button::South, SDL_GAMEPAD_BUTTON_SOUTH);              set(Button::East, SDL_GAMEPAD_BUTTON_EAST);
+    set(Button::West, SDL_GAMEPAD_BUTTON_WEST);                set(Button::North, SDL_GAMEPAD_BUTTON_NORTH);
+    set(Button::Back, SDL_GAMEPAD_BUTTON_BACK);                set(Button::Start, SDL_GAMEPAD_BUTTON_START);
+    set(Button::LeftShoulder, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER);
+    set(Button::RightShoulder, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER);
+    set(Button::LeftStick, SDL_GAMEPAD_BUTTON_LEFT_STICK);     set(Button::RightStick, SDL_GAMEPAD_BUTTON_RIGHT_STICK);
+    set(Button::DpadUp, SDL_GAMEPAD_BUTTON_DPAD_UP);           set(Button::DpadDown, SDL_GAMEPAD_BUTTON_DPAD_DOWN);
+    set(Button::DpadLeft, SDL_GAMEPAD_BUTTON_DPAD_LEFT);       set(Button::DpadRight, SDL_GAMEPAD_BUTTON_DPAD_RIGHT);
+    return out;
 }
 
 void Couch::into_view(View& view, float blend) const {

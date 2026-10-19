@@ -1,0 +1,5 @@
+LIBRARY ijl11.dll
+EXPORTS
+    forward_ordinal_2 @2 NONAME
+    forward_ordinal_3 @3 NONAME
+    forward_ordinal_5 @5 NONAME

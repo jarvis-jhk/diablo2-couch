@@ -318,7 +318,10 @@ inline std::vector<BuiltRoom> level_room_tiles(const std::vector<Outdoor::RoomSe
         rooms.push_back(std::move(room));
     }
     const std::size_t own = rooms.size();
-    for (auto& room : outside) rooms.push_back(std::move(room));
+    for (auto& room : outside) {                        // their shares' owners index `outside`: now after ours
+        for (auto& share : room.shares) share.owner += int(own);
+        rooms.push_back(std::move(room));
+    }
     // Each room's tile seed and DT1s outlive its walk: a later room re-picking a shared tile rolls the owner's.
     std::vector<d2d::rules::Rng> rngs(rooms.size());
     std::vector<decltype(room_dt1_list(0u, dt1s))> lists(rooms.size());

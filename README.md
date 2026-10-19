@@ -90,7 +90,11 @@ and **A**, and that hero joins next to player 1. Up to three controllers can joi
 | Back (hold 2 s) | leave the game (your hero is saved) |
 
 On a Steam Deck the first controller plays player 1 instead (`pad_player1 = 1` in
-`d2d.cfg` does that anywhere, `0` turns it off).
+`d2d.cfg` does that anywhere, `0` turns it off). Player 1's controller uses D2Decomp's own
+gamepad layout, menus and screens included: the stick walks, **A** / **RT** attack or use
+what is in front, **B** / **LT** the right skill, **Y** inventory, **X** character, **LB** skill
+tree, **RB** automap, **Start** the game menu, **Back** the quest log, the d-pad the belt; with
+a screen open the left stick moves a cursor and **A** clicks.
 
 How it plays: one camera follows the whole party and nobody can walk off the screen.
 Player 1 leads — when they take a waypoint, portal, cave entrance or walk into the next

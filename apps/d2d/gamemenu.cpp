@@ -175,6 +175,8 @@ int GameMenu::top() const {
     return (kHeight - 80) / 2 - kMenus[menu].step * count / 2;
 }
 
+int GameMenu::step() const { return kMenus[menu].step; }
+
 bool GameMenu::enabled(int row) const {
     const auto name = kMenus[menu].rows[std::size_t(row)].name;
     // 4df940 / 4df980 (a 3D provider), EAX, 4f5170 (the video driver's perspective)
