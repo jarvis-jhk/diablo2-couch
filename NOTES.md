@@ -404,3 +404,11 @@
   tests skip); couch/town/gamepad/ingame syntax-checked against SDL3 headers, clang-tidy
   clean on couch.cpp. No data or pads here: untested in play.
 
+- CI run 39195697881 on 50af818 all green (Linux/Windows/macOS, both Flatpaks, portable + four
+  distro starts); 44/44 on Linux and Windows incl. test_gamepad/test_couch_pads, source SHA
+  checked in both job logs.
+- v0.0.7 published: https://github.com/jarvis-jhk/diablo2-couch/releases/tag/v0.0.7 from 50af818,
+  tag run 39197188522 green. All five assets downloaded, SHA-256 equal to GitHub's digests
+  (hashes in the release notes); Windows zip holds d2d.exe, d2d-launcher.exe, SDL3.dll; the
+  tarball's `d2d --help` ran and its launcher stayed up under Xvfb; no Sentry DSN in the
+  binaries. Only the v0.0.7 tag was pushed (upstream's v0.4.x tags stay local). Next > v0.0.7.
