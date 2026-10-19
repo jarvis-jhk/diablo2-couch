@@ -87,3 +87,34 @@ becomes a GitHub issue; Flatpak for Linux/Deck, Windows zip, assets checksum-ver
 - [ ] Online co-op through Warpzone (rooms/invites, hole-punch/relay, C API
       crates/capi/include/warpzone.h), after the couch milestones. No chat or free-text
       player content; warpzone.virtualtabletop.io is the only Jan domain allowed in the repo.
+
+## M4 — macOS support
+Combined roadmap item diablo2-macos-support (Jan, 2026-10-19: macOS on every game's roadmap).
+Comes after the items above; it does not reorder them.
+
+Done when: every release carries a macOS build (Apple Silicon + Intel, or one universal
+build) of d2d and the launcher, built and smoke-tested on a GitHub macOS runner in CI
+(start with the SDL dummy driver like tests/smoke_d2d.py, checksum the uploaded asset),
+and the player docs say how to install and start it. Unsigned is fine: document the
+Gatekeeper workaround (right-click → Open, or `xattr -dr com.apple.quarantine`).
+
+- [ ] Package: an .app bundle (or tarball) with SDL3, OpenAL Soft, StormLib, the Bink-only
+      FFmpeg and Qt for the launcher bundled and their install names rewritten
+      (macdeployqt / install_name_tool); today CI's "macOS (Clang)" job only builds and
+      runs ctest against Homebrew's dylibs, and packages nothing.
+- [ ] Architectures: macos-latest is arm64 only, and Homebrew bottles are single-arch, so
+      a universal build means building the dependencies for both arches (or a separate
+      Intel job on an x86_64 runner while one exists).
+- [ ] Smoke test in CI on the packaged asset, then release upload + checksum like Linux/Windows.
+- [ ] Player docs: install/start notes, where the MPQs go, Gatekeeper workaround.
+
+Known risks:
+- Rendering: SDL_CreateRenderer picks Metal on macOS; the letterboxing, scaling and
+  Retina (high-DPI) pixel sizes are untested there.
+- Controllers: SDL3 gamepads go through Apple's GameController framework; no Steam Input,
+  and the per-player pad claiming/hotplug has only been exercised on Linux/Windows.
+- Paths: userdir uses ~/Library/Preferences/<app>/ on macOS (upstream's choice); do not move
+  saves or config without a migration and backup. The launcher's update check and
+  `.warpzone-managed` handling need a macOS asset name and install layout.
+- Warpzone: the client needs libwarpzone built for macOS (both arches) and a macOS entry
+  in games/diablo2-couch.toml; fault reports must name the platform.
